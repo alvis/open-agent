@@ -21,6 +21,14 @@ import { describe, expect, it } from 'vitest';
 import { runOffline } from '../fixtures/network-block.js';
 import { runTerminal } from '../fixtures/terminal.js';
 
+/** what a flyctl stand-in prints */
+interface FlyStandIn {
+  /** what it prints for `fly tokens debug` */
+  decoding: string;
+  /** the version it reports */
+  version?: string;
+}
+
 const packedBin = process.env.OPEN_AGENT_PACKED_BIN;
 const pendingConnection =
   'data:text/javascript,' +
@@ -79,6 +87,36 @@ async function withIsolatedCli<T>(
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
+}
+
+/**
+ * writes a private bin directory holding a flyctl stand-in, or nothing when
+ * no stand-in is given, so the host's own flyctl never answers
+ * @param cwd isolated working directory
+ * @param standIn what the stand-in prints
+ * @returns the bin directory, to be the whole PATH
+ */
+async function writeFlyBin(cwd: string, standIn?: FlyStandIn): Promise<string> {
+  const bin = join(cwd, 'bin');
+  await mkdir(bin);
+  if (standIn !== undefined) {
+    const version = standIn.version ?? '0.4.108';
+    await writeFile(join(cwd, 'decoding.json'), standIn.decoding);
+    await writeFile(
+      join(bin, 'fly'),
+      [
+        '#!/bin/sh',
+        'case "$1" in',
+        `  tokens) exec /bin/cat '${join(cwd, 'decoding.json')}' ;;`,
+        `  *) echo "fly v${version} darwin/arm64 Commit: test" ;;`,
+        'esac',
+        '',
+      ].join('\n'),
+    );
+    await chmod(join(bin, 'fly'), 0o755);
+  }
+
+  return bin;
 }
 
 describe('workflow:installed CLI', () => {
@@ -717,34 +755,15 @@ describe('workflow:installed CLI', () => {
      * @param name workstation name
      * @param env extra environment, such as the token
      * @param standIn what the stand-in prints
-     * @param standIn.decoding what it prints for `fly tokens debug`
-     * @param standIn.version the version it reports
      * @returns the run and its blocked network attempts
      */
     async function createOnFly(
       name: string,
       env: NodeJS.ProcessEnv,
-      standIn?: { decoding: string; version?: string },
+      standIn?: FlyStandIn,
     ): Promise<Awaited<ReturnType<typeof runOffline>>> {
       return withIsolatedCli(async (cwd, isolated) => {
-        const bin = join(cwd, 'bin');
-        await mkdir(bin);
-        if (standIn !== undefined) {
-          const version = standIn.version ?? '0.4.108';
-          await writeFile(join(cwd, 'decoding.json'), standIn.decoding);
-          await writeFile(
-            join(bin, 'fly'),
-            [
-              '#!/bin/sh',
-              'case "$1" in',
-              `  tokens) exec /bin/cat '${join(cwd, 'decoding.json')}' ;;`,
-              `  *) echo "fly v${version} darwin/arm64 Commit: test" ;;`,
-              'esac',
-              '',
-            ].join('\n'),
-          );
-          await chmod(join(bin, 'fly'), 0o755);
-        }
+        const bin = await writeFlyBin(cwd, standIn);
 
         return runOffline(
           packedBin!,
@@ -1064,7 +1083,12 @@ describe('workflow:installed CLI', () => {
         ],
         {
           cwd,
-          env: { ...env, OPEN_AGENT_TEST_SOURCE: 'offline-placeholder' },
+          env: {
+            ...env,
+            // a decoding with no permission macaroon is not a Fly API token
+            PATH: await writeFlyBin(cwd, { decoding: '[]' }),
+            OPEN_AGENT_TEST_SOURCE: 'offline-placeholder',
+          },
         },
       ),
     );
