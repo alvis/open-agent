@@ -21,6 +21,10 @@ export interface BrewScenario {
   newer?: Readonly<Record<string, string>>;
   /** formulae whose upgrade fails, leaving them at their version */
   broken?: readonly string[];
+  /** formulae whose upgrade fails beside others, yet succeeds alone */
+  crowded?: readonly string[];
+  /** formulae moved to their new version before their post-install step fails */
+  postinstallFails?: readonly string[];
   /** formulae whose new version has no bottle for the guest */
   unbottled?: readonly string[];
   /** true when the listing of every installed formula fails */
@@ -72,7 +76,8 @@ case $command in
     shift
     status=0
     for formula; do
-      if grep -qxF "$formula" "$state/broken"; then
+      if grep -qxF "$formula" "$state/broken" ||
+        { test "$#" -gt 1 && grep -qxF "$formula" "$state/crowded"; }; then
         status=1
         continue
       fi
@@ -80,6 +85,9 @@ case $command in
         $1 == name && newer != "" { $2 = newer } { print }' \\
         "$state/newer" "$state/installed" >"$state/installed.new" &&
         mv "$state/installed.new" "$state/installed"
+      if grep -qxF "$formula" "$state/postinstall-fails"; then
+        status=1
+      fi
     done
     exit "$status"
     ;;
@@ -129,6 +137,11 @@ export async function runWithBrew(params: {
     writeFile(join(state, 'bin/outdated'), list(scenario.outdated)),
     writeFile(join(state, 'bin/newer'), lines(scenario.newer)),
     writeFile(join(state, 'bin/broken'), list(scenario.broken)),
+    writeFile(join(state, 'bin/crowded'), list(scenario.crowded)),
+    writeFile(
+      join(state, 'bin/postinstall-fails'),
+      list(scenario.postinstallFails),
+    ),
     writeFile(join(state, 'bin/unbottled'), list(scenario.unbottled)),
     writeFile(join(state, 'bin/calls'), ''),
     ...(scenario.listingFails
