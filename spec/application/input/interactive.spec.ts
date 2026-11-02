@@ -59,17 +59,21 @@ describe('input source resolution', () => {
           interaction,
         }),
       [
+        { waitFor: 'Minimum CPUs', input: '\r' },
+        { waitFor: 'Minimum memory (GB)', input: '\r' },
         { waitFor: 'Release channel', input: '\r' },
         { waitFor: 'Suspend after idle', input: '\r' },
       ],
     );
 
-    expect(observed.matchedSteps, observed.output).toBe(2);
+    expect(observed.matchedSteps, observed.output).toBe(4);
     expect(observed.result.candidate).toMatchObject({
       provider: 'sprite',
       harnesses: ['claude'],
       network: 'none',
       options: {
+        minCpus: 2,
+        minMemoryGb: 2,
         agentRelease: 'stable',
         idleTimeoutMinutes: 5,
       },

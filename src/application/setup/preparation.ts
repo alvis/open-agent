@@ -10,6 +10,7 @@ import {
   unrecordedProfile,
 } from './recorded';
 import { isAgentReleaseChanged } from './release';
+import { resizeWhenRequested } from './resize';
 
 import type { CommandOptions, SetupSection } from '#application/contracts';
 import type { SuppliedSelection } from '#application/input/selection/supplied';
@@ -52,7 +53,7 @@ interface SetupPreparationParams {
 interface PreparedSetup {
   /** complete setup context for the selected section */
   context: SetupContext;
-  /** guest channel to apply the section through */
+  /** guest channel to apply the section through; over a new session when a resize restarted the machine */
   guest: GuestChannel;
 }
 
@@ -61,6 +62,26 @@ type GuestPreparationParams = Omit<
   Parameters<typeof prepareSetupContext>[1],
   'guest'
 >;
+
+/** what a prepared setup context is assembled from */
+interface SetupContextParts {
+  /** the recorded state, validated profile and resolved inputs */
+  resolved: ResolvedSetup;
+  /** the machine as resized */
+  resized: WorkstationRecord;
+  /** the session the section applies over */
+  connection: SetupSession;
+}
+
+/** the named inputs of reconnect */
+interface ReconnectParams {
+  /** the session that ran on the machine before it restarted */
+  lost: SetupSession;
+  /** the provider that opens the new session */
+  provider: ProviderDriver;
+  /** the machine as resized */
+  resized: WorkstationRecord;
+}
 
 /** the recorded state of a machine and the setup selection resolved against it */
 interface ResolvedSetup {
@@ -116,17 +137,51 @@ export async function prepareSetupContext(
   dependencies: ApplicationDependencies,
   params: SetupPreparationParams,
 ): Promise<PreparedSetup> {
+  const { provider, workstation, options, interaction } = params;
   const resolved = await resolveSetup(dependencies, params);
-  await persistPreparedProfile(dependencies, {
-    resolved,
-    guest: params.guest,
-    mutation: params.mutation,
+  const { profile } = resolved;
+  const resized = await resizeWhenRequested({
+    provider,
+    workstation,
+    profile,
+    supplied: params.supplied,
+    options,
+    interaction,
   });
+  // a resize that restarted the machine ended the session the channel ran over
+  const connection =
+    resized === workstation
+      ? params.connection
+      : await reconnect(dependencies, {
+          lost: params.connection,
+          provider,
+          resized,
+        });
+  try {
+    const guest =
+      connection === params.connection
+        ? params.guest
+        : await connection.guest();
+    await persistPreparedProfile(dependencies, {
+      resolved,
+      guest,
+      mutation: params.mutation,
+    });
 
-  return {
-    guest: params.guest,
-    context: setupContextOf(params, resolved),
-  };
+    return {
+      guest,
+      context: setupContextOf(params, {
+        resolved,
+        resized,
+        connection,
+      }),
+    };
+  } catch (error) {
+    if (connection !== params.connection) {
+      await connection.close();
+    }
+    throw error;
+  }
 }
 
 /**
@@ -134,7 +189,7 @@ export async function prepareSetupContext(
  * @param dependencies registered drivers and guest profile storage
  * @param params resolved selection, current channel and mutation state
  * @param params.resolved validated selection and previously recorded environment
- * @param params.guest current guest channel
+ * @param params.guest current guest channel, after any resize
  * @param params.mutation diagnostic mutation state
  */
 async function persistPreparedProfile(
@@ -161,19 +216,20 @@ async function persistPreparedProfile(
 /**
  * assembles the context a section is applied with
  * @param params target, selected section, input choices, and diagnostic state
- * @param resolved the recorded state, validated profile and resolved inputs
+ * @param parts the resolved state, the resized machine and the connection
  * @returns complete setup context for the selected section
  */
 function setupContextOf(
   params: SetupPreparationParams,
-  resolved: ResolvedSetup,
+  parts: SetupContextParts,
 ): SetupContext {
+  const { resolved, resized, connection } = parts;
   const { profile, input } = resolved;
 
   return {
     provider: params.provider,
-    workstation: params.workstation,
-    connection: params.connection,
+    workstation: resized,
+    connection,
     options: params.options,
     interaction: params.interaction,
     input,
@@ -182,6 +238,25 @@ function setupContextOf(
     isReleaseChanged: resolved.isReleaseChanged,
     mutation: params.mutation,
   };
+}
+
+/**
+ * ends the session a resize cut short and binds a new one to the resized machine
+ * @param dependencies the guest mechanics
+ * @param params the call's inputs: lost, provider, resized
+ * @returns the new, still unopened, connection
+ */
+async function reconnect(
+  dependencies: Pick<ApplicationDependencies, 'guest'>,
+  params: ReconnectParams,
+): Promise<SetupSession> {
+  const { lost, provider, resized } = params;
+  await lost.close();
+
+  return dependencies.guest.session.connect({
+    provider,
+    workstation: resized,
+  });
 }
 
 /**

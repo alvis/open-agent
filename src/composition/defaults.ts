@@ -15,5 +15,7 @@ export const defaults = {
     holdMaxMinutes: 60,
     // an update is due a day after the last successful one
     updateDueIntervalDays: 1,
+    minCpus: 2,
+    minMemoryGb: 2,
   },
 } as const satisfies ProfileDefaults;

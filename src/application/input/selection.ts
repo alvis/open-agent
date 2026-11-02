@@ -5,7 +5,11 @@ import {
   networkChoices,
   providerChoices,
 } from './selection/choices';
-import { resolveOptions, resolveRelease } from './selection/options';
+import {
+  resolveMachine,
+  resolveOptions,
+  resolveRelease,
+} from './selection/options';
 import { activePrompts } from './selection/sources';
 import { readSelection } from './selection/supplied';
 
@@ -46,6 +50,8 @@ export interface SelectionResolution {
 /** every field a new workstation's selection reads */
 const CREATE_FIELDS: readonly SelectionField[] = [
   'provider',
+  'minCpus',
+  'minMemoryGb',
   'agent',
   'agentRelease',
   'harnesses',
@@ -71,6 +77,9 @@ const SECTION_FIELDS: Readonly<
   network: ['network'],
   tools: ['updateDueIntervalDays'],
 };
+
+/** the machine minimums, which any setup section may carry because they resize rather than configure the guest */
+const MACHINE_FIELDS: readonly SelectionField[] = ['minCpus', 'minMemoryGb'];
 
 /**
  * lists the profile fields a setup section reads and saves
@@ -153,6 +162,8 @@ export async function resolveCreateSelection(
     supplied.provider ??
     (await prompts?.choose('Provider', providerChoices(dependencies))) ??
     dependencies.defaults.selection.provider;
+  // the machine minimums are asked right after the provider they are checked against
+  const machine = await resolveMachine(dependencies, { provider, ...asked });
   const agent =
     supplied.agent ??
     (await prompts?.choose('ACP agent', agentChoices(dependencies))) ??
@@ -181,6 +192,7 @@ export async function resolveCreateSelection(
         selected: { provider, agent },
         supplied: {
           ...supplied.options,
+          ...machine,
           ...(agentRelease !== undefined && { agentRelease }),
         },
         fields: CREATE_FIELDS,
@@ -205,7 +217,10 @@ export function readSetupSelection(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: SetupReadContext,
 ): Resolved<SuppliedSelection> {
-  return readSelection(dependencies, context, sectionFields(context.section));
+  return readSelection(dependencies, context, [
+    ...sectionFields(context.section),
+    ...MACHINE_FIELDS,
+  ]);
 }
 
 /**

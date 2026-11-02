@@ -12,4 +12,6 @@ export const SPRITE_CAPABILITIES: ProviderCapabilities = {
   persistence: 'provider-disk',
   exposure: 'provider-url',
   discovery: 'provider-metadata',
+  // a Sprite has one size, so there is nothing to restart
+  resizeRestarts: false,
 };

@@ -109,6 +109,20 @@ function parseWholeNumber(
     : { value: undefined, problems: [`${name} must be a whole number`] };
 }
 
+/** what a whole-number answer must satisfy before the prompt accepts it */
+interface NumberRule {
+  /** what the number counts, named in the refusal of a non-number */
+  unit: string;
+  /** smallest accepted number */
+  minimum: number;
+  /**
+   * refuses a number the prompt cannot take for a reason only the caller knows
+   * @param value the entered number
+   * @returns why the number is refused, or undefined to accept it
+   */
+  check?(value: number): string | undefined;
+}
+
 /** prompts that skip a step with only one choice */
 export interface Prompts {
   /**
@@ -132,13 +146,21 @@ export interface Prompts {
     choices: ReadonlyArray<InteractionChoice<V>>,
   ): Promise<V[] | undefined>;
   /**
-   * asks for a whole number of minutes
+   * asks for a whole number
    * @param message prompt label
    * @param defaultValue value Enter keeps
+   * @param rule what the answer must be; whole minutes of at least 0 when absent
    * @returns the number
    */
-  number(message: string, defaultValue: number): Promise<number>;
+  number(
+    message: string,
+    defaultValue: number,
+    rule?: NumberRule,
+  ): Promise<number>;
 }
+
+/** the rule of the idle-minutes prompt */
+const MINUTES_RULE: NumberRule = { unit: 'minutes', minimum: 0 };
 
 /**
  * binds the selection prompts when the run may prompt
@@ -158,16 +180,20 @@ export function activePrompts(context: SelectionContext): Prompts | undefined {
       choices.length > 1
         ? interaction.multiselect({ message }, choices)
         : undefined,
-    number: async (message, defaultValue) =>
-      Number(
+    number: async (message, defaultValue, rule = MINUTES_RULE) => {
+      const floor =
+        rule.minimum > 0 ? ` of at least ${String(rule.minimum)}` : '';
+
+      return Number(
         await interaction.input({
           message,
           defaultValue: String(defaultValue),
           validate: (value) =>
-            /^\d+$/u.test(value.trim())
-              ? undefined
-              : 'Enter a whole number of minutes',
+            /^\d+$/u.test(value.trim()) && Number(value) >= rule.minimum
+              ? rule.check?.(Number(value))
+              : `Enter a whole number of ${rule.unit}${floor}`,
         }),
-      ),
+      );
+    },
   };
 }

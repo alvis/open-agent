@@ -1,4 +1,4 @@
-import { isDriverId } from '#domain/profile';
+import { machineViolations, isDriverId } from '#domain/profile';
 
 import { releaseChoices } from './choices';
 
@@ -30,6 +30,11 @@ type ReleaseContext = Pick<OptionContext, 'supplied' | 'prompts' | 'base'> & {
   agent: string;
 };
 
+/** machine-size inputs and the selected provider */
+type MachineContext = Pick<OptionContext, 'supplied' | 'prompts' | 'base'> & {
+  provider: string;
+};
+
 /**
  * resolves the capability-driven options the run owns: idle minutes only when the provider keeps workstations awake; hold-max
  * and the update due interval are never asked
@@ -56,6 +61,8 @@ export async function resolveOptions(
     idleTimeoutMinutes: fields.includes('idleTimeoutMinutes')
       ? await resolveIdleMinutes(dependencies, context)
       : base.idleTimeoutMinutes,
+    minCpus: supplied.minCpus ?? base.minCpus,
+    minMemoryGb: supplied.minMemoryGb ?? base.minMemoryGb,
     holdMaxMinutes: supplied.holdMaxMinutes ?? base.holdMaxMinutes,
     updateDueIntervalDays:
       supplied.updateDueIntervalDays ?? base.updateDueIntervalDays,
@@ -95,6 +102,53 @@ export async function resolveRelease(
       releaseChoices(channels, current),
     )) ?? current
   );
+}
+
+/**
+ * resolves the minimum machine size of a new workstation: the supplied
+ * minimums, else the base ones, with each missing one asked for CPUs first and
+ * memory second; a prompt asks again while the provider offers no machine
+ * that meets the answer
+ * @param dependencies the registered drivers
+ * @param context provider, supplied values, prompts and base options
+ * @returns the CPU and memory minimums
+ */
+export async function resolveMachine(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  context: MachineContext,
+): Promise<Pick<ProfileOptions, 'minCpus' | 'minMemoryGb'>> {
+  const { provider, supplied, prompts, base } = context;
+  const refusal = (
+    requirement: Pick<ProfileOptions, 'minCpus' | 'minMemoryGb'>,
+  ): string | undefined =>
+    isDriverId(provider, {
+      declarations: dependencies.registry,
+      kind: 'providers',
+    })
+      ? machineViolations({
+          declarations: dependencies.registry,
+          provider,
+          options: { ...base, ...requirement },
+        })[0]?.message
+      : undefined;
+  const minCpus =
+    supplied.minCpus ??
+    (await prompts?.number('Minimum CPUs', base.minCpus, {
+      unit: 'CPUs',
+      minimum: 1,
+      check: (value) => refusal({ minCpus: value, minMemoryGb: 1 }),
+    })) ??
+    base.minCpus;
+  const minMemoryGb =
+    supplied.minMemoryGb ??
+    (await prompts?.number('Minimum memory (GB)', base.minMemoryGb, {
+      unit: 'GB',
+      minimum: 1,
+      check: (value) => refusal({ minCpus, minMemoryGb: value }),
+    })) ??
+    base.minMemoryGb;
+
+  return { minCpus, minMemoryGb };
 }
 
 /**

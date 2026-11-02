@@ -1,6 +1,7 @@
 import { ProviderFault } from '#kernel/provider-fault';
 
 import { MANAGED_LABEL, readMetadataLabels } from './labels';
+import { SPRITE_MACHINE } from './machines';
 
 import type { Sprite } from '@fly/sprites';
 
@@ -19,6 +20,7 @@ export function toRecord(sprite: Sprite): WorkstationRecord {
     organization: sprite.organizationName ?? '',
     ...(sprite.createdAt ? { createdAt: sprite.createdAt.toISOString() } : {}),
     state: sprite.status ?? 'unknown',
+    machine: SPRITE_MACHINE,
     ...(sprite.url ? { url: sprite.url } : {}),
     metadata: readMetadataLabels(sprite.labels),
   };

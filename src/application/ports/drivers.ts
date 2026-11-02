@@ -7,6 +7,7 @@ import type {
   AgentPairing,
   ExposureVisibility,
   HarnessDeclaration,
+  MachineOffer,
   NetworkDeclaration,
   ProviderDeclaration,
 } from '#domain/declarations';
@@ -110,6 +111,17 @@ export interface ProviderDriver<
   setMetadata(
     workstation: WorkstationRecord,
     metadata: WorkstationMetadata,
+  ): Promise<WorkstationRecord>;
+  /**
+   * moves the workstation to a machine size, doing nothing when it already
+   * runs on it; every other setting of the workstation is preserved
+   * @param workstation managed workstation
+   * @param offer machine size to run on
+   * @returns the workstation as recorded after the change
+   */
+  resize(
+    workstation: WorkstationRecord,
+    offer: MachineOffer,
   ): Promise<WorkstationRecord>;
   /**
    * publishes the ACP agent port, only after readiness

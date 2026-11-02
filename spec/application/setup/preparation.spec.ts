@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
 import { prepareGuestSection } from '#application/setup/preparation';
+import { registry } from '#composition/registry';
 import { summarizeProfile } from '#domain/recorded';
 
 import { environmentOf } from '../../fixtures/environment';
@@ -20,6 +21,29 @@ vi.mock(
   '#adapters/guest/platform/session/open',
   async () => import('../../mocks/session'),
 );
+
+/** machine sizes a resizable provider offers, so a CPU minimum moves the workstation */
+const OFFERS = [
+  { label: 'small', cpus: 2, memoryGb: 4 },
+  { label: 'large', cpus: 4, memoryGb: 8 },
+];
+
+/**
+ * authenticates the Sprite provider with more than one machine size, so a
+ * supplied minimum resizes the workstation
+ * @returns the authenticated Sprite provider offering the small and large sizes
+ */
+function resizableProvider(): ReturnType<
+  typeof registry.providers.sprite.authenticate
+> {
+  return Object.assign(
+    registry.providers.sprite.authenticate({
+      credential: 'test-org/1/0abc/0def',
+      restorableServices: [],
+    }),
+    { machines: OFFERS },
+  );
+}
 
 describe('fn:prepareGuestSection', () => {
   it.each([
@@ -140,55 +164,160 @@ describe('fn:prepareGuestSection', () => {
     await target.connection.close();
   });
 
-  it('should preserve persistence failures without closing the session', async () => {
+  it('should persist resized requirements through the replacement session and close the retired session', async () => {
     await using directory = await mkdtempDisposable(
-      join(tmpdir(), 'open-agent-preparation-failure-'),
+      join(tmpdir(), 'open-agent-resize-preparation-'),
     );
     const profile: WorkstationProfile = DISABLED_NETWORK_PROFILE;
-    const sprite = createFilesystemSprite({ root: directory.path });
-    await sprite
-      .filesystem()
-      .writeFile(ENVIRONMENT_PATH, JSON.stringify(environmentOf(profile)));
-    const target = workstationOf(sprite);
+    const original = createFilesystemSprite({
+      root: join(directory.path, 'old'),
+    });
+    const replacement = createFilesystemSprite({
+      root: join(directory.path, 'new'),
+    });
+    for (const sprite of [original, replacement]) {
+      await sprite
+        .filesystem()
+        .writeFile(ENVIRONMENT_PATH, JSON.stringify(environmentOf(profile)));
+    }
+    const target = workstationOf(original);
+    const next = workstationOf(replacement);
+    const provider = resizableProvider();
+    const workstation = {
+      ...target.workstation,
+      machine: provider.machines[0],
+    };
+    vi.spyOn(provider, 'resize').mockImplementation(async (record, offer) => ({
+      ...record,
+      machine: offer,
+    }));
     const close = vi.spyOn(target.connection, 'close');
-    const failure = new Error('guest storage is read-only');
     const wired = dependenciesWith({
       guest: {
         ...dependencies.guest,
-        environment: {
-          ...dependencies.guest.environment,
-          writeProfile: async () => {
-            throw failure;
-          },
-        },
+        session: { connect: () => next.connection },
       },
     });
     const mutation = { started: false };
 
-    await expect(
-      prepareGuestSection(wired, {
-        ...target,
-        supplied: { options: { updateDueIntervalDays: 2 } },
-        sources: { processEnv: {}, fileEnv: {} },
-        section: 'tools',
-        options: { updateDueDays: 2, nonInteractive: true, yes: true },
-        mutation,
-      }),
-    ).rejects.toBe(failure);
+    const prepared = await prepareGuestSection(wired, {
+      ...target,
+      provider,
+      workstation,
+      supplied: { options: { minCpus: 4 } },
+      sources: { processEnv: {}, fileEnv: {} },
+      section: 'tools',
+      options: { cpu: 4, nonInteractive: true, yes: true },
+      mutation,
+    });
 
     expect({
-      closes: close.mock.calls,
+      cpus: prepared.context.workstation.machine?.cpus,
+      connection: prepared.context.connection,
+      persisted: (await dependencies.guest.environment.find(prepared.guest))
+        ?.profile.options.minCpus,
+      retiredCloses: close.mock.calls,
       started: mutation.started,
-      recorded: (
+    }).toEqual({
+      cpus: 4,
+      connection: next.connection,
+      persisted: 4,
+      retiredCloses: [[]],
+      started: true,
+    });
+    expect(
+      (
         await dependencies.guest.environment.find(
           await target.connection.guest(),
         )
-      )?.profile,
-    }).toEqual({
-      closes: [],
-      started: true,
-      recorded: profile,
-    });
+      )?.profile.options.minCpus,
+    ).toBe(profile.options.minCpus);
     await target.connection.close();
+    await next.connection.close();
   });
+
+  it.each([false, true])(
+    'should preserve persistence failures and close only a replacement session (resize=%s)',
+    async (resize) => {
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-preparation-failure-'),
+      );
+      const profile: WorkstationProfile = DISABLED_NETWORK_PROFILE;
+      const original = createFilesystemSprite({
+        root: join(directory.path, 'old'),
+      });
+      const replacement = createFilesystemSprite({
+        root: join(directory.path, 'new'),
+      });
+      for (const sprite of [original, replacement]) {
+        await sprite
+          .filesystem()
+          .writeFile(ENVIRONMENT_PATH, JSON.stringify(environmentOf(profile)));
+      }
+      const target = workstationOf(original);
+      const next = workstationOf(replacement);
+      const provider = resizableProvider();
+      const workstation = {
+        ...target.workstation,
+        machine: provider.machines[0],
+      };
+      vi.spyOn(provider, 'resize').mockImplementation(
+        async (record, offer) => ({ ...record, machine: offer }),
+      );
+      const oldClose = vi.spyOn(target.connection, 'close');
+      const newClose = vi.spyOn(next.connection, 'close');
+      const failure = new Error('guest storage is read-only');
+      const wired = dependenciesWith({
+        guest: {
+          ...dependencies.guest,
+          session: { connect: () => next.connection },
+          environment: {
+            ...dependencies.guest.environment,
+            writeProfile: async () => {
+              throw failure;
+            },
+          },
+        },
+      });
+      const mutation = { started: false };
+
+      await expect(
+        prepareGuestSection(wired, {
+          ...target,
+          provider,
+          workstation,
+          supplied: {
+            options: resize ? { minCpus: 4 } : { updateDueIntervalDays: 2 },
+          },
+          sources: { processEnv: {}, fileEnv: {} },
+          section: 'tools',
+          options: {
+            cpu: resize ? 4 : undefined,
+            updateDueDays: 2,
+            nonInteractive: true,
+            yes: true,
+          },
+          mutation,
+        }),
+      ).rejects.toBe(failure);
+
+      expect({
+        oldCloses: oldClose.mock.calls,
+        newCloses: newClose.mock.calls,
+        started: mutation.started,
+        recorded: (
+          await dependencies.guest.environment.find(
+            await target.connection.guest(),
+          )
+        )?.profile,
+      }).toEqual({
+        oldCloses: resize ? [[]] : [],
+        newCloses: resize ? [[]] : [],
+        started: true,
+        recorded: profile,
+      });
+      await target.connection.close();
+      await next.connection.close();
+    },
+  );
 });

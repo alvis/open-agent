@@ -76,6 +76,26 @@ export interface ProviderCapabilities {
   exposure: ExposureMode;
   /** where list finds workstations without waking them */
   discovery: DiscoverySource;
+  /** changing the machine size restarts a running workstation to take effect */
+  resizeRestarts: boolean;
+}
+
+/** one machine size a provider offers */
+export interface MachineOffer {
+  /** the provider's own name for the size, such as `shared-cpu-2x` */
+  label: string;
+  /** CPUs the size provides */
+  cpus: number;
+  /** memory the size provides, in whole gigabytes */
+  memoryGb: number;
+}
+
+/** the smallest machine a workstation must run on */
+export interface MachineRequirement {
+  /** minimum CPUs */
+  cpus: number;
+  /** minimum memory, in whole gigabytes */
+  memoryGb: number;
 }
 
 /** a driver selection combination a provider cannot host */
@@ -96,6 +116,8 @@ export interface ProviderDeclaration<
 > extends DriverDescriptor<'providers', Name> {
   /** capability axes core and the idle governor branch on */
   capabilities: ProviderCapabilities;
+  /** machine sizes the provider offers, cheapest first */
+  machines: readonly MachineOffer[];
   /** combinations validation rejects before any provider call */
   incompatibilities: readonly ProfileIncompatibility[];
   /** host tools and credential every provider-reaching command needs */

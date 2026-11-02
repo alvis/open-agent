@@ -179,6 +179,7 @@ describe('mt:SpriteProvider.list', () => {
         createdAt: createdAt.toISOString(),
         state: 'running',
         url: primaryInfo.url,
+        machine: { cpus: 8, label: 'sprite', memoryGb: 16 },
         metadata: { setup: 'not recorded' },
       },
       {
@@ -188,6 +189,7 @@ describe('mt:SpriteProvider.list', () => {
         createdAt: createdAt.toISOString(),
         state: 'cold',
         url: primaryInfo.url,
+        machine: { cpus: 8, label: 'sprite', memoryGb: 16 },
         metadata: { setup: 'not recorded' },
       },
     ]);
@@ -472,6 +474,14 @@ describe('mt:SpriteProvider.expose', () => {
     await subject.expose(workstation, 3773, 'private');
 
     expect(sprite.urlSettings).toEqual({ auth: 'sprite' });
+  });
+});
+
+describe('mt:SpriteProvider.resize', () => {
+  it('should keep the same workstation because a Sprite has no configurable size', async () => {
+    const workstation = await provider.get('primary');
+
+    expect(await unboundProvider.resize(workstation)).toBe(workstation);
   });
 });
 

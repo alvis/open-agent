@@ -3,6 +3,7 @@ import { registeredSummary } from '#domain/profile';
 import { CommandFault } from '#kernel/faults';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { MachineOffer } from '#domain/declarations';
 import type { ProfileSummary } from '#domain/profile';
 import type {
   WorkstationRecord,
@@ -20,6 +21,8 @@ export interface MachineSummary {
   organization: string;
   createdAt?: string;
   state: string;
+  /** machine size the provider reports; absent when it reports none */
+  machine?: MachineOffer;
   agentUrl?: string | PairingSecret;
   setup: WorkstationSetupState;
   /** driver selection recorded in provider metadata; absent when unrecorded */
@@ -75,6 +78,7 @@ export function summarizeMachine(
     organization: workstation.organization,
     createdAt: workstation.createdAt,
     state: workstation.state,
+    machine: workstation.machine,
     agentUrl: workstation.url
       ? pairingCode
         ? pairingCode.forUrl(workstation.url)

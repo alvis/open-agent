@@ -5,6 +5,7 @@ import { harnessIds } from '#domain/harnesses';
 import { AGENT_IDS, PROVIDER_IDS, releaseChannelIds } from '#domain/ids';
 import { networkIds } from '#domain/networks';
 
+import { machineFlags } from './machine-flags';
 import { parseWholeNumber } from './whole-number';
 
 /** local provider credential selection shared by every operation */
@@ -91,6 +92,7 @@ export const providerFlags = {
 /** driver and option selection, in the order interactive setup asks for it */
 export const selectionFlags = {
   ...providerFlags,
+  ...machineFlags,
   agent: {
     kind: 'parsed',
     parse: buildChoiceParser(AGENT_IDS),

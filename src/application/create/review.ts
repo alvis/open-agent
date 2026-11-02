@@ -1,4 +1,5 @@
 import { harnessLabel } from '#domain/harnesses';
+import { pickMachine } from '#domain/machine-sizes';
 import { publishStatus } from '#kernel/operation';
 
 import type { CommandRequest } from '#application/contracts';
@@ -48,6 +49,7 @@ export function reviewCreatePlan(
       kind: 'info',
       message: [
         `Create ${values.name} on ${provider.displayName}`,
+        machineSummary(dependencies, profile),
         ...releaseSummary(dependencies, profile),
         `Harnesses: ${profile.harnesses.map((id) => harnessLabel(id)).join(', ')}`,
         'No private network',
@@ -86,6 +88,29 @@ export async function confirmCreation(
   }
 
   return undefined;
+}
+
+/**
+ * names the machine the provider picks for the minimums
+ * @param dependencies the registered drivers
+ * @param profile validated selection
+ * @returns one review line naming the minimums and the selected machine
+ */
+function machineSummary(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  profile: WorkstationProfile,
+): string {
+  const { minCpus, minMemoryGb } = profile.options;
+  const offer = pickMachine(
+    dependencies.registry.providers[profile.provider].machines,
+    {
+      cpus: minCpus,
+      memoryGb: minMemoryGb,
+    },
+  )!;
+  const picked = ` (${offer.label}, ${String(offer.cpus)} CPUs, ${String(offer.memoryGb)} GB)`;
+
+  return `Machine: at least ${String(minCpus)} CPUs, ${String(minMemoryGb)} GB${picked}`;
 }
 
 /**

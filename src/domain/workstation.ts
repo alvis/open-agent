@@ -1,3 +1,4 @@
+import type { MachineOffer } from '#domain/declarations';
 import type { RecordedProfile } from '#domain/recorded';
 
 /** provider-recorded progress of the current provisioning attempt */
@@ -15,6 +16,8 @@ export interface WorkstationRecord {
   createdAt?: string;
   /** provider-reported run state */
   state: string;
+  /** machine size the workstation runs on, when the provider reports it */
+  machine?: MachineOffer;
   /** canonical ACP agent URL when the provider assigned one */
   url?: string;
   /** ownership, schema, setup state and profile summary read without waking */

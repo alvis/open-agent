@@ -25,7 +25,11 @@ describe('fn:activePrompts', () => {
     const validation: Array<string | undefined> = [];
     const interaction = {
       input: vi.fn<Interaction['input']>(async (prompt) => {
-        validation.push(prompt.validate?.('1.5'), prompt.validate?.('4'));
+        validation.push(
+          prompt.validate?.('1.5'),
+          prompt.validate?.('2'),
+          prompt.validate?.('4'),
+        );
 
         return '4';
       }),
@@ -52,10 +56,16 @@ describe('fn:activePrompts', () => {
       ]),
     ).toBeUndefined();
     expect(
-      await prompts?.number('Suspend after idle (minutes, 0 = never)', 5),
+      await prompts?.number('Minimum CPUs', 1, {
+        unit: 'CPUs',
+        minimum: 1,
+        check: (value) =>
+          value < 4 ? 'No machine is large enough' : undefined,
+      }),
     ).toBe(4);
     expect(validation).toEqual([
       expect.stringContaining('whole number'),
+      'No machine is large enough',
       undefined,
     ]);
   });

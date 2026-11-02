@@ -11,6 +11,8 @@ const SELECTION_INPUTS = {
   provider: { flag: '--provider', environment: 'OPEN_AGENT_PROVIDER' },
   agent: { flag: '--agent', environment: 'OPEN_AGENT_AGENT' },
   agentRelease: { flag: '--release', environment: 'OPEN_AGENT_RELEASE' },
+  minCpus: { flag: '--cpu', environment: 'OPEN_AGENT_CPU' },
+  minMemoryGb: { flag: '--mem', environment: 'OPEN_AGENT_MEM' },
   harnesses: { flag: '--harness', environment: 'OPEN_AGENT_HARNESSES' },
   network: { flag: '--network', environment: 'OPEN_AGENT_NETWORK' },
 
