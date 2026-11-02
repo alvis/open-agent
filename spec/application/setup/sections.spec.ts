@@ -4,8 +4,10 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { RUNTIME_ENV_PATH } from '#adapters/guest/platform/layout';
 import {
   setupAgent,
+  setupEnvironment,
   setupGit,
   setupGithub,
   stopService,
@@ -90,6 +92,7 @@ describe('fn:setupAgent', () => {
       options: {},
       input: {
         profile: DISABLED_NETWORK_PROFILE,
+        runtimeEnv: {},
         sources: {},
         missing: [],
       },
@@ -155,6 +158,7 @@ async function quietSetup(
     options,
     input: {
       profile: DISABLED_NETWORK_PROFILE,
+      runtimeEnv: {},
       sources: {},
       missing: [],
     },
@@ -166,6 +170,77 @@ async function quietSetup(
 
   return { context, guest: await context.connection.guest() };
 }
+
+describe('fn:setupEnvironment', () => {
+  it('should write the interactively selected runtime environment and return only its variable names', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-runtime-selection-'),
+    );
+    const path = join(directory.path, 'runtime.env');
+    await writeFile(
+      path,
+      'PROJECT_MODE=development\nCUSTOM_API_KEY=runtime-private-key\n',
+    );
+    const { context, guest } = await quietSetup({}, directory.path);
+    const observed = await driveInk(
+      async (interaction) =>
+        setupEnvironment(dependencies, guest, { ...context, interaction }),
+      [{ waitFor: 'Runtime env file path', input: [path, '\r'] }],
+    );
+
+    expect({
+      result: observed.result,
+      matchedSteps: observed.matchedSteps,
+      started: context.mutation.started,
+    }).toEqual({
+      result: {
+        runtimeEnvironment: {
+          status: 'configured',
+          names: ['PROJECT_MODE', 'CUSTOM_API_KEY'],
+        },
+      },
+      matchedSteps: 1,
+      started: true,
+    });
+    expect(
+      JSON.parse(
+        await readFile(join(directory.path, RUNTIME_ENV_PATH), 'utf8'),
+      ),
+    ).toEqual({
+      PROJECT_MODE: 'development',
+      CUSTOM_API_KEY: 'runtime-private-key',
+    });
+    expect(observed.output).not.toContain('runtime-private-key');
+  });
+
+  it('should honor explicit noninteractive mode even when a terminal interaction is available', async () => {
+    const { context, guest } = await quietSetup({ nonInteractive: true });
+    const observed = await driveInk(
+      async (interaction) =>
+        setupEnvironment(dependencies, guest, { ...context, interaction }),
+      [],
+    );
+
+    expect({
+      result: observed.result,
+      output: observed.output,
+      started: context.mutation.started,
+    }).toEqual({
+      result: { runtimeEnvironment: { status: 'skipped' } },
+      output: expect.not.stringContaining('Runtime env file path'),
+      started: false,
+    });
+  });
+
+  it('should skip the section without --env-file when it cannot prompt', async () => {
+    const { context, guest } = await quietSetup({ nonInteractive: true });
+
+    const result = await setupEnvironment(dependencies, guest, context);
+
+    expect(result).toEqual({ runtimeEnvironment: { status: 'skipped' } });
+    expect(context.mutation.started).toBe(false);
+  });
+});
 
 describe('fn:setupGit', () => {
   it('should name every source of a missing Git identity before changing the guest', async () => {

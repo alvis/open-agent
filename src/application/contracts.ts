@@ -5,7 +5,7 @@ import type { CommandName } from '#kernel/commands';
 
 /** targetable setup areas */
 export type SetupSection =
-  'all' | 'agent' | 'network' | 'github' | 'git' | 'tools';
+  'all' | 'agent' | 'network' | 'github' | 'git' | 'env' | 'tools';
 
 /** values parsed from CLI flags; secret-bearing fields contain references, never raw credentials */
 export interface CommandOptions {
@@ -13,6 +13,8 @@ export interface CommandOptions {
   name?: string;
   /** explicit credential dotenv file read before the ambient environment, from --credential-file */
   credentialFile?: string;
+  /** dotenv file of variables for the agent and the shell accounts' shells, from --env-file */
+  envFile?: string;
   /** setup section to configure */
   section?: SetupSection;
   /** selected provider */

@@ -49,6 +49,9 @@ export async function prepareCreate(
     request.options,
     interaction,
   );
+  // the runtime environment is written only once the plan has run, so a
+  // restricted variable refuses here, before the provider creates anything
+  dependencies.guest.native.assertRuntimeEnv(input.runtimeEnv);
   const blocked = await inputFailure(dependencies, input);
   if (blocked) {
     return blocked;

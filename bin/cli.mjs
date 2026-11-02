@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --
+// "--" ends Node's own options, so Node never claims the CLI's --env-file flag
 import { run } from '../lib/cli/index.js';
 
 try {

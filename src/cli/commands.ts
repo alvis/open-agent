@@ -21,6 +21,7 @@ import {
   selectionFlags,
   setupFlags,
 } from './flags';
+import { guestFileFlags } from './guest-file-flags';
 
 import type { Command } from '@stricli/core';
 
@@ -46,6 +47,7 @@ type ConfigurationFlags = FlagsFor<
     typeof pairingFlags &
     typeof selectionFlags &
     typeof integrationFlags &
+    typeof guestFileFlags &
     typeof providerCredentialFlags &
     typeof integrationCredentialFlags &
     typeof outputFlags
@@ -103,6 +105,7 @@ const createCommand = buildCommand({
       ...pairingFlags,
       ...selectionFlags,
       ...integrationFlags,
+      ...guestFileFlags,
       ...providerCredentialFlags,
       ...integrationCredentialFlags,
       ...outputFlags,
@@ -139,6 +142,7 @@ const setupCommand = buildCommand({
       ...pairingFlags,
       ...selectionFlags,
       ...integrationFlags,
+      ...guestFileFlags,
       ...providerCredentialFlags,
       ...integrationCredentialFlags,
       ...outputFlags,

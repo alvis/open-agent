@@ -1,16 +1,21 @@
-import { mkdtempDisposable } from 'node:fs/promises';
+import { mkdtempDisposable, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
 import { createGuestMechanics } from '#adapters/guest/mechanics';
+import { RUNTIME_ENV_PATH, accountHome } from '#adapters/guest/platform/layout';
 import { defaults } from '#composition/defaults';
 import { registry } from '#composition/registry';
 import { OPEN_AGENT_VERSION } from '#kernel/version';
 
 import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
-import { createFilesystemSprite, guestOf } from '../../mocks/sprites';
+import {
+  createFilesystemSprite,
+  guestOf,
+  sessionGuestOf,
+} from '../../mocks/sprites';
 
 import type { OsRelease } from '#domain/guest';
 import type { WorkstationRecord } from '#domain/workstation';
@@ -134,6 +139,40 @@ describe('fn:createGuestMechanics', () => {
       ok: true,
       serverVersion: '2.3.4',
       label: 'test-workstation',
+    });
+  });
+
+  it('should configure approved runtime variables for the agent and provider shell', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-mechanics-env-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    const mechanics = createGuestMechanics({ registry, defaults });
+    const variables = { APP_MODE: 'runtime-probe-mode' };
+
+    await mechanics.native.configureRuntimeEnv(
+      sessionGuestOf(sprite),
+      variables,
+      ['sprite'],
+    );
+
+    expect({
+      runtime: JSON.parse(
+        await readFile(join(directory.path, RUNTIME_ENV_PATH), 'utf8'),
+      ),
+      providerShell: await readFile(
+        join(
+          directory.path,
+          accountHome('sprite'),
+          '.config/open-agent/env.sh',
+        ),
+        'utf8',
+      ).catch(() => undefined),
+    }).toEqual({
+      runtime: variables,
+      providerShell: expect.stringContaining(
+        `export APP_MODE='${variables.APP_MODE}'`,
+      ),
     });
   });
 });

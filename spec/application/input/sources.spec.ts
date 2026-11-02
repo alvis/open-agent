@@ -5,14 +5,15 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  readEnvironmentSources,
+  readInputSources,
   resolveSecret,
+  runtimeEnvironment,
 } from '#application/input/sources';
 import { redactResolved } from '#kernel/redaction';
 
 import { dependencies } from '../../mocks/dependencies';
 
-describe('fn:readEnvironmentSources', () => {
+describe('fn:readInputSources', () => {
   it('should parse the selected dotenv file', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'open-agent-input-'));
     vi.stubEnv('SPRITES_TOKEN', 'process-secret-for-source-test');
@@ -23,7 +24,7 @@ describe('fn:readEnvironmentSources', () => {
     );
 
     try {
-      const sources = await readEnvironmentSources(dependencies, {
+      const sources = await readInputSources(dependencies, {
         credentialFile: envPath,
       });
 
@@ -41,6 +42,41 @@ describe('fn:readEnvironmentSources', () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe('fn:runtimeEnvironment', () => {
+  it('should forward dotenv runtime inputs while retaining management and CLI inputs locally', () => {
+    const runtime = runtimeEnvironment(dependencies, {
+      SPRITES_TOKEN: 'sprites-management',
+      OPEN_AGENT_NETWORK: 'none',
+      OPEN_AGENT_IDLE_MINUTES: '0',
+      GH_TOKEN: 'native-github-client',
+      GIT_AUTHOR_NAME: 'Author',
+      CI: 'true',
+      APP_ACCESS_TOKEN: 'runtime-app-secret',
+      APP_DESCRIPTION: 'runtime setting',
+    });
+
+    expect(runtime).toEqual({
+      APP_ACCESS_TOKEN: 'runtime-app-secret',
+      APP_DESCRIPTION: 'runtime setting',
+    });
+    expect(redactResolved('runtime-app-secret remains private')).toBe(
+      '[REDACTED] remains private',
+    );
+  });
+
+  it('should reject process startup, loader, Git, and proxy overrides as a group', () => {
+    expect(() =>
+      runtimeEnvironment(dependencies, {
+        NODE_OPTIONS: '--import unwanted.mjs',
+        HTTP_PROXY: 'http://unwanted.test',
+        DYLD_INSERT_LIBRARIES: '/unwanted',
+        GIT_CONFIG_COUNT: '1',
+        npm_config_cache: '/unwanted',
+      }),
+    ).toThrow(expect.objectContaining({ code: 'INPUT' }));
   });
 });
 

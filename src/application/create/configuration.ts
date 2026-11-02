@@ -25,6 +25,7 @@ interface NewWorkstationConfiguration {
   githubToken?: string;
   githubHost?: string;
   gitIdentity?: GitIdentity;
+  runtimeEnv: Record<string, string>;
 }
 
 /** the named inputs of configure new workstation */
@@ -42,8 +43,8 @@ export interface ConfigureNewWorkstationParams {
 /**
  * installs the workstation through its setup plan, enrolling the network and
  * writing the native harness and account configuration before the services
- * start, since the agent's launcher reads its committer only as it
- * starts, then records the installation as ready
+ * start, since the agent's launcher reads its runtime environment and
+ * committer only as it starts, then records the installation as ready
  * @param dependencies the registered drivers, the guest mechanics
  * @param params the call's inputs: provider, connection, interaction, configuration
  * @returns the guest channel the configuration ran over
@@ -133,6 +134,11 @@ async function configureNative(
 ): Promise<void> {
   const { profile, githubToken, githubHost } = configuration;
   const drivers = harnessDrivers(dependencies.registry, profile.harnesses);
+  await dependencies.guest.native.configureRuntimeEnv(
+    guest,
+    configuration.runtimeEnv,
+    dependencies.registry.providers[profile.provider].shellAccounts,
+  );
   if (githubToken) {
     await dependencies.guest.native.configureGithub(
       guest,

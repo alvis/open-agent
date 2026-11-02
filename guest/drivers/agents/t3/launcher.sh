@@ -1,10 +1,10 @@
 #!/bin/sh
 # T3 Code's launcher, run as the agent by the t3-code service: it starts the
-# agent's t3 on the port environment.json records, with every selected
-# harness's spawn environment and the committer the agent configured, then
-# replaces itself with t3. T3 can mint startup credentials on stdout even with
-# the browser disabled, so its output is never kept or logged: both streams are
-# discarded
+# agent's t3 on the port environment.json records, with the environment the
+# agent keeps for its runtime, every selected harness's spawn environment and
+# the committer the agent configured, then replaces itself with t3. T3 can mint
+# startup credentials on stdout even with the browser disabled, so its output
+# is never kept or logged: both streams are discarded
 
 set -u
 
@@ -84,6 +84,12 @@ test -r "$OA_ENVIRONMENT_PATH" || oa_fail "$OA_ENVIRONMENT_PATH is not readable"
 oa_port=$(jq -er '.agent.port | select(type == "number" and . >= 1 and . <= 65535 and floor == .)' \
   "$OA_ENVIRONMENT_PATH") || oa_fail "environment.json records no agent port"
 
+# the agent's runtime environment first, so neither HOME nor a harness's
+# environment can be overridden by it
+if test -e "$OA_RUNTIME_ENV_PATH"; then
+  oa_runtime=$(oa_exports "the agent's runtime environment" <"$OA_RUNTIME_ENV_PATH") || exit 1
+  eval "$oa_runtime"
+fi
 HOME=$OA_AGENT_HOME
 export HOME
 oa_harnesses=$(jq -c '[.agent.harnesses[]?.environment] | add // {}' "$OA_ENVIRONMENT_PATH" |

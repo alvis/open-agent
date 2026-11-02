@@ -29,6 +29,7 @@ const FIELD_LABELS: Record<string, string> = {
   httpie: 'HTTPie',
   rust: 'Rust',
   github: 'GitHub',
+  env: 'Environment variables',
   ...Object.fromEntries(
     [
       ...Object.values(registry.agents),

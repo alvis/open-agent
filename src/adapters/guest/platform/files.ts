@@ -54,8 +54,9 @@ export async function writeGuestFile(
 
 /**
  * hands a written file's contents to the guest: as a secret input when they
- * hold a credential the host resolved, so it reaches the guest only through a
- * setup session's secret input, and as text otherwise
+ * hold a credential the host resolved, such as a runtime variable, so it
+ * reaches the guest only through a setup session's secret
+ * input, and as text otherwise
  * @param contents the file's contents
  * @returns the write command's input or secret
  */

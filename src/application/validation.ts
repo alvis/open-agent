@@ -117,7 +117,12 @@ function validateSetupOptions(options: CommandOptions): void {
     });
   }
   validateSetupIntegrationOptions(options, options.section);
-  if (!options.section && !options.withPairCode && options.nonInteractive) {
+  if (
+    !options.section &&
+    !options.withPairCode &&
+    !options.envFile &&
+    options.nonInteractive
+  ) {
     throw new CommandValidationError({
       message: [
         'Non-interactive setup requires --section',
@@ -164,6 +169,11 @@ export function validateSetupIntegrationOptions(
   if (section !== 'agent' && options.release !== undefined) {
     throw new CommandValidationError({
       message: 'Release switches require --section agent or --section all',
+    });
+  }
+  if (section !== 'env' && options.envFile !== undefined) {
+    throw new CommandValidationError({
+      message: 'The env file requires --section env or --section all',
     });
   }
 }

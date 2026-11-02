@@ -37,7 +37,7 @@ describe('fn:resolveBaseInputs', () => {
     });
   });
 
-  it('should resolve credential file and process precedence', async () => {
+  it('should resolve credential file and process precedence and forward only the guest env file', async () => {
     const resolved = await resolveBaseInputs(dependencies, {
       options: {
         name: 'chosen',
@@ -53,6 +53,7 @@ describe('fn:resolveBaseInputs', () => {
           SPRITES_TOKEN: 'file-management-token',
           CREDENTIAL_ONLY: 'credential-file-value',
         },
+        runtimeFileEnv: { APP_TOKEN: 'runtime-secret-value' },
       },
       selection: { profile: DISABLED_NETWORK_PROFILE },
     });
@@ -62,6 +63,7 @@ describe('fn:resolveBaseInputs', () => {
         name: 'chosen',
         providerToken: 'file-management-token',
         profile: DISABLED_NETWORK_PROFILE,
+        runtimeEnv: { APP_TOKEN: 'runtime-secret-value' },
         sources: {
           SPRITES_TOKEN: 'SPRITES_TOKEN in selected.env',
           GH_TOKEN: 'process environment',
@@ -70,9 +72,11 @@ describe('fn:resolveBaseInputs', () => {
       },
       githubCandidate: 'process-github-token',
     });
-    expect(redactResolved('file-management-token process-github-token')).toBe(
-      '[REDACTED] [REDACTED]',
-    );
+    expect(
+      redactResolved(
+        'file-management-token process-github-token runtime-secret-value',
+      ),
+    ).toBe('[REDACTED] [REDACTED] [REDACTED]');
   });
 
   it('should select explicit secret references and record source descriptions without values', async () => {
@@ -94,6 +98,7 @@ describe('fn:resolveBaseInputs', () => {
         githubCandidate: 'explicit-github-secret',
         input: expect.objectContaining({
           providerToken: 'explicit-sprites-secret',
+          runtimeEnv: {},
           sources: {
             SPRITES_TOKEN:
               '--provider-token-source env:OPEN_AGENT_BASE_SPRITES',

@@ -3,6 +3,7 @@ import {
   mkdtempDisposable,
   readFile,
   stat,
+  symlink,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,11 +11,19 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { configureGit, configureGithub } from '#adapters/guest/native/git';
+import {
+  assertRuntimeEnv,
+  configureGit,
+  configureGithub,
+  configureRuntimeEnv,
+} from '#adapters/guest/native/git';
 import { ACCOUNT_PATH, accountHome } from '#adapters/guest/platform/layout';
+import { sessionGuest } from '#adapters/guest/platform/session/channel';
 import { HOMEBREW_GH } from '#adapters/guest/tools/accounts';
+import { registry } from '#composition/registry';
 import { Secret } from '#kernel/secret';
 
+import { standInSession } from '../../../mocks/session';
 import {
   createFilesystemSprite,
   createNativeCommandExecutor,
@@ -326,5 +335,196 @@ describe('fn:configureGithub', () => {
         ),
       }),
     );
+  });
+});
+
+describe('fn:configureRuntimeEnv', () => {
+  it('should persist only approved runtime values for the agent and its shells and reject management credentials before rewriting the files', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-runtime-env-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    const approved = {
+      WORKSTATION_CONTEXT: 'quoted "value"\nsecond line',
+      USER_TAG: 'preserved',
+    };
+    const path = join(
+      directory.path,
+      '/home/agent/.config/open-agent/runtime-env.json',
+    );
+
+    const home = join(directory.path, '/home/agent');
+
+    await configureRuntimeEnv(registry, sessionGuestOf(sprite), {
+      environment: approved,
+      shellAccounts: [],
+    });
+    await expect(
+      configureRuntimeEnv(registry, sessionGuestOf(sprite), {
+        environment: { SPRITES_TOKEN: 'private', HOME: '/malicious' },
+        shellAccounts: [],
+      }),
+    ).rejects.toEqual(expect.objectContaining({ code: 'INPUT' }));
+
+    expect({
+      runtime: JSON.parse(await readFile(path, 'utf8')),
+      shell: await readFile(`${home}/.config/open-agent/env.sh`, 'utf8'),
+      profile: await readFile(`${home}/.profile`, 'utf8'),
+    }).toEqual({
+      runtime: approved,
+      shell: [
+        '# open-agent: variables from --env-file',
+        `export WORKSTATION_CONTEXT='quoted "value"\nsecond line'`,
+        "export USER_TAG='preserved'",
+        '',
+      ].join('\n'),
+      profile: expect.stringContaining('.config/open-agent/env.sh'),
+    });
+  });
+  it('should leave exactly one hook line in the profile when the runtime env is configured twice', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-runtime-env-twice-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    await sprite
+      .filesystem()
+      .writeFile('/home/agent/.profile', 'export EXISTING=kept');
+    await sprite
+      .filesystem()
+      .writeFile('/home/agent/.bashrc', 'export BASH_SETTING=kept\n');
+    const options = {
+      environment: { USER_TAG: 'preserved' },
+      shellAccounts: [],
+    };
+
+    await configureRuntimeEnv(registry, sessionGuestOf(sprite), options);
+    await configureRuntimeEnv(registry, sessionGuestOf(sprite), options);
+
+    const profile = await readFile(
+      join(directory.path, '/home/agent/.profile'),
+      'utf8',
+    );
+    expect(
+      profile.split('\n').filter((line) => line.endsWith('# open-agent env')),
+    ).toEqual([expect.stringContaining('.config/open-agent/env.sh')]);
+    expect(profile).toMatch(/^export EXISTING=kept\nif /);
+    expect(
+      await readFile(join(directory.path, '/home/agent/.bashrc'), 'utf8'),
+    ).toMatch(/^export BASH_SETTING=kept\nif /);
+  });
+
+  it('should stop configuration when the account cannot read a startup file', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-startup-read-error-'),
+    );
+    const guest = sessionGuestOf(
+      createFilesystemSprite({ root: directory.path }),
+    );
+    const execute = guest.exec.bind(guest);
+    vi.spyOn(guest, 'exec').mockImplementation(async (command) =>
+      command.arguments.includes('oa-read-startup')
+        ? { exitCode: 1, stdout: '', stderr: 'permission denied' }
+        : execute(command),
+    );
+
+    await expect(
+      configureRuntimeEnv(registry, guest, {
+        environment: { USER_TAG: 'kept' },
+        shellAccounts: [],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PROVIDER',
+      message: expect.stringContaining('/home/agent/.zshenv'),
+    });
+  });
+
+  it('should leave a startup file that is a link unchanged when the runtime env is configured', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-runtime-env-link-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    const home = join(directory.path, '/home/agent');
+    const elsewhere = join(directory.path, 'elsewhere');
+    await mkdir(home, { recursive: true });
+    await writeFile(elsewhere, 'kept\n');
+    await symlink(elsewhere, join(home, '.zshenv'));
+
+    await configureRuntimeEnv(registry, sessionGuestOf(sprite), {
+      environment: { USER_TAG: 'preserved' },
+      shellAccounts: [],
+    });
+
+    expect({
+      target: await readFile(elsewhere, 'utf8'),
+      zshenv: await readFile(join(home, '.zshenv'), 'utf8'),
+    }).toEqual({ target: 'kept\n', zshenv: 'kept\n' });
+  });
+
+  it('should send the runtime and shell env files only as secret input when every value is escaped in them', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-runtime-env-escaped-'),
+    );
+    const channel = guestOf(createFilesystemSprite({ root: directory.path }));
+    const session = standInSession(channel);
+    const run = vi.spyOn(session, 'run');
+
+    await configureRuntimeEnv(
+      registry,
+      sessionGuest(session, channel, channel.services),
+      {
+        environment: { DATABASE_PASSWORD: `it's "quoted"` },
+        shellAccounts: ['sprite'],
+      },
+    );
+
+    expect(
+      run.mock.calls
+        .filter(([command]) => command.input?.kind === 'secret')
+        .flatMap(([command]) => command.argv)
+        .filter((arg) => /\/(?:runtime-env\.json|env\.sh)$/.test(arg)),
+    ).toEqual([
+      '/home/agent/.config/open-agent/runtime-env.json',
+      '/home/agent/.config/open-agent/env.sh',
+      '/home/sprite/.config/open-agent/env.sh',
+    ]);
+  });
+});
+
+describe('fn:assertRuntimeEnv', () => {
+  it('should reject every OA_ name the guest programs reserve and tell the user to rename it', () => {
+    const run = () =>
+      assertRuntimeEnv(registry, {
+        USER_TAG: 'kept',
+        OA_GUEST_ROOT: '/srv/elsewhere',
+        OA_CUSTOM: 'value',
+      });
+
+    expect(run).toThrow(
+      expect.objectContaining({
+        code: 'INPUT',
+        message:
+          'Runtime environment contains keys open-agent reserves for its guest programs: OA_GUEST_ROOT, OA_CUSTOM; rename them without the OA_ prefix',
+      }),
+    );
+  });
+
+  it('should reject a dotted or dashed name a shell cannot export', () => {
+    const run = () =>
+      assertRuntimeEnv(registry, { 'my-var': 'a', 'a.b': 'b', 'FINE': 'c' });
+
+    expect(run).toThrow(
+      expect.objectContaining({
+        code: 'INPUT',
+        message: expect.stringContaining(
+          'Runtime environment contains names a shell cannot export: my-var, a.b',
+        ),
+      }),
+    );
+  });
+
+  it('should accept a name that only contains OA_ after its start', () => {
+    expect(() =>
+      assertRuntimeEnv(registry, { MY_OA_SETTING: 'value' }),
+    ).not.toThrow();
   });
 });

@@ -45,6 +45,7 @@ describe('fn:recordSetupMetadata', () => {
         options: {},
         input: {
           profile: DISABLED_NETWORK_PROFILE,
+          runtimeEnv: {},
           sources: {},
           missing: [],
         },

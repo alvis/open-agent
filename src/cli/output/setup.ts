@@ -53,6 +53,8 @@ export interface SetupDataOutput {
   network?: { status: 'disabled'; readiness: 'skipped' };
   github?: string;
   gitIdentity?: string;
+  runtimeEnvironment?:
+    { status: 'configured'; names: readonly string[] } | { status: 'skipped' };
   components?: ComponentCountsOutput;
   tools?: ToolsSetupOutput;
 }
@@ -131,6 +133,16 @@ export function projectSetup(data: SetupData): SetupDataOutput {
     network: projectNetworkOutcome,
     github: same,
     gitIdentity: same,
+    runtimeEnvironment: (environment) =>
+      environment.status === 'configured'
+        ? projectFields<
+            typeof environment,
+            NonNullable<SetupDataOutput['runtimeEnvironment']>
+          >(environment, { status: same, names: same })
+        : projectFields<
+            typeof environment,
+            NonNullable<SetupDataOutput['runtimeEnvironment']>
+          >(environment, { status: same }),
     components: projectComponents,
     tools: projectToolsOutcome,
   });

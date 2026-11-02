@@ -12,6 +12,7 @@ import type { StatusUpdate } from '#kernel/status';
 
 const input = {
   profile: DISABLED_NETWORK_PROFILE,
+  runtimeEnv: {},
   sources: {},
   missing: [],
 };

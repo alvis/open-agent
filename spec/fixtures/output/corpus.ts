@@ -323,6 +323,10 @@ export const CORPUS: readonly CorpusCase[] = [
       pairing: { status: 'not requested' },
       github: 'configured',
       gitIdentity: 'preserved',
+      runtimeEnvironment: {
+        status: 'configured',
+        names: ['API_BASE', 'REGION'],
+      },
       network: { status: 'disabled', readiness: 'skipped' },
       components: { installed: 6, skipped: 1, failed: 1 },
       tools: 'updated',
@@ -401,6 +405,27 @@ export const CORPUS: readonly CorpusCase[] = [
     command: 'setup',
     ok: true,
     data: { section: 'git', machine: MACHINE, gitIdentity: 'preserved' },
+  }),
+  corpusCase('setup-env-configured', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'env',
+      machine: MACHINE,
+      runtimeEnvironment: {
+        status: 'configured',
+        names: ['API_BASE', 'REGION'],
+      },
+    },
+  }),
+  corpusCase('setup-env-skipped', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'env',
+      machine: MACHINE,
+      runtimeEnvironment: { status: 'skipped' },
+    },
   }),
   corpusCase('setup-tools-updated', {
     command: 'setup',

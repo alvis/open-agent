@@ -23,6 +23,14 @@ export interface NativeAccountOwner {
   shellAccounts: readonly string[];
 }
 
+/** a file written into an account's home */
+export interface AccountFile {
+  /** absolute path inside the owning account's home */
+  path: string;
+  /** the file's complete contents */
+  contents: string;
+}
+
 /** arguments for an operation confined to one native account home */
 interface NativeFileCommandParams {
   guest: GuestChannel;
@@ -84,7 +92,7 @@ export async function ensurePrivateDirectory(
 
 /**
  * writes a private native configuration file owned by the guest account;
- * contents that hold a credential go as a secret input
+ * contents that hold a credential, such as a runtime variable, go as a secret input
  * @param guest target guest
  * @param path absolute file path
  * @param contents serialized native settings
@@ -95,6 +103,21 @@ export async function writeOwnedFile(
   contents: string,
 ): Promise<void> {
   await runNativeFileCommand({ guest, path, operation: 'write', contents });
+}
+
+/**
+ * writes a private file owned by the agent or a provider shell account;
+ * contents that hold a credential go as a secret input
+ * @param guest target guest
+ * @param owner account that owns the file
+ * @param file absolute path inside the owner's home and its contents
+ */
+export async function writeAccountFile(
+  guest: GuestChannel,
+  owner: NativeAccountOwner,
+  file: AccountFile,
+): Promise<void> {
+  await runNativeFileCommand({ guest, owner, operation: 'write', ...file });
 }
 
 /**

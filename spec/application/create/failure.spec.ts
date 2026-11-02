@@ -337,6 +337,7 @@ describe('cmd:create retained setup recovery', () => {
           name: workstation.name,
           providerToken: 'sdk-only-test-token',
           profile: DISABLED_NETWORK_PROFILE,
+          runtimeEnv: {},
           sources: {},
           missing: [],
         },

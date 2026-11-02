@@ -195,6 +195,9 @@ function expectSuccessJson(result: CommandSuccess, output: unknown): void {
     case 'show':
       expectShowJson(result.data.inspection, output);
       break;
+    case 'setup':
+      expectSetupJson(result.data, output);
+      break;
     case 'terminate':
       expect(output).toMatchObject({
         data: { workstation: result.data.workstation },
@@ -281,6 +284,22 @@ function expectShowJson(
           governor: { recorded: inspection.governor.recorded },
         },
       },
+    });
+  }
+}
+
+/**
+ * checks section-specific setup outcomes through their public JSON fields
+ * @param data completed setup data
+ * @param output freshly parsed JSON output
+ */
+function expectSetupJson(
+  data: Extract<CommandSuccess, { command: 'setup' }>['data'],
+  output: unknown,
+): void {
+  if ('runtimeEnvironment' in data && data.runtimeEnvironment) {
+    expect(output).toMatchObject({
+      data: { runtimeEnvironment: { status: data.runtimeEnvironment.status } },
     });
   }
 }

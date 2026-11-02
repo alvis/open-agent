@@ -118,6 +118,12 @@ export interface GitSetupData {
   gitIdentity: 'configured' | 'preserved';
 }
 
+/** names of configured environment values without their secret contents */
+export interface EnvironmentSetupData {
+  runtimeEnvironment:
+    { status: 'configured'; names: string[] } | { status: 'skipped' };
+}
+
 /** how many tools an update left current, did not run for, and failed */
 export interface ComponentCounts {
   /** tools current after the update */
@@ -153,6 +159,7 @@ export interface AllSetupData
     Partial<AgentSetupData>,
     Partial<GithubSetupData>,
     Partial<GitSetupData>,
+    Partial<EnvironmentSetupData>,
     NetworkSetupData,
     ToolsSetupData {}
 
@@ -163,6 +170,7 @@ interface SetupSectionData {
   network: NetworkSetupData;
   github: GithubSetupData;
   git: GitSetupData;
+  env: EnvironmentSetupData;
   tools: ToolsSetupData;
 }
 

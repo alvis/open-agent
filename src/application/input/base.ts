@@ -3,7 +3,7 @@ import { runOperation } from '#kernel/operation';
 
 import { resolveProviderCredential } from './provider-credential';
 
-import { resolveSecret } from './sources';
+import { resolveSecret, runtimeEnvironment } from './sources';
 
 import type { CommandOptions } from '#application/contracts';
 
@@ -62,6 +62,10 @@ export async function resolveBaseInputs(
   const names = declaredNames(dependencies, profile);
   const sourceNames: Record<string, string> = {};
   const value = sourceReader(options, sources, sourceNames);
+  const runtimeEnv = runtimeEnvironment(
+    dependencies,
+    sources.runtimeFileEnv ?? {},
+  );
   const secrets = await resolveSelectedSecrets(dependencies, {
     options,
     value,
@@ -77,6 +81,7 @@ export async function resolveBaseInputs(
     name: options.name,
     providerToken: secrets.providerToken,
     profile,
+    runtimeEnv,
     sources: sourceNames,
     missing: [],
   };

@@ -10,6 +10,7 @@ import type { ResolvedInputs } from '#application/input/types';
 
 const baseInput: ResolvedInputs = {
   profile: DISABLED_NETWORK_PROFILE,
+  runtimeEnv: {},
   sources: {},
   missing: [],
 };

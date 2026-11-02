@@ -27,6 +27,11 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
     description: 'Configure author and committer names and emails',
   },
   {
+    value: 'env',
+    label: 'Environment variables',
+    description: 'Configure variables for the agent and every shell',
+  },
+  {
     value: 'tools',
     label: 'Managed tools',
     description: 'View recorded versions or explicitly update tools in place',
@@ -53,6 +58,9 @@ export async function selectSetupSection(
   }
   if (options.withPairCode) {
     return 'agent';
+  }
+  if (options.envFile) {
+    return 'env';
   }
   if (!interaction || options.nonInteractive) {
     throw new Error('Non-interactive setup requires --section');

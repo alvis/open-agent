@@ -73,14 +73,13 @@ function connectionOf(sprite: Sprite): SetupSession {
 }
 
 /**
- * builds the guest mechanics with a stubbed workstation label and native
- * steps a test may replace
+ * builds the guest mechanics whose native steps and label record their order
+ * @param calls receives the name of each step in the order it runs
  * @returns the dependencies configuration runs on
  */
-function labelStubbedDependencies(): Pick<
-  ApplicationDependencies,
-  'registry' | 'guest'
-> {
+function recordingDependencies(
+  calls: string[],
+): Pick<ApplicationDependencies, 'registry' | 'guest'> {
   const { guest } = dependencies;
 
   return {
@@ -90,6 +89,9 @@ function labelStubbedDependencies(): Pick<
       label: { ...guest.label, write: vi.fn(async () => undefined) },
       native: {
         ...guest.native,
+        configureRuntimeEnv: vi.fn(async () => {
+          calls.push('configureNative');
+        }),
       },
     },
   };
@@ -113,12 +115,13 @@ describe('fn:configureNewWorkstation', () => {
         calls.push('network enrolled');
       });
 
-    const guest = await configureNewWorkstation(labelStubbedDependencies(), {
+    const guest = await configureNewWorkstation(recordingDependencies(calls), {
       provider: providerOf(sprite.client),
       connection,
       configuration: {
         hostname: 'box',
         profile,
+        runtimeEnv: {},
       },
     });
 
@@ -128,7 +131,7 @@ describe('fn:configureNewWorkstation', () => {
       enrollment: enroll.mock.calls,
     }).toEqual({
       guest: await connection.guest(),
-      calls: ['network enrolled'],
+      calls: ['network enrolled', 'configureNative'],
       enrollment: [
         [expect.anything(), expect.objectContaining({ hostname: 'box' })],
       ],
@@ -141,7 +144,7 @@ describe('fn:configureNewWorkstation', () => {
     );
     const sprite = createFilesystemSprite({ root: directory.path });
     const calls: string[] = [];
-    const wired = labelStubbedDependencies();
+    const wired = recordingDependencies(calls);
     const profile = {
       ...DISABLED_NETWORK_PROFILE,
       harnesses: ['claude'],
@@ -182,6 +185,7 @@ describe('fn:configureNewWorkstation', () => {
           committerName: 'A User',
           committerEmail: 'author@example.test',
         },
+        runtimeEnv: {},
       },
     });
 
@@ -193,6 +197,7 @@ describe('fn:configureNewWorkstation', () => {
     }).toEqual({
       guest: await connection.guest(),
       calls: [
+        'configureNative',
         'github configured',
         'git configured',
         'harness configured',

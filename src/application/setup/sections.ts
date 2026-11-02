@@ -13,6 +13,7 @@ import type {
   AgentSetupData,
   GithubSetupData,
   GitSetupData,
+  EnvironmentSetupData,
 } from '#application/data';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { GuestChannel } from '#application/ports/guest-channel';
@@ -179,4 +180,49 @@ export async function setupGit(
   await dependencies.guest.native.configureGit(guest, input.gitIdentity);
 
   return { gitIdentity: 'configured' };
+}
+
+/**
+ * loads and writes a selected runtime environment file, asking for its path
+ * in a terminal and skipping the section when no file is selected and no
+ * prompt can ask for one
+ * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
+ * @param guest guest channel of the managed workstation
+ * @param context environment choice, prompts, and redaction values
+ * @returns names of configured runtime variables, or the skipped section
+ */
+export async function setupEnvironment(
+  dependencies: ApplicationDependencies,
+  guest: GuestChannel,
+  context: SetupContext,
+): Promise<EnvironmentSetupData> {
+  const { options, interaction, mutation } = context;
+  const envPath =
+    options.envFile ??
+    (interaction && !options.nonInteractive
+      ? await interaction.input({
+          message: 'Runtime env file path',
+          required: true,
+        })
+      : undefined);
+  if (!envPath) {
+    return { runtimeEnvironment: { status: 'skipped' } };
+  }
+  const input = await resolveInputs(dependencies, {
+    options: { ...options, envFile: envPath },
+    requirementSelection: [],
+  });
+  mutation.started = true;
+  await dependencies.guest.native.configureRuntimeEnv(
+    guest,
+    input.runtimeEnv,
+    dependencies.registry.providers[context.profile.provider].shellAccounts,
+  );
+
+  return {
+    runtimeEnvironment: {
+      status: 'configured',
+      names: Object.keys(input.runtimeEnv),
+    },
+  };
 }
