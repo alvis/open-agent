@@ -16,20 +16,39 @@
     "email": "alvis@hilbert.space"
   },
   "type": "module",
+  "imports": {
+    "#cli/components/*": "./src/cli/components/*.tsx",
+    "#*": "./src/*.ts"
+  },
+  "bin": {
+    "open-agent": "./bin/cli.mjs"
+  },
   "scripts": {
     "build": "run build",
+    "postbuild": "chmod +x bin/cli.mjs",
     "lint": "run lint --",
+    "local": "sh -c '[ \"${1-}\" != -- ] || shift\n  d=$(mktemp -d) || exit\n  trap \"rm -rf \\\"$d\\\"\" EXIT; trap \"exit 130\" INT; trap \"exit 143\" TERM\n  pnpm -s run build >&2 &&\n  pnpm pack --out \"$d/oa.tgz\" >&2 &&\n  npm install --prefix \"$d\" --no-audit --no-fund --package-lock=false \"$d/oa.tgz\" >&2 &&\n  \"$d/node_modules/.bin/open-agent\" \"$@\"' sh",
     "prepare": "run prepare",
     "test": "run test",
     "test:coverage": "run test:coverage --",
     "typecheck": "run typecheck"
+  },
+  "dependencies": {
+    "@fly/sprites": "^0.2.3",
+    "@stricli/core": "^1.3.0",
+    "dotenv": "^18.0.6",
+    "execa": "^9.6.1",
+    "ink": "~8.0.0",
+    "react": "^19.3.0"
   },
   "devDependencies": {
     "@presetter/preset-esm": "^9.1.0",
     "@presetter/preset-react": "^9.1.0",
     "@presetter/preset-strict": "^9.1.0",
     "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
     "@vitest/coverage-v8": "^4.0.0",
+    "ink-testing-library": "^4.0.0",
     "presetter": "^9.1.0",
     "typescript": "^5.9.0",
     "vitest": "^4.0.0"
@@ -46,6 +65,9 @@
     "node": ">=24.0.0"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "imports": {
+      "#*": "./lib/*.js"
+    }
   }
 }

@@ -1,0 +1,64 @@
+import { projectCreate, projectCreateFailure } from './create';
+import { projectError } from './failure';
+
+import type { CommandResult, CommandSuccess } from '#application/result';
+
+import type { FailureOutput, ResultOutput, SuccessOutput } from './envelope';
+
+type Failed = Exclude<CommandResult, { ok: true }>;
+
+/**
+ * projects a command result to the frozen output contract
+ * @param result internal result
+ * @returns output result, ready for the serializer to redact and encode
+ */
+export function projectResult(result: CommandResult): ResultOutput {
+  return result.ok ? projectSuccess(result) : projectFailure(result);
+}
+
+/**
+ * projects a successful result for its command
+ * @param result internal success
+ * @returns output success
+ */
+function projectSuccess(result: CommandSuccess): SuccessOutput {
+  return {
+    command: 'create',
+    ok: true,
+    data: projectCreate(result.data),
+  };
+}
+
+/**
+ * projects a failed result with the observations its command keeps
+ * @param result internal failure
+ * @returns output failure
+ */
+function projectFailure(result: Failed): FailureOutput {
+  const error = projectError(result.error);
+  switch (result.command) {
+    case null:
+      return { command: null, ok: false, error };
+    case 'create':
+      return {
+        command: 'create',
+        ok: false,
+        error,
+        data: optional(result.data, projectCreateFailure),
+      };
+    // no default
+  }
+}
+
+/**
+ * projects a value that a failure may not carry
+ * @param value internal value
+ * @param project projector for a present value
+ * @returns the projection, or undefined when absent
+ */
+function optional<T, V>(
+  value: T | undefined,
+  project: (present: T) => V,
+): V | undefined {
+  return value === undefined ? undefined : project(value);
+}

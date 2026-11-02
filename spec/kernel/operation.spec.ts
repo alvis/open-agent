@@ -1,0 +1,618 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
+import { Sprite, SpritesClient } from '@fly/sprites';
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  MANAGED_LABEL,
+  SCHEMA_LABEL,
+} from '#adapters/drivers/providers/sprite/labels';
+import { commandError } from '#application/failures';
+
+import {
+  OperationContext,
+  checkOperation,
+  currentOperation,
+  publishStatus,
+  promptUnavailableDetail,
+  recoverOperation,
+  runBoundedIO,
+  runOperation,
+  traceStage,
+  withOperation,
+} from '#kernel/operation';
+
+import {
+  DEFAULT_AGENT_PORT,
+  DISABLED_NETWORK_PROFILE,
+} from '../fixtures/profile';
+
+import { providerOf } from '../mocks/sprites';
+
+import type { StageEvent } from '#kernel/operation';
+
+/** one caller-controlled SDK settlement without a workflow replacement */
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
+describe('invocation-scoped operations', () => {
+  it('should deliver status only to the originating invocation reporter', async () => {
+    const reported = vi.fn();
+    const fallback = { status: vi.fn() };
+    const context = new OperationContext({
+      signal: new AbortController().signal,
+      onStatus: reported,
+    });
+    const update = { kind: 'info' as const, message: 'Preparing resource' };
+
+    await withOperation(context, async () => {
+      publishStatus(update, fallback);
+    });
+
+    expect(reported).toHaveBeenCalledExactlyOnceWith(update);
+    expect(fallback.status).not.toHaveBeenCalled();
+    expect(context.reportStatus(update)).toBe(false);
+  });
+
+  it('should use direct interaction status only when the active invocation has no reporter', async () => {
+    const fallback = { status: vi.fn() };
+    const update = { kind: 'warning' as const, message: 'Waiting for guest' };
+    const context = new OperationContext({
+      signal: new AbortController().signal,
+    });
+
+    publishStatus(update, fallback);
+    await withOperation(context, async () => {
+      publishStatus(update, fallback);
+    });
+
+    expect(fallback.status).toHaveBeenCalledTimes(2);
+    expect(context.reportStatus(update)).toBe(false);
+  });
+
+  it('should suppress late status from a closed invocation', async () => {
+    const fallback = { status: vi.fn() };
+    const context = new OperationContext({
+      signal: new AbortController().signal,
+    });
+    const update = { kind: 'info' as const, message: 'Too late' };
+    const gate = deferred<void>();
+    let pending!: Promise<void>;
+
+    await withOperation(context, async () => {
+      pending = gate.promise.then(() => publishStatus(update, fallback));
+    });
+    gate.resolve();
+    await pending;
+
+    expect(fallback.status).not.toHaveBeenCalled();
+  });
+
+  it('should report ordered real stage timings only to the originating invocation', async () => {
+    const firstEvents: StageEvent[] = [];
+    const secondEvents: StageEvent[] = [];
+    const first = new OperationContext({
+      signal: new AbortController().signal,
+      onStage: (event) => firstEvents.push(event),
+    });
+    const second = new OperationContext({
+      signal: new AbortController().signal,
+      onStage: (event) => secondEvents.push(event),
+    });
+    const firstClient = new SpritesClient('sdk-only-stage-first');
+    const secondClient = new SpritesClient('sdk-only-stage-second');
+
+    vi.spyOn(firstClient, 'listAllSprites').mockImplementation(async () => {
+      await delay(2);
+
+      return [];
+    });
+    secondClient.listAllSprites = vi.fn(async () => []);
+
+    await Promise.all([
+      withOperation(first, async () => {
+        first.select('create');
+        first.identify({ name: 'first' });
+
+        return traceStage({
+          stage: 'command',
+          action: async () => providerOf(firstClient).isNameTaken('disposable'),
+        });
+      }),
+      withOperation(second, async () => {
+        second.select('create');
+
+        return traceStage({
+          stage: 'command',
+          action: async () =>
+            providerOf(secondClient).isNameTaken('disposable'),
+        });
+      }),
+    ]);
+
+    expect(first.command).toBe('create');
+
+    expect(firstEvents.map(({ event }) => event)).toEqual([
+      'start',
+      'complete',
+    ]);
+    expect(secondEvents.map(({ event }) => event)).toEqual([
+      'start',
+      'complete',
+    ]);
+    expect(firstEvents).toMatchObject([
+      { command: 'create', targetKnown: true, stage: 'command' },
+      {
+        command: 'create',
+        targetKnown: true,
+        stage: 'command',
+        outcome: 'ok',
+      },
+    ]);
+    expect(secondEvents).toMatchObject([
+      { command: 'create', targetKnown: false, stage: 'command' },
+      {
+        command: 'create',
+        targetKnown: false,
+        stage: 'command',
+        outcome: 'ok',
+      },
+    ]);
+    expect(firstEvents[1]?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(secondEvents[1]?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(firstEvents[0]).not.toHaveProperty('durationMs');
+    expect(secondEvents[0]).not.toHaveProperty('durationMs');
+  });
+
+  it('should stop stage diagnostics and SDK effects after the originating invocation closes', async () => {
+    const events: StageEvent[] = [];
+    const context = new OperationContext({
+      signal: new AbortController().signal,
+      onStage: (event) => events.push(event),
+    });
+    const gate = deferred<void>();
+    const client = new SpritesClient('sdk-only-late-stage');
+    const sdkCall = vi.spyOn(client, 'listAllSprites');
+    let pending!: Promise<unknown>;
+
+    await withOperation(context, async () => {
+      pending = traceStage({
+        stage: 'command',
+        action: async () => {
+          await gate.promise;
+
+          return providerOf(client).isNameTaken('disposable');
+        },
+      }).catch((error: unknown) => error);
+      expect(events.map(({ event }) => event)).toEqual(['start']);
+    });
+    gate.resolve();
+    await expect(pending).resolves.toMatchObject({ action: 'cancel' });
+    expect(context.closed).toBe(true);
+    expect(() => context.identify({ name: 'late' })).toThrowError();
+    expect(sdkCall).not.toHaveBeenCalled();
+    expect(events.map(({ event }) => event)).toEqual(['start']);
+
+    const afterClose = await traceStage({
+      stage: 'command',
+      action: async () => providerOf(client).isNameTaken('disposable'),
+      context,
+    }).catch((error: unknown) => error);
+    expect(afterClose).toMatchObject({ action: 'cancel' });
+    expect(sdkCall).not.toHaveBeenCalled();
+    expect(events.map(({ event }) => event)).toEqual(['start']);
+  });
+
+  it('should report an unsuccessful stage result while returning it to the caller', async () => {
+    const events: StageEvent[] = [];
+    const context = new OperationContext({
+      signal: new AbortController().signal,
+      onStage: (event) => events.push(event),
+    });
+    const result = { accepted: false };
+
+    await expect(
+      traceStage({
+        stage: 'validate',
+        action: async () => result,
+        context: { operation: context, succeeded: (value) => value.accepted },
+      }),
+    ).resolves.toBe(result);
+    expect(events).toMatchObject([
+      { stage: 'validate', event: 'start' },
+      { stage: 'validate', event: 'complete', outcome: 'failed' },
+    ]);
+  });
+
+  it('should report a failed stage and preserve the original rejection', async () => {
+    const events: StageEvent[] = [];
+    const context = new OperationContext({
+      signal: new AbortController().signal,
+      onStage: (event) => events.push(event),
+    });
+    const failure = new Error('provider failed');
+
+    await expect(
+      traceStage({
+        stage: 'request',
+        action: async () => {
+          throw failure;
+        },
+        context,
+      }),
+    ).rejects.toBe(failure);
+    expect(events).toMatchObject([
+      { stage: 'request', event: 'start' },
+      { stage: 'request', event: 'complete', outcome: 'failed' },
+    ]);
+  });
+
+  it('should isolate overlapping SDK calls when only one invocation is cancelled', async () => {
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const firstContext = new OperationContext({
+      signal: firstController.signal,
+    });
+    const secondContext = new OperationContext({
+      signal: secondController.signal,
+    });
+    const firstPending = deferred<Sprite[]>();
+    const secondPending = deferred<Sprite[]>();
+    const firstClient = new SpritesClient('sdk-only-first-token');
+    const secondClient = new SpritesClient('sdk-only-second-token');
+    vi.spyOn(firstClient, 'listAllSprites').mockReturnValue(
+      firstPending.promise,
+    );
+    vi.spyOn(secondClient, 'listAllSprites').mockReturnValue(
+      secondPending.promise,
+    );
+
+    const first = withOperation(firstContext, async () => {
+      expect(currentOperation()).toBe(firstContext);
+
+      return providerOf(firstClient).isNameTaken('disposable');
+    });
+    const second = withOperation(secondContext, async () => {
+      expect(currentOperation()).toBe(secondContext);
+
+      return providerOf(secondClient).isNameTaken('disposable');
+    });
+    firstController.abort();
+    secondPending.resolve([]);
+
+    await expect(first).rejects.toMatchObject({ action: 'cancel' });
+    await expect(second).resolves.toBe(false);
+    expect(firstContext.closed).toBe(true);
+    expect(secondContext.closed).toBe(true);
+    expect(currentOperation()).toBeUndefined();
+    firstPending.resolve([]);
+    await Promise.resolve();
+  });
+
+  it('should use independent recovery and restores the cancelled parent scope', async () => {
+    const controller = new AbortController();
+    const parent = new OperationContext({ signal: controller.signal });
+    const observations = await withOperation(parent, async () => {
+      controller.abort();
+      const recovered = await recoverOperation(async () => {
+        const recovery = currentOperation();
+        expect(recovery).toBeDefined();
+        expect(recovery).not.toBe(parent);
+        checkOperation();
+
+        return { parentSignalAborted: parent.signal.aborted, recovery };
+      });
+
+      expect(currentOperation()).toBe(parent);
+      expect(recovered.recovery?.closed).toBe(true);
+
+      return recovered.parentSignalAborted;
+    });
+
+    expect(observations).toBe(true);
+    expect(parent.closed).toBe(true);
+  });
+
+  it('should refuse late descendant IO and recovery after its owner closes', async () => {
+    const controller = new AbortController();
+    const context = new OperationContext({ signal: controller.signal });
+    const release = deferred<void>();
+    let descendant!: Promise<unknown>;
+    const sdkCall = vi.fn(async () => []);
+
+    await withOperation(context, async () => {
+      descendant = release.promise.then(async () => {
+        await expect(runOperation(sdkCall)).rejects.toMatchObject({
+          action: 'cancel',
+        });
+        await expect(
+          recoverOperation(async () => 'late'),
+        ).rejects.toMatchObject({ action: 'cancel' });
+      });
+    });
+    release.resolve();
+    await descendant;
+
+    expect(context.closed).toBe(true);
+    expect(sdkCall).not.toHaveBeenCalled();
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'should observe late SDK %s without changing another invocation',
+    async (settlement) => {
+      const cancelled = new AbortController();
+      const firstContext = new OperationContext({ signal: cancelled.signal });
+      const pending = deferred<Sprite[]>();
+      const client = new SpritesClient('sdk-only-late-token');
+      vi.spyOn(client, 'listAllSprites').mockReturnValue(pending.promise);
+      const first = withOperation(firstContext, async () =>
+        providerOf(client).isNameTaken('disposable'),
+      );
+
+      cancelled.abort();
+      await expect(first).rejects.toMatchObject({ action: 'cancel' });
+
+      const other = new OperationContext({
+        signal: new AbortController().signal,
+      });
+      const result = await withOperation(other, async () => {
+        expect(currentOperation()).toBe(other);
+        if (settlement === 'resolve') {
+          pending.resolve([]);
+        } else {
+          pending.reject(new Error('late provider failure'));
+        }
+
+        return runOperation(async () => 'second invocation continued');
+      });
+
+      expect(result).toBe('second invocation continued');
+      expect(firstContext.closed).toBe(true);
+      expect(other.closed).toBe(true);
+    },
+  );
+
+  it('should allow direct unscoped SDK helpers and accepts an explicitly scoped direct caller', async () => {
+    const client = new SpritesClient('sdk-only-direct-token');
+    const sprite = Object.assign(new Sprite('disposable', client), {
+      labels: [MANAGED_LABEL],
+    });
+    client.listAllSprites = vi.fn(async () => [sprite]);
+    const unscoped = await providerOf(client).isNameTaken('disposable');
+    const context = new OperationContext({
+      signal: new AbortController().signal,
+    });
+    const scoped = await withOperation(context, async () =>
+      providerOf(client).isNameTaken('disposable'),
+    );
+
+    expect(unscoped).toBe(true);
+    expect(scoped).toBe(true);
+    expect(context.closed).toBe(true);
+    expect(client.listAllSprites).toHaveBeenCalledTimes(2);
+  });
+
+  it('should keep deadline expiry distinct from a user cancellation', () => {
+    const timeout = new AbortController();
+    timeout.abort(new DOMException('operation deadline', 'TimeoutError'));
+    const context = new OperationContext({ signal: timeout.signal });
+
+    expect(() => checkOperation(context)).toThrowError(DOMException);
+    try {
+      checkOperation(context);
+    } catch (error) {
+      expect(error).toMatchObject({ name: 'TimeoutError' });
+      expect(commandError(error).code).not.toBe('CANCELLED');
+    }
+  });
+
+  it('should bound unsupported IO with a timeout that is distinct from cancellation', async () => {
+    vi.useFakeTimers();
+    try {
+      const context = new OperationContext({
+        signal: new AbortController().signal,
+      });
+      const pending = deferred<string>();
+      const effect = vi.fn(async (_signal?: AbortSignal) => pending.promise);
+      const result = withOperation(context, async () => runBoundedIO(effect));
+      const observed = result.catch((error: unknown) => error);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      const error: unknown = await observed;
+
+      expect(error).toMatchObject({ name: 'TimeoutError' });
+      expect(commandError(error).code).not.toBe('CANCELLED');
+      expect(effect).toHaveBeenCalledOnce();
+      expect(effect.mock.calls).toEqual([
+        [expect.objectContaining({ aborted: true })],
+      ]);
+      pending.resolve('late remote completion');
+      expect(context.closed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('should run unscoped IO directly and prevent pre-cancelled scoped IO', async () => {
+    const direct = vi.fn(async () => 'completed');
+    await expect(runBoundedIO(direct)).resolves.toBe('completed');
+    expect(direct).toHaveBeenCalledExactlyOnceWith();
+
+    const controller = new AbortController();
+    const context = new OperationContext({ signal: controller.signal });
+    const blocked = vi.fn(async () => 'too late');
+    controller.abort();
+
+    await expect(runBoundedIO(blocked, context)).rejects.toMatchObject({
+      action: 'cancel',
+    });
+    expect(blocked).not.toHaveBeenCalled();
+  });
+
+  it('should stop IO when cancellation happens before its abort listener is installed', async () => {
+    const controller = new AbortController();
+    const context = new OperationContext({ signal: controller.signal });
+    const observedSignals: Array<AbortSignal | undefined> = [];
+    const action = vi.fn(async (signal?: AbortSignal) => {
+      observedSignals.push(signal);
+      controller.abort('cancelled');
+
+      return 'late completion';
+    });
+
+    await expect(runBoundedIO(action, context)).rejects.toMatchObject({
+      action: 'cancel',
+    });
+    expect(action).toHaveBeenCalledOnce();
+    expect(observedSignals).toEqual([
+      expect.objectContaining({ aborted: true }),
+    ]);
+  });
+
+  it('should not start an SDK call when its invocation is already cancelled', async () => {
+    const controller = new AbortController();
+    const context = new OperationContext({ signal: controller.signal });
+    const client = new SpritesClient('sdk-only-pre-abort-token');
+    const list = vi.spyOn(client, 'listAllSprites');
+    controller.abort();
+
+    await expect(
+      withOperation(context, async () =>
+        providerOf(client).isNameTaken('disposable'),
+      ),
+    ).rejects.toMatchObject({
+      action: 'cancel',
+    });
+
+    expect(list).not.toHaveBeenCalled();
+    expect(context.closed).toBe(true);
+  });
+
+  it('should wait for create settlement before reporting exact retained identity', async () => {
+    const controller = new AbortController();
+    const context = new OperationContext({ signal: controller.signal });
+    const client = new SpritesClient('sdk-only-create-token');
+    const sprite = Object.assign(new Sprite('disposable', client), {
+      id: 'exact-created-id',
+      labels: [MANAGED_LABEL, SCHEMA_LABEL],
+    });
+    const pending = deferred<Sprite>();
+    const create = vi
+      .spyOn(client, 'createSprite')
+      .mockReturnValue(pending.promise);
+    const reconcile = vi.spyOn(client, 'getSprite');
+    const result = withOperation(context, async () =>
+      providerOf(client).create(
+        sprite.name,
+        DISABLED_NETWORK_PROFILE,
+        DEFAULT_AGENT_PORT,
+      ),
+    );
+
+    controller.abort();
+    await Promise.resolve();
+    expect(create).toHaveBeenCalledOnce();
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(context.target).toEqual({ name: sprite.name });
+
+    pending.resolve(sprite);
+    await expect(result).resolves.toMatchObject({ id: sprite.id });
+    expect(context.target).toEqual({ name: sprite.name, id: sprite.id });
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(context.closed).toBe(true);
+  });
+
+  it('should reconcile a failed create only after settlement in an independent scope', async () => {
+    const controller = new AbortController();
+    const context = new OperationContext({ signal: controller.signal });
+    const client = new SpritesClient('sdk-only-reconcile-token');
+    const pending = deferred<Sprite>();
+    vi.spyOn(client, 'createSprite').mockReturnValue(pending.promise);
+    const sprite = Object.assign(new Sprite('disposable', client), {
+      id: 'retained-id',
+      labels: [MANAGED_LABEL, SCHEMA_LABEL],
+    });
+    const reconcile = vi
+      .spyOn(client, 'getSprite')
+      .mockImplementation(async () => {
+        expect(currentOperation()).not.toBe(context);
+        checkOperation();
+
+        return sprite;
+      });
+    const result = withOperation(context, async () =>
+      providerOf(client).create(
+        sprite.name,
+        DISABLED_NETWORK_PROFILE,
+        DEFAULT_AGENT_PORT,
+      ),
+    );
+
+    controller.abort();
+    await Promise.resolve();
+    expect(reconcile).not.toHaveBeenCalled();
+    pending.reject(new Error('provider settled after cancel'));
+
+    await expect(result).rejects.toMatchObject({
+      machine: sprite.name,
+      machineId: sprite.id,
+      outcome: 'retained',
+      setupIncomplete: true,
+    });
+    expect(reconcile).toHaveBeenCalledExactlyOnceWith(sprite.name);
+    expect(context.target).toEqual({ name: sprite.name });
+  });
+
+  it('should report unresolved failed create without inventing provider identity', async () => {
+    const client = new SpritesClient('sdk-only-unresolved-token');
+    const pending = deferred<Sprite>();
+    vi.spyOn(client, 'createSprite').mockReturnValue(pending.promise);
+    const reconcile = vi
+      .spyOn(client, 'getSprite')
+      .mockRejectedValue(new Error('404'));
+    const result = providerOf(client).create(
+      'disposable',
+      DISABLED_NETWORK_PROFILE,
+      DEFAULT_AGENT_PORT,
+    );
+
+    expect(reconcile).not.toHaveBeenCalled();
+    pending.reject(new Error('provider failed'));
+
+    await expect(result).rejects.toMatchObject({
+      machine: 'disposable',
+      outcome: 'unknown',
+    });
+    expect(reconcile).toHaveBeenCalledExactlyOnceWith('disposable');
+  });
+
+  it('should explain an implicit terminal limitation only inside the invocation that has one', async () => {
+    const blocked = new OperationContext({
+      signal: new AbortController().signal,
+    });
+    const free = new OperationContext({ signal: new AbortController().signal });
+    blocked.setPromptBlocker('stdin is not a terminal');
+
+    expect(promptUnavailableDetail()).toBeUndefined();
+    await withOperation(blocked, async () => {
+      expect(promptUnavailableDetail()).toBe(
+        'Prompts are disabled because stdin is not a terminal; pass required flags or run in a TTY.',
+      );
+    });
+    await withOperation(free, async () => {
+      expect(promptUnavailableDetail()).toBeUndefined();
+    });
+  });
+});

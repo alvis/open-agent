@@ -1,0 +1,214 @@
+import { buildEnvironment } from '#adapters/guest/environment/build';
+import {
+  ENVIRONMENT_MODE,
+  serializeEnvironment,
+} from '#adapters/guest/environment/contracts';
+import { guestServices } from '#adapters/guest/environment/services';
+import { familyOf } from '#adapters/guest/os/families';
+import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
+import { BASE_TOOLS } from '#adapters/guest/tools/base';
+import { resolveTools } from '#adapters/guest/tools/resolve';
+import { agentService } from '#domain/services';
+
+import { BOOTSTRAP_STEP, foundationSteps } from './foundation';
+import { fileStep } from './steps/file';
+import { HOMEBREW_STEP } from './steps/homebrew';
+import { toolSteps, versionsStep } from './steps/tools';
+
+import type {
+  DriverRegistry,
+  ProviderDriver,
+} from '#application/ports/drivers';
+import type { AssemblyParams, SetupAssembly } from '#application/ports/plan';
+import type { OsImage, OsRelease } from '#domain/guest';
+import type { GuestEnvironment } from '#domain/observations/environment';
+import type { WorkstationProfile } from '#domain/profile';
+import type { Resolution, ToolSpec } from '#domain/tools';
+
+/** id of the step that writes environment.json */
+const ENVIRONMENT_STEP = 'environment';
+
+/**
+ * lists every tool a workstation installs: the base set, then the agent's,
+ * the harnesses' with their ACP adapters, and the network's; a tool two
+ * drivers declare is installed once, as the first declares it
+ * @param registry every registered driver
+ * @param profile the selection
+ * @returns the tools, each named once
+ */
+function workstationTools(
+  registry: DriverRegistry,
+  profile: WorkstationProfile,
+): ToolSpec[] {
+  const harnessTools = profile.harnesses
+    .map((id) => registry.harnesses[id])
+    .flatMap((driver) => [
+      ...driver.tools,
+      ...(driver.acpAdapter ? [driver.acpAdapter.tool] : []),
+    ]);
+  const declared = [
+    ...BASE_TOOLS,
+    ...registry.agents[profile.agent].tools,
+    ...harnessTools,
+    ...registry.networks[profile.network].tools,
+  ];
+  const named = new Map<string, ToolSpec>();
+  for (const tool of declared) {
+    if (!named.has(tool.name)) {
+      named.set(tool.name, tool);
+    }
+  }
+
+  return [...named.values()];
+}
+
+/**
+ * refuses, before the provider creates anything, a selection whose required
+ * tools no source serves on the provider's default image; an image whose
+ * release only the guest can tell is checked once the guest is probed
+ * @param registry every registered driver
+ * @param provider the provider, whose default image is checked
+ * @param profile the selection
+ */
+export function assertImageTools(
+  registry: DriverRegistry,
+  provider: Pick<ProviderDriver, 'images'>,
+  profile: WorkstationProfile,
+): void {
+  const release = declaredRelease(provider.images[0]);
+  if (release) {
+    resolveTools(workstationTools(registry, profile), {
+      release,
+      family: familyOf(release),
+    });
+  }
+}
+
+/**
+ * assembles a workstation's setup plan: the guest libraries and assets, the
+ * agent account, the bootstrap packages, Homebrew and the ping sysctl, then
+ * every resolved tool, environment.json and
+ * the version each tool's manager reports installed, recorded into it
+ * @param registry every registered driver
+ * @param params the profile, probed release and version
+ * @returns the steps, the resolved tools and the environment they record
+ */
+export async function assemblePlan(
+  registry: DriverRegistry,
+  params: AssemblyParams,
+): Promise<SetupAssembly> {
+  const { profile, release } = params;
+  const family = familyOf(release);
+  const tools = workstationTools(registry, profile);
+  const resolutions = resolveTools(
+    tools,
+    { release, family },
+    params.refused ?? [],
+  );
+  const environment = assembleEnvironment(registry, params, {
+    tools,
+    resolutions,
+  });
+  const foundation = await foundationSteps({
+    registry,
+    profile,
+    release,
+    family,
+    tools,
+    resolutions,
+  });
+  const installed = toolSteps(resolutions, tools, {
+    family,
+    homebrewStep: HOMEBREW_STEP,
+    needs: [BOOTSTRAP_STEP],
+  });
+  const required = installed
+    .filter(({ critical }) => critical)
+    .map(({ id }) => id);
+
+  return {
+    family,
+    tools,
+    resolutions,
+    environment,
+    foundation,
+    steps: [
+      ...installed,
+      fileStep(family, {
+        id: ENVIRONMENT_STEP,
+        component: 'environment',
+        path: ENVIRONMENT_PATH,
+        contents: serializeEnvironment(environment),
+        mode: ENVIRONMENT_MODE,
+        needs: required,
+      }),
+      versionsStep(family, {
+        path: ENVIRONMENT_PATH,
+        needs: [ENVIRONMENT_STEP],
+      }),
+    ],
+  };
+}
+
+/**
+ * builds the environment the plan writes, its setup still incomplete
+ * @param registry every registered driver
+ * @param params the profile, version and retained identity
+ * @param resolved the tools setup resolved and the source picked for each
+ * @param resolved.tools every tool setup resolved
+ * @param resolved.resolutions the source picked for each tool
+ * @returns the validated record
+ */
+function assembleEnvironment(
+  registry: DriverRegistry,
+  params: AssemblyParams,
+  resolved: {
+    tools: readonly ToolSpec[];
+    resolutions: readonly Resolution[];
+  },
+): GuestEnvironment {
+  const { tools, resolutions } = resolved;
+  const { profile, release } = params;
+  const agent = agentService(registry, profile);
+
+  return buildEnvironment(registry, {
+    version: params.version,
+    setupAt: params.setupAt,
+    state: 'incomplete',
+    family: release.family,
+    profile,
+    tools,
+    resolutions,
+    agent: { id: profile.agent, service: agent },
+    harnesses: profile.harnesses.map((id) => {
+      const driver = registry.harnesses[id];
+
+      return {
+        id: driver.id,
+        spawnEnvironment: driver.spawnEnvironment,
+        ...(driver.acpAdapter && { acpAdapter: driver.acpAdapter }),
+      };
+    }),
+    services: guestServices(agent),
+  });
+}
+
+/**
+ * the release a provider declares for an image, assumed glibc on its first
+ * architecture, or nothing when only the guest can tell
+ * @param image OS image the provider declares, if any
+ * @returns the release resolution checks against
+ */
+function declaredRelease(image: OsImage | undefined): OsRelease | undefined {
+  if (!image?.release) {
+    return undefined;
+  }
+
+  return {
+    family: image.family,
+    id: image.release.id,
+    versionId: image.release.versionId,
+    arch: image.arch[0],
+    libc: 'glibc',
+  };
+}
