@@ -130,11 +130,13 @@ vi.mock('#composition/registry', async (importOriginal) => {
     id: 'none',
     kind: 'networks',
     displayName: 'None',
+    supportsExitNode: false,
   };
   const tailscale: NetworkDeclaration<'tailscale'> = {
     id: 'tailscale',
     kind: 'networks',
     displayName: 'Tailscale',
+    supportsExitNode: true,
   };
 
   const cliproxyapi: GatewayDeclaration<'cliproxyapi'> = {
@@ -226,6 +228,7 @@ describe('fn:defaultProfile', () => {
       harnesses: ['claude', 'codex'],
       network: 'tailscale',
       options: {
+        isExitNodeEnabled: false,
         isProxyEnabled: false,
         minCpus: 2,
         minMemoryGb: 2,
@@ -383,6 +386,14 @@ describe('fn:validateProfile', () => {
       ['duplicate-harness'],
     ],
     [
+      'exit node with network none',
+      {
+        network: 'none',
+        options: { ...valid.options, isExitNodeEnabled: true },
+      },
+      ['undeclared-capability'],
+    ],
+    [
       'a negative idle timeout',
       { options: { ...valid.options, idleTimeoutMinutes: -1 } },
       ['invalid-option'],
@@ -483,7 +494,7 @@ describe('fn:validateProfile', () => {
         harnesses: [],
         options: {
           ...valid.options,
-          isProxyEnabled: true,
+          isExitNodeEnabled: true,
           idleTimeoutMinutes: -1,
           holdMaxMinutes: 0,
         },
@@ -525,6 +536,13 @@ describe('fn:parseProfile', () => {
     { field: 'harness list', value: { ...valid, harnesses: 'claude' } },
     { field: 'harness entry', value: { ...valid, harnesses: ['claude', 7] } },
     { field: 'network', value: { ...valid, network: false } },
+    {
+      field: 'exit-node option',
+      value: {
+        ...valid,
+        options: { ...valid.options, isExitNodeEnabled: 'yes' },
+      },
+    },
     {
       field: 'proxy option',
       value: { ...valid, options: { ...valid.options, isProxyEnabled: 'yes' } },

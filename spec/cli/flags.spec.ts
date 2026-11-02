@@ -64,6 +64,7 @@ describe('cmd:setup', () => {
     ['claude-plugins', 'claudePlugins'],
     ['codex-plugins', 'codexPlugins'],
     ['proxy', 'proxy'],
+    ['use-exit-node', 'useExitNode'],
   ] as const)(
     'should preserve omitted, positive and negative values for --%s',
     async (flag, property) => {
@@ -161,6 +162,7 @@ describe('cmd:setup', () => {
         expect.objectContaining({
           network: undefined,
           proxy: undefined,
+          useExitNode: undefined,
         }),
       ],
       diagnostics: [],
@@ -173,6 +175,7 @@ describe('cmd:setup', () => {
       '--network',
       'none',
       '--proxy',
+      '--no-use-exit-node',
       '--section',
       'all',
     ]);
@@ -183,6 +186,7 @@ describe('cmd:setup', () => {
           expect.objectContaining({
             network: 'none',
             proxy: true,
+            useExitNode: false,
             section: 'all',
           }),
         ],

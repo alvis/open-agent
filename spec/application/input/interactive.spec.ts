@@ -46,7 +46,7 @@ describe('input source resolution', () => {
     });
     expect(observed.result.create).toMatchObject({
       network: 'none',
-      options: { isProxyEnabled: false },
+      options: { isExitNodeEnabled: false, isProxyEnabled: false },
     });
   });
 

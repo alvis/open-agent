@@ -117,7 +117,8 @@ export interface AgentSetupData {
 /** selected native networking outcome */
 export interface NetworkSetupData {
   network:
-    { status: 'configured' } | { status: 'disabled'; readiness: 'skipped' };
+    | { status: 'configured'; exitNode?: string }
+    | { status: 'disabled'; readiness: 'skipped' };
 }
 
 /** native GitHub authentication outcome */

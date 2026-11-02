@@ -84,11 +84,12 @@ describe('fn:resolveOptions', () => {
         provider: 'sprite',
         agent: 't3',
         harnesses: ['unregistered-harness'],
+        network: 'none',
       },
       supplied: {},
       fields: ['isProxyEnabled'],
       base: { ...defaults.options, isProxyEnabled: true },
-      inferred: { isProxyEnabled: true },
+      inferred: { isExitNodeEnabled: false, isProxyEnabled: true },
     });
 
     expect(options.isProxyEnabled).toBe(false);
@@ -100,6 +101,7 @@ describe('fn:resolveOptions', () => {
         provider: 'unregistered-provider',
         agent: 't3',
         harnesses: ['claude'],
+        network: 'none',
       },
       supplied: {},
       fields: ['idleTimeoutMinutes'],
@@ -116,6 +118,7 @@ describe('fn:resolveOptions', () => {
       provider: 'sprite',
       agent: 't3',
       harnesses: ['claude'],
+      network: 'none',
     };
     const base = { ...defaults.options, isProxyEnabled: true };
     const section = await resolveOptions(dependencies, {

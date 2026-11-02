@@ -138,7 +138,7 @@ export interface GuestEnvironmentAccess {
    * inputs were being collected
    * @param guest target guest
    * @param expected the profile the inputs were collected for
-   * @throws {CommandFault} when the network or gateway choice differs
+   * @throws {CommandFault} when the network, exit node or gateway choice differs
    */
   assertProfile(
     guest: GuestChannel,

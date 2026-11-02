@@ -67,8 +67,15 @@ export const consentFlags = {
   },
 } as const;
 
-/** network identity inputs also used for deletion cleanup */
+/** network identity and routing inputs also used for deletion cleanup */
 export const networkSelectionFlags = {
+  exitNode: {
+    kind: 'parsed',
+    parse: String,
+    optional: true,
+    placeholder: 'NODE',
+    brief: 'NODE · home exit node',
+  },
   networkAccount: {
     kind: 'parsed',
     parse: String,
@@ -175,6 +182,12 @@ export const integrationFlags = {
     optional: true,
     withNegated: true,
     brief: 'enable or disable CLIProxyAPI routing',
+  },
+  useExitNode: {
+    kind: 'boolean',
+    optional: true,
+    withNegated: true,
+    brief: 'enable or disable exit-node routing on the selected network',
   },
   github: {
     kind: 'boolean',

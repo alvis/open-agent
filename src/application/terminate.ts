@@ -88,7 +88,7 @@ export async function terminateWorkstation(
     dependencies,
     await provider.openGuest(workstation),
   );
-  const input = await resolveCleanupInputs(dependencies, request, capture);
+  const input = await assertSafeNetworkTarget(dependencies, request, capture);
   interaction?.progress({
     stage: 'terminate',
     message: `Deleting workstation ${workstation.name}`,
@@ -107,13 +107,14 @@ export async function terminateWorkstation(
 }
 
 /**
- * resolves the management credentials of the network that owns the device
+ * resolves the management credentials of the network that owns the device and
+ * refuses a target that credential does not safely own
  * @param dependencies the registered drivers, the profile defaults, what this computer provides
  * @param request parsed termination target and options
  * @param capture the network and identity captured before deletion
  * @returns the inputs the later cleanup reuses
  */
-async function resolveCleanupInputs(
+async function assertSafeNetworkTarget(
   dependencies: ApplicationDependencies,
   request: CommandRequest,
   capture: NetworkIdentityCapture,
@@ -129,6 +130,13 @@ async function resolveCleanupInputs(
         : undefined,
     },
   });
+  if (capture.network && capture.identity) {
+    await capture.network.assertSafeTarget({
+      identity: capture.identity,
+      management: networkManagement(input),
+      exitNode: input.exitNode,
+    });
+  }
 
   return input;
 }

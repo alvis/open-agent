@@ -72,6 +72,7 @@ export function missingProvisioningInputs(
             Boolean(input.networkAccount),
             missingInput(network.account),
           ],
+          ['exitNode', Boolean(input.exitNode), missingInput(network.exitNode)],
         ]
       : [];
   const isProxyRequired =

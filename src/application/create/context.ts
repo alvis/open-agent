@@ -17,6 +17,7 @@ export interface CreateContext {
   input: ResolvedInputs;
   name: string;
   token: string;
+  effectiveExitNode?: string;
   authKey?: Secret;
   plugins: HarnessPluginActions;
   preflight: CreatePreflight;

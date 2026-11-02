@@ -3,6 +3,7 @@ import { harnessLabel } from '#domain/harnesses';
 
 import type { ResolvedInputs } from '#application/input/types';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { NetworkExitNode } from '#application/ports/drivers';
 
 import type { CreatePreflight } from './context';
 
@@ -10,11 +11,13 @@ import type { CreatePreflight } from './context';
  * distinguishes verified caller checks from readiness requiring the new guest
  * @param dependencies the registered drivers
  * @param input resolved selections without serializing their credentials
+ * @param exitNode caller-verified exit node, when management access is available
  * @returns non-secret checks and actionable reminders
  */
 export function createPreflightSummary(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   input: ResolvedInputs,
+  exitNode?: NetworkExitNode,
 ): CreatePreflight {
   const { profile } = input;
   const network = networkDriver(dependencies.registry, profile.network);
@@ -27,6 +30,9 @@ export function createPreflightSummary(
       `${provider} prerequisites, authentication and target-name availability`,
       ...(network.daemon && input.networkKey
         ? [`${network.displayName} access and hostname availability`]
+        : []),
+      ...(exitNode
+        ? ['Unique exit-node identity and approved IPv4 exit route']
         : []),
     ],
     reminders: [
@@ -79,7 +85,7 @@ function networkReminders(
   const { displayName: name, inputs } = network;
 
   return [
-    'Guest TUN support and a writable native DNS mount are verified before public exposure; failed readiness leaves the workstation private and incomplete.',
+    'Guest TUN support, a writable native DNS mount and selected routing are verified before public exposure; failed readiness leaves the workstation private and incomplete.',
     `A provider network policy that blocks managed ${name} DNS setup is reported, never removed or bypassed.`,
     ...(input.enrollmentKey
       ? [
@@ -89,7 +95,7 @@ function networkReminders(
     ...(input.networkKey
       ? []
       : [
-          `Without ${inputs.management.environment}, caller-side ${name} account checks are unavailable; device deletion needs separate management authorisation.`,
+          `Without ${inputs.management.environment}, caller-side ${name} account and exit approval checks are unavailable; device deletion needs separate management authorisation.`,
         ]),
   ];
 }

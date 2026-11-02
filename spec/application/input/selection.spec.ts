@@ -121,6 +121,18 @@ describe('fn:resolveCreateSelection', () => {
     });
   });
 
+  it('should ask for an exit node only when the selected network supports one', async () => {
+    const { interaction, asked } = recordingInteraction();
+
+    await resolveCreateSelection(dependencies, {
+      options: { network: 'tailscale' },
+      sources: empty,
+      interaction,
+    });
+
+    expect(asked).toContain('Use an exit node?');
+  });
+
   it('should not prompt for a step a flag already answers', async () => {
     const { interaction, asked } = recordingInteraction();
 
@@ -132,6 +144,7 @@ describe('fn:resolveCreateSelection', () => {
         release: 'stable',
         harness: ['codex'],
         network: 'tailscale',
+        useExitNode: false,
         proxy: false,
         idleMinutes: 0,
       },
@@ -231,6 +244,7 @@ describe('fn:resolveCreateSelection', () => {
       options: {},
       sources: {
         processEnv: {
+          OPEN_AGENT_USE_EXIT_NODE: 'maybe',
           CLIPROXYAPI_ENABLED: 'sometimes',
           OPEN_AGENT_HOLD_MAX_MINUTES: 'soon',
         },
@@ -242,6 +256,7 @@ describe('fn:resolveCreateSelection', () => {
 
     expect(asked).toEqual([]);
     expect(problems).toEqual([
+      'OPEN_AGENT_USE_EXIT_NODE must be a boolean value (true or false)',
       'CLIPROXYAPI_ENABLED must be a boolean value (true or false)',
       'OPEN_AGENT_HOLD_MAX_MINUTES must be a whole number',
     ]);
@@ -251,16 +266,16 @@ describe('fn:resolveCreateSelection', () => {
     const { interaction } = recordingInteraction();
 
     const { candidate } = await resolveCreateSelection(dependencies, {
-      options: {},
+      options: { network: 'tailscale' },
       sources: {
-        processEnv: { CLIPROXYAPI_BASE_URL: 'https://hub.example.test' },
+        processEnv: { TAILSCALE_EXIT_NODE: 'exit-node' },
         fileEnv: {},
         profile: {},
       },
       interaction,
     });
 
-    expect(candidate.options.isProxyEnabled).toBe(true);
+    expect(candidate.options.isExitNodeEnabled).toBe(true);
   });
 });
 
@@ -298,11 +313,15 @@ describe('fn:resolveSetupSelection', () => {
     expect(candidate.network).toBe('tailscale');
   });
 
-  it('should keep the recorded network when only the proxy section is targeted', async () => {
-    const recorded = defaultProfile(defaults, 'tailscale');
+  it('should keep the recorded exit node when only the proxy section is targeted', async () => {
+    const tailscale = defaultProfile(defaults, 'tailscale');
+    const recorded = {
+      ...tailscale,
+      options: { ...tailscale.options, isExitNodeEnabled: true },
+    };
 
     const { candidate } = await resolveSetup({
-      options: { nonInteractive: true, proxy: false },
+      options: { nonInteractive: true, useExitNode: false, proxy: false },
       sources: {
         processEnv: { OPEN_AGENT_IDLE_MINUTES: '5' },
         fileEnv: {},
@@ -327,20 +346,26 @@ describe('fn:resolveSetupSelection', () => {
     };
 
     const { candidate } = await resolveSetup({
-      options: { nonInteractive: true, proxy: false },
+      options: { nonInteractive: true, proxy: false, useExitNode: true },
       sources: empty,
       recorded,
       section: 'network',
     });
 
-    expect(candidate.options).toEqual(recorded.options);
+    expect(candidate.options).toEqual({
+      ...recorded.options,
+      isExitNodeEnabled: true,
+    });
   });
 
   it('should not read an environment value the targeted section does not own', () => {
     const { value, problems } = readSetupSelection(dependencies, {
       options: {},
       sources: {
-        processEnv: { CLIPROXYAPI_ENABLED: 'true' },
+        processEnv: {
+          OPEN_AGENT_USE_EXIT_NODE: 'maybe',
+          CLIPROXYAPI_ENABLED: 'true',
+        },
         fileEnv: {},
         profile: {},
       },
@@ -349,6 +374,7 @@ describe('fn:resolveSetupSelection', () => {
 
     expect(problems).toEqual([]);
     expect(value.options).toEqual({
+      isExitNodeEnabled: undefined,
       isProxyEnabled: true,
       idleTimeoutMinutes: undefined,
       holdMaxMinutes: undefined,
@@ -387,6 +413,7 @@ describe('fn:resolveSetupSelection update intervals', () => {
     expect({ problems, options: value.options }).toEqual({
       problems: [],
       options: {
+        isExitNodeEnabled: undefined,
         isProxyEnabled: undefined,
         idleTimeoutMinutes: undefined,
         holdMaxMinutes: undefined,
@@ -445,17 +472,18 @@ describe('fn:suppliedSelectionViolations', () => {
     expect(violations).toEqual([]);
   });
 
-  it('should report supplied option bounds', () => {
+  it('should report supplied option bounds and capabilities whose drivers are all known', () => {
     const violations = suppliedSelectionViolations(
       dependencies,
       {
         network: 'none',
-        options: { holdMaxMinutes: 0 },
+        options: { isExitNodeEnabled: true, holdMaxMinutes: 0 },
       },
       { isPairingRequested: false },
     );
 
     expect(violations.map(({ message }) => message)).toEqual([
+      '--use-exit-node (OPEN_AGENT_USE_EXIT_NODE) needs a network that supports exit nodes; "none" does not',
       '--hold-max-minutes (OPEN_AGENT_HOLD_MAX_MINUTES) must be a whole number of minutes of at least 1',
     ]);
   });
@@ -494,7 +522,7 @@ describe('fn:suppliedSelectionViolations', () => {
   it('should leave a capability that depends on the recorded profile for later', () => {
     const violations = suppliedSelectionViolations(
       dependencies,
-      { options: { isProxyEnabled: true } },
+      { options: { isExitNodeEnabled: true } },
       { isPairingRequested: false },
     );
 
@@ -518,6 +546,10 @@ describe('fn:selectionRequirements', () => {
   it('should require network inputs only for an installable network and skip enrollment for an enrolled device', () => {
     const none = defaultProfile(defaults, 'none');
     const tailscale = defaultProfile(defaults, 'tailscale');
+    const routed = {
+      ...tailscale,
+      options: { ...tailscale.options, isExitNodeEnabled: true },
+    };
 
     expect(
       selectionRequirements(dependencies, {
@@ -525,9 +557,11 @@ describe('fn:selectionRequirements', () => {
         base: ['providerToken'],
       }),
     ).toEqual(['providerToken']);
-    expect(selectionRequirements(dependencies, { profile: tailscale })).toEqual(
-      ['networkEnrollment', 'networkAccount'],
-    );
+    expect(selectionRequirements(dependencies, { profile: routed })).toEqual([
+      'networkEnrollment',
+      'networkAccount',
+      'exitNode',
+    ]);
     expect(
       selectionRequirements(dependencies, {
         profile: tailscale,

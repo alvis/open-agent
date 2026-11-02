@@ -69,7 +69,12 @@ export function createResult(
       readiness: assessReadiness(dependencies, observed),
       network: {
         deviceId: observed.network.deviceId,
+        exitNode: observed.network.exitNode,
+        exitNodeIp: observed.network.exitNodeIp,
         online: observed.network.online,
+        routeDevice: observed.network.routeDevice,
+        dnsReady: observed.network.dnsReady,
+        egressIp: observed.network.egressIp,
         skipped: observed.network.skipped,
         reason: observed.network.reason,
       },

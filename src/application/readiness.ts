@@ -108,7 +108,7 @@ function readinessChecks(
 ): ReadinessFinding[] {
   const { profile } = inspection.environment;
   const { native } = inspection;
-  const { isProxyEnabled } = profile.options;
+  const { isExitNodeEnabled, isProxyEnabled } = profile.options;
   const drivers = harnessDrivers(dependencies.registry, profile.harnesses);
   const agent = dependencies.registry.agents[profile.agent].readiness({
     services: inspection.services,
@@ -126,7 +126,7 @@ function readinessChecks(
       'maintenance cron service',
     ),
     ...agent.environment,
-    ...network.readiness(inspection.network),
+    ...network.readiness(inspection.network, { isExitNodeEnabled }),
     gatedFinding({
       isSelected: isProxyEnabled,
       passed: inspection.hub.reachable,

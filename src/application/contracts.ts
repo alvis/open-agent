@@ -96,6 +96,10 @@ export interface CommandOptions {
   update?: boolean;
   /** routes harnesses through CLIProxyAPI when enabled */
   proxy?: boolean;
+  /** routes guest traffic through a network exit node when enabled */
+  useExitNode?: boolean;
+  /** exit node that routes guest traffic */
+  exitNode?: string;
   /** account or network the network management credential manages */
   networkAccount?: string;
   /** base URL of the CLIProxyAPI hub */

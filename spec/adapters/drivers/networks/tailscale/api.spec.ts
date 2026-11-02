@@ -5,6 +5,8 @@ import {
   createTailscaleAuthKey,
   deleteTailnetDevice,
   findTailnetDevice,
+  matchesExitNode,
+  resolveExitNode,
 } from '#adapters/drivers/networks/tailscale/api';
 
 const devices = [
@@ -13,8 +15,23 @@ const devices = [
     nodeId: 'node-id',
     name: 'Home.example.ts.net',
     hostname: 'router',
+    addresses: ['fd7a::1', '100.64.0.1'],
+    enabledRoutes: ['0.0.0.0/0'],
   },
   { id: 'minimal', name: 'minimal.example.ts.net' },
+  {
+    id: 'no-ip',
+    name: 'ipv6.example.ts.net',
+    addresses: ['fd7a::2'],
+    enabledRoutes: ['0.0.0.0/0'],
+  },
+  {
+    id: 'legacy',
+    name: 'legacy.example.ts.net',
+    addresses: ['100.64.0.3'],
+    enabledRoutes: ['0.0.0.0/0'],
+  },
+  { id: 'duplicate', name: 'Home.other.ts.net' },
 ];
 const http = {
   fetch: vi.fn<typeof fetch>(async (input, options) => {
@@ -31,6 +48,49 @@ const http = {
     return Response.json({ devices });
   }),
 } satisfies Partial<typeof globalThis>;
+
+describe('fn:resolveExitNode', () => {
+  it.each([
+    'api-id',
+    'node-id',
+    '100.64.0.1',
+    ' ROUTER. ',
+    'HOME.EXAMPLE.TS.NET.',
+  ])('should resolve the unique exit node selected by %s', async (selector) => {
+    vi.stubGlobal('fetch', http.fetch);
+
+    const exit = await resolveExitNode('test-key', 'example.ts.net', selector);
+
+    expect(exit).toEqual({
+      id: 'node-id',
+      name: 'Home.example.ts.net',
+      ip: '100.64.0.1',
+    });
+  });
+
+  it('should retain the API identity when no node identity is available', async () => {
+    vi.stubGlobal('fetch', http.fetch);
+
+    expect(
+      await resolveExitNode('test-key', 'example.ts.net', 'legacy'),
+    ).toEqual({
+      id: 'legacy',
+      name: 'legacy.example.ts.net',
+      ip: '100.64.0.3',
+    });
+  });
+
+  it.each(['missing', 'Home', 'minimal', 'no-ip'])(
+    'should reject an unusable exit-node selection %s',
+    async (selector) => {
+      vi.stubGlobal('fetch', http.fetch);
+
+      await expect(
+        resolveExitNode('test-key', 'example.ts.net', selector),
+      ).rejects.toMatchObject({ code: 'PREFLIGHT' });
+    },
+  );
+});
 
 describe('fn:assertTailnetHostnameAvailable', () => {
   it.each(['ROUTER.', 'Home.example.ts.net', 'home'])(
@@ -166,4 +226,40 @@ describe('tailnet device management', () => {
       { code: 'PROVIDER', status: 404 },
     );
   });
+});
+
+describe('fn:matchesExitNode', () => {
+  it.each([
+    {
+      selection: '100.64.0.1',
+      observed: { exitNodeIp: '100.64.0.1' },
+      expected: true,
+    },
+    {
+      selection: '100.64.0.2',
+      observed: { exitNodeIp: '100.64.0.1' },
+      expected: false,
+    },
+    {
+      selection: 'HOME.',
+      observed: { exitNodeName: 'home.example.ts.net.' },
+      expected: true,
+    },
+    {
+      selection: 'home.example.ts.net.',
+      observed: { exitNodeName: 'HOME.EXAMPLE.TS.NET' },
+      expected: true,
+    },
+    {
+      selection: 'other',
+      observed: { exitNodeName: 'home.example.ts.net' },
+      expected: false,
+    },
+    { selection: 'home', observed: {}, expected: false },
+  ])(
+    'should compare the selected exit $selection against observed identity',
+    ({ selection, observed, expected }) => {
+      expect(matchesExitNode(selection, observed)).toBe(expected);
+    },
+  );
 });

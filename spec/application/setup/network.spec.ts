@@ -7,7 +7,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { none } from '#adapters/drivers/networks/none';
 import { debianFamily } from '#adapters/guest/os/debian/family';
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
-import { disableNetwork, setupNetwork } from '#application/setup/network';
+import {
+  disableNetwork,
+  setupNetwork,
+  verifySetupExitNode,
+} from '#application/setup/network';
 import { registry } from '#composition/registry';
 
 import { revealSecret } from '#kernel/secret';
@@ -39,7 +43,10 @@ import type { SetupStep } from '#application/ports/plan';
 import type { SetupSession } from '#application/ports/session';
 import type { SetupContext } from '#application/setup/context';
 import type { GuestEnvironment } from '#domain/observations/environment';
-import type { GuestNetworkIdentity } from '#domain/observations/network';
+import type {
+  NetworkStatus,
+  GuestNetworkIdentity,
+} from '#domain/observations/network';
 import type { WorkstationProfile } from '#domain/profile';
 import type { ServiceDefinition } from '#domain/services';
 
@@ -63,9 +70,10 @@ const DAEMON: ServiceDefinition = {
   needs: [],
 };
 
-/** an active network whose removal must change the profile */
+/** an active network and exit route whose removal must change the profile */
 const ACTIVE_PROFILE = profileWith({
   network: true,
+  exitNode: true,
   cliproxyapi: false,
 });
 
@@ -224,6 +232,7 @@ const OBSERVED_INPUTS: NonNullable<NetworkDriver['inputs']> = {
     store: 'net',
   },
   enrollment: { environment: 'NET_AUTH_KEY', flag: '--auth-key' },
+  exitNode: { environment: 'NET_EXIT', prompt: 'Exit', flag: '--exit' },
 };
 
 /**
@@ -262,6 +271,8 @@ async function runObservedSetup(params: {
 
       return Promise.resolve();
     },
+    status: async () =>
+      Promise.resolve({ online: true, skipped: false, dnsReady: true }),
   } satisfies DriverRegistry['networks']['tailscale'];
   await using directory = await mkdtempDisposable(
     join(tmpdir(), 'open-agent-setup-observed-'),
@@ -372,6 +383,7 @@ describe('fn:setupNetwork', () => {
         ...registry.networks.tailscale,
         daemon: DAEMON,
         enroll,
+        status: async () => ({ online: true, skipped: false, dnsReady: true }),
       } satisfies DriverRegistry['networks']['tailscale'];
       const context = setupContext(sprite, {
         profile,
@@ -412,7 +424,7 @@ describe('fn:setupNetwork', () => {
         await expect(result).rejects.toThrow('enrolment refused');
       } else {
         await expect(result).resolves.toEqual({
-          network: { status: 'configured' },
+          network: { status: 'configured', exitNode: undefined },
         });
       }
       expect(
@@ -446,39 +458,60 @@ describe('fn:setupNetwork', () => {
     expect(context.mutation.started).toBe(false);
   });
 
-  it('should reject validated network inputs missing their account before enrolment', async () => {
-    const enroll = vi.fn<NetworkDriver['enroll']>(async () => undefined);
-    const profile = TAILSCALE_PROFILE;
-    const network = {
-      ...registry.networks.tailscale,
-      displayName: 'Observed',
-      inputs: OBSERVED_INPUTS,
-      daemon: DAEMON,
-      enroll,
-    } satisfies DriverRegistry['networks']['tailscale'];
-    await using directory = await mkdtempDisposable(
-      join(tmpdir(), 'open-agent-setup-missing-network-input-'),
-    );
-    const sprite = createFilesystemSprite({ root: directory.path });
-    await recordNetwork(sprite, undefined, profile);
-    const context = setupContext(sprite, {
-      profile,
-      input: {
+  it.each([
+    {
+      name: 'account',
+      account: undefined,
+      exitNode: undefined,
+      useExit: false,
+    },
+    {
+      name: 'exit node',
+      account: 'example.ts.net',
+      exitNode: undefined,
+      useExit: true,
+    },
+  ])(
+    'should reject validated network inputs missing their $name before enrolment',
+    async ({ account, exitNode, useExit }) => {
+      const enroll = vi.fn<NetworkDriver['enroll']>(async () => undefined);
+      const profile = useExit
+        ? profileWith({ network: true, exitNode: true, cliproxyapi: false })
+        : TAILSCALE_PROFILE;
+      const network = {
+        ...registry.networks.tailscale,
+        displayName: 'Observed',
+        inputs: OBSERVED_INPUTS,
+        daemon: DAEMON,
+        enroll,
+      } satisfies DriverRegistry['networks']['tailscale'];
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-setup-missing-network-input-'),
+      );
+      const sprite = createFilesystemSprite({ root: directory.path });
+      await recordNetwork(sprite, undefined, profile);
+      const context = setupContext(sprite, {
         profile,
-        runtimeEnv: {},
-        sources: {},
-        missing: [],
-      },
-    });
+        input: {
+          profile,
+          runtimeEnv: {},
+          sources: {},
+          missing: [],
+          networkAccount: account,
+          exitNode,
+        },
+      });
 
-    await expect(
-      setupNetwork(withTailscale(network), guestOf(sprite), context),
-    ).rejects.toThrow('Validated Observed inputs were unavailable');
-    expect(enroll).not.toHaveBeenCalled();
-    expect(context.mutation.started).toBe(false);
-  });
+      await expect(
+        setupNetwork(withTailscale(network), guestOf(sprite), context),
+      ).rejects.toThrow('Validated Observed inputs were unavailable');
+      expect(enroll).not.toHaveBeenCalled();
+      expect(context.mutation.started).toBe(false);
+    },
+  );
 
   it('should enroll a network that has a daemon and no inputs without a credential', async () => {
+    const status: NetworkStatus = { online: true, skipped: false };
     const enroll = vi.fn<NetworkDriver['enroll']>(async () =>
       Promise.resolve(),
     );
@@ -489,6 +522,7 @@ describe('fn:setupNetwork', () => {
       tools: [],
       daemon: DAEMON,
       enroll,
+      status: async () => Promise.resolve({ ...status, dnsReady: true }),
     } satisfies DriverRegistry['networks']['tailscale'];
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-setup-daemon-only-'),
@@ -511,7 +545,9 @@ describe('fn:setupNetwork', () => {
       context,
     );
 
-    expect(result).toEqual({ network: { status: 'configured' } });
+    expect(result).toEqual({
+      network: { status: 'configured', exitNode: undefined },
+    });
     expect(enroll).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ credential: undefined }),
@@ -551,6 +587,193 @@ describe('fn:setupNetwork', () => {
       'enroll',
     ]);
   });
+
+  it.each([
+    { matched: true, verified: true, expected: 'Office Gateway' },
+    { matched: true, verified: false, expected: 'office' },
+    { matched: false, verified: true, expected: undefined },
+  ])(
+    'should require the selected exit route to be active (matched=$matched, verified=$verified)',
+    async ({ matched, verified, expected }) => {
+      const enroll = vi.fn<NetworkDriver['enroll']>(async () => undefined);
+      const matchesExitNode = vi.fn<NetworkDriver['matchesExitNode']>(
+        () => matched,
+      );
+      const network = {
+        ...registry.networks.tailscale,
+        displayName: 'Observed',
+        daemon: DAEMON,
+        inputs: OBSERVED_INPUTS,
+        enroll,
+        status: async () => ({ online: true, skipped: false, dnsReady: true }),
+        matchesExitNode,
+      } satisfies DriverRegistry['networks']['tailscale'];
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-setup-exit-route-'),
+      );
+      const sprite = createFilesystemSprite({ root: directory.path });
+      const profile = profileWith({
+        network: true,
+        exitNode: true,
+        cliproxyapi: false,
+      });
+      await recordNetwork(sprite, undefined, profile);
+      const context = setupContext(sprite, {
+        profile,
+        input: {
+          profile,
+          runtimeEnv: {},
+          sources: {},
+          missing: [],
+          networkAccount: 'example.ts.net',
+          exitNode: 'office',
+        },
+        networkEnrolled: true,
+      });
+      if (verified) {
+        context.verifiedExitNode = {
+          id: 'node-1',
+          name: 'Office Gateway',
+          ip: '100.64.0.10',
+        };
+      }
+
+      const result = setupNetwork(
+        withTailscale(network),
+        guestOf(sprite),
+        context,
+      );
+
+      if (matched) {
+        await expect(result).resolves.toEqual({
+          network: { status: 'configured', exitNode: expected },
+        });
+      } else {
+        await expect(result).rejects.toThrow(
+          'The selected exit node does not match current Observed status',
+        );
+      }
+      expect(enroll).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          exitNode: verified ? '100.64.0.10' : 'office',
+        }),
+      );
+      expect(matchesExitNode).toHaveBeenCalledWith(
+        verified ? '100.64.0.10' : 'office',
+        { online: true, skipped: false, dnsReady: true },
+      );
+      expect(context.mutation.started).toBe(true);
+    },
+  );
+});
+
+describe('fn:verifySetupExitNode', () => {
+  it('should resolve an enabled exit node using the selected network account and management key', async () => {
+    const node = { id: 'node-1', name: 'office', ip: '100.64.0.10' };
+    const verifyExitNode = vi.fn<NetworkDriver['verifyExitNode']>(async () =>
+      Promise.resolve(node),
+    );
+    const network = {
+      ...registry.networks.tailscale,
+      supportsExitNode: true,
+      verifyExitNode,
+    } satisfies DriverRegistry['networks']['tailscale'];
+    const profile = {
+      ...TAILSCALE_PROFILE,
+      options: {
+        ...TAILSCALE_PROFILE.options,
+        isExitNodeEnabled: true,
+      },
+    };
+
+    const selected = await verifySetupExitNode(
+      withTailscale(network),
+      {
+        profile,
+        runtimeEnv: {},
+        sources: {},
+        missing: [],
+        networkAccount: 'example.ts.net',
+        networkKey: 'api-key',
+        exitNode: 'office',
+      },
+      profile,
+    );
+
+    expect(selected).toEqual(node);
+    expect(verifyExitNode).toHaveBeenCalledWith(
+      { account: 'example.ts.net', credential: 'api-key' },
+      'office',
+    );
+  });
+
+  it.each([
+    {
+      reason: 'unsupported network',
+      supportsExitNode: false,
+      enabled: true,
+      account: 'example.ts.net',
+      selector: 'office',
+    },
+    {
+      reason: 'disabled route',
+      supportsExitNode: true,
+      enabled: false,
+      account: 'example.ts.net',
+      selector: 'office',
+    },
+    {
+      reason: 'missing account',
+      supportsExitNode: true,
+      enabled: true,
+      account: undefined,
+      selector: 'office',
+    },
+    {
+      reason: 'missing selector',
+      supportsExitNode: true,
+      enabled: true,
+      account: 'example.ts.net',
+      selector: undefined,
+    },
+  ])(
+    'should not verify an exit node with $reason',
+    async ({ supportsExitNode, enabled, account, selector }) => {
+      const verifyExitNode = vi.fn<NetworkDriver['verifyExitNode']>(async () =>
+        Promise.resolve({ id: 'node-1', name: 'office', ip: '100.64.0.10' }),
+      );
+      const network = {
+        ...registry.networks.tailscale,
+        supportsExitNode,
+        verifyExitNode,
+      } satisfies DriverRegistry['networks']['tailscale'];
+      const profile = {
+        ...TAILSCALE_PROFILE,
+        options: {
+          ...TAILSCALE_PROFILE.options,
+          isExitNodeEnabled: enabled,
+        },
+      };
+
+      const selected = await verifySetupExitNode(
+        withTailscale(network),
+        {
+          profile,
+          runtimeEnv: {},
+          sources: {},
+          missing: [],
+          networkAccount: account,
+          networkKey: 'api-key',
+          exitNode: selector,
+        },
+        profile,
+      );
+
+      expect(selected).toBeUndefined();
+      expect(verifyExitNode).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('fn:disableNetwork', () => {
@@ -675,7 +898,10 @@ describe('fn:disableNetwork', () => {
         }),
       );
       const recorded = await dependencies.guest.environment.read(guest);
-      expect(recorded.profile).toMatchObject({ network: 'none' });
+      expect(recorded.profile).toMatchObject({
+        network: 'none',
+        options: { isExitNodeEnabled: false },
+      });
     },
   );
 

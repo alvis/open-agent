@@ -16,6 +16,18 @@ export interface NetworkStatus extends NetworkIdentity {
   skipped: boolean;
   /** bounded reason the status is unavailable */
   reason?: string;
+  /** exit node the client currently routes through */
+  exitNode?: string;
+  /** IPv4 address of that exit node */
+  exitNodeIp?: string;
+  /** display name of that exit node */
+  exitNodeName?: string;
+  /** device the kernel routes public traffic through */
+  routeDevice?: string;
+  /** whether a public hostname resolved; reported by networks that route egress */
+  dnsReady?: boolean;
+  /** public IPv4 address observed from the guest */
+  egressIp?: string;
 }
 
 /** retained non-secret network device identity for authorised cleanup */
@@ -24,8 +36,14 @@ export interface GuestNetworkIdentity extends NetworkIdentity {
   network: NetworkId;
 }
 
+/** current tailnet identity and exit-route status */
+export interface TailnetStatus extends NetworkStatus {
+  /** whether a public hostname resolved */
+  dnsReady: boolean;
+}
+
 /** the status each registered network reports, keyed by network */
 export interface NetworkStatuses {
   none: NetworkStatus;
-  tailscale: NetworkStatus;
+  tailscale: TailnetStatus;
 }

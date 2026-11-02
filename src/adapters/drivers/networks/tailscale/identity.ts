@@ -7,7 +7,7 @@ import { inspectTailscale } from './status';
 import type { NetworkRecord } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
 
-import type { NetworkStatus } from '#domain/observations/network';
+import type { TailnetStatus } from '#domain/observations/network';
 
 /**
  * captures enrolled identity without requiring a completed installation
@@ -18,16 +18,17 @@ import type { NetworkStatus } from '#domain/observations/network';
 export async function identifyTailnetDevice(
   guest: GuestChannel,
   record: NetworkRecord,
-): Promise<NetworkStatus> {
-  const offline: NetworkStatus = {
+): Promise<TailnetStatus> {
+  const offline: TailnetStatus = {
     ...record.identity,
     online: false,
+    dnsReady: false,
     skipped: true,
   };
   if (!(await runBoundedIO(async () => guest.exists(TAILSCALE_STATE_FILE)))) {
     return offline;
   }
-  let inspected: NetworkStatus | undefined;
+  let inspected: TailnetStatus | undefined;
   let inspectionFailure: { cause: unknown } | undefined;
   try {
     inspected = await inspectTailscale(guest);

@@ -1,5 +1,7 @@
 import { proxySelectionLabel, selectionLabel } from '#domain/selection-inputs';
 
+import { isDriverId } from './selection';
+
 import type { ProductDeclarations } from '#domain/declarations';
 import type { HarnessId } from '#domain/ids';
 
@@ -23,7 +25,7 @@ interface OptionBound {
 export interface OptionViolationsParams {
   declarations: ProductDeclarations;
   options: ProfileOptions;
-  selected: { harnesses: readonly HarnessId[] };
+  selected: { network: string; harnesses: readonly HarnessId[] };
 }
 
 /** longest update due interval: one year */
@@ -66,10 +68,10 @@ export const OPTION_BOUNDS: readonly OptionBound[] = [
 
 /**
  * checks option bounds and that every enabled option has a declaring driver
- * @param params options and known harness ids
+ * @param params options, requested network and known harness ids
  * @param params.declarations the data every registered driver declares
  * @param params.options requested options
- * @param params.selected harnesses are known requested ids
+ * @param params.selected network is the requested id, possibly unknown; harnesses are known requested ids
  * @returns violations for out-of-bound or capability-less options
  */
 export function optionViolations({
@@ -77,9 +79,20 @@ export function optionViolations({
   options,
   selected,
 }: OptionViolationsParams): ProfileViolation[] {
-  const { harnesses } = selected;
+  const { network, harnesses } = selected;
 
   return [
+    ...(options.isExitNodeEnabled &&
+    isDriverId(network, { declarations, kind: 'networks' }) &&
+    !declarations.networks[network].supportsExitNode
+      ? [
+          {
+            code: 'undeclared-capability' as const,
+            message: `${selectionLabel('isExitNodeEnabled')} needs a network that supports exit nodes; "${network}" does not`,
+            fields: ['network' as const, 'isExitNodeEnabled' as const],
+          },
+        ]
+      : []),
     ...(options.isProxyEnabled &&
     !harnesses.some((id) => declarations.harnesses[id].supportsProxy)
       ? [

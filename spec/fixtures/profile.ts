@@ -32,12 +32,13 @@ export const DISABLED_NETWORK_SUMMARY: ProfileSummary = summarizeProfile(
 /** integration choices a test workstation selects */
 export interface FixtureIntegrations {
   network: boolean;
+  exitNode: boolean;
   cliproxyapi: boolean;
 }
 
 /**
  * builds the default profile with the given integration choices
- * @param integrations whether the private network and gateway are selected
+ * @param integrations whether the private network, exit node and gateway are selected
  * @returns a complete workstation profile
  */
 export function profileWith(
@@ -52,6 +53,7 @@ export function profileWith(
     ...profile,
     options: {
       ...profile.options,
+      isExitNodeEnabled: integrations.exitNode,
       isProxyEnabled: integrations.cliproxyapi,
     },
   };

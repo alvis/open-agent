@@ -24,7 +24,10 @@ import type { CommandError } from '#application/failures';
 import type { ResolvedInputs } from '#application/input/types';
 import type { HarnessPluginActions } from '#application/plugins';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
-import type { ProviderDriver } from '#application/ports/drivers';
+import type {
+  ProviderDriver,
+  NetworkExitNode,
+} from '#application/ports/drivers';
 import type { Interaction } from '#application/ports/interaction';
 
 import type { CreatePreparation } from './context';
@@ -34,6 +37,7 @@ interface CreateProviderChecks {
   /** the provider answered with the entered credential */
   providerAccepted: boolean;
   collision: boolean;
+  verifiedExitNode?: NetworkExitNode;
   issues: CommandError[];
 }
 
@@ -94,12 +98,17 @@ export async function prepareCreate(
   if (refused) {
     return refused;
   }
-  const preflight = createPreflightSummary(dependencies, input);
+  const preflight = createPreflightSummary(
+    dependencies,
+    input,
+    names.verifiedExitNode,
+  );
 
   return authorizeCreate(dependencies, {
     values,
     input,
     plugins,
+    verifiedExitNode: names.verifiedExitNode,
     interaction,
     preflight,
     request,
@@ -220,8 +229,16 @@ async function authorizeCreate(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: CreateAuthorizationContext,
 ): Promise<CreatePreparation> {
-  const { values, input, plugins, interaction, preflight, request, provider } =
-    context;
+  const {
+    values,
+    input,
+    plugins,
+    verifiedExitNode,
+    interaction,
+    preflight,
+    request,
+    provider,
+  } = context;
   reviewCreatePlan(dependencies, context);
   const declined = await confirmCreation(
     dependencies,
@@ -243,6 +260,9 @@ async function authorizeCreate(
       input,
       name: values.name,
       token: values.token,
+      effectiveExitNode: input.profile.options.isExitNodeEnabled
+        ? (verifiedExitNode?.ip ?? input.exitNode)
+        : undefined,
       authKey,
       plugins,
       preflight,
@@ -265,7 +285,7 @@ interface CheckProviderAndNetworkParams {
  * checks the provider name and exact network hostname before creating a workstation
  * @param dependencies the registered drivers
  * @param params the call's inputs: provider, values, input
- * @returns collision status and all failed checks
+ * @returns collision status, verified exit-node identity, and all failed checks
  */
 async function checkProviderAndNetwork(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
@@ -273,19 +293,24 @@ async function checkProviderAndNetwork(
 ): Promise<CreateProviderChecks> {
   const { provider, values, input } = params;
   const network = networkDriver(dependencies.registry, input.profile.network);
+  const { isExitNodeEnabled } = input.profile.options;
   const [taken, preflight] = await runOperation(async () =>
     Promise.allSettled([
       provider.isNameTaken(values.name),
       network.preflight({
         hostname: values.name,
         management: networkManagement(input),
+        exitNode: isExitNodeEnabled ? input.exitNode : undefined,
       }),
     ]),
   );
+  const checked =
+    preflight.status === 'fulfilled' ? preflight.value : undefined;
 
   return {
     providerAccepted: taken.status === 'fulfilled',
     collision: taken.status === 'fulfilled' && taken.value,
+    verifiedExitNode: checked?.exitNode,
     issues: [
       ...(taken.status === 'rejected' ? [commandError(taken.reason)] : []),
       ...(preflight.status === 'rejected'

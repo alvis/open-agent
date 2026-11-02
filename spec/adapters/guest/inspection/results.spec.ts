@@ -35,6 +35,7 @@ describe('fn:settleInspectionResults', () => {
         deviceId: 'retained',
         ip: '100.64.0.1',
         online: false,
+        dnsReady: false,
         skipped: false,
         reason: 'network probe unavailable',
       },

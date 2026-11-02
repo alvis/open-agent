@@ -6,11 +6,15 @@ import {
 } from '#kernel/operation';
 import { rememberSecret } from '#kernel/redaction';
 
+import type { NetworkExitNode } from '#application/ports/drivers';
+
 interface TailnetDevice {
   id: string;
   nodeId?: string;
   name: string;
   hostname?: string;
+  addresses?: string[];
+  enabledRoutes?: string[];
 }
 
 interface TailnetDeviceList {
@@ -100,6 +104,49 @@ export async function assertTailnetHostnameAvailable(
       message: `Tailnet hostname ${name} is already assigned to a device`,
     });
   }
+}
+
+/**
+ * resolves the selected exit node from the live tailnet device inventory
+ * @param apiKey Tailscale management API credential
+ * @param tailnet tailnet identity
+ * @param selector device ID, short name, full DNS name, or tailnet address
+ * @returns the unique enabled IPv4 exit node
+ */
+export async function resolveExitNode(
+  apiKey: string,
+  tailnet: string,
+  selector: string,
+): Promise<NetworkExitNode> {
+  const response = await resolveTailnet(apiKey, tailnet);
+  const matches = response.devices.filter((device) =>
+    matchesExitNodeSelector(device, selector),
+  );
+  if (matches.length !== 1) {
+    throw new CommandFault({
+      code: 'PREFLIGHT',
+      message:
+        `Exit node selector matched ${matches.length} tailnet devices; ` +
+        'choose a unique machine name, full DNS name, device ID or IP from Tailscale Machines',
+    });
+  }
+  const device = matches[0];
+  if (!device?.enabledRoutes?.includes('0.0.0.0/0')) {
+    throw new CommandFault({
+      code: 'PREFLIGHT',
+      message:
+        'Selected tailnet device has no approved IPv4 exit route; enable "Use as exit node" in Tailscale Machines',
+    });
+  }
+  const ip = device.addresses?.find((address) => address.includes('.'));
+  if (!ip) {
+    throw new CommandFault({
+      code: 'PREFLIGHT',
+      message: 'Selected exit node has no IPv4 tailnet address',
+    });
+  }
+
+  return { id: device.nodeId ?? device.id, name: device.name, ip };
 }
 
 /**
@@ -219,6 +266,29 @@ async function resolveTailnet(
 }
 
 /**
+ * compares opaque IDs exactly and machine DNS names without case or a final dot
+ * @param device live tailnet device
+ * @param selector caller's exact ID, address, short name, or full DNS name
+ * @returns whether this device matches the selector
+ */
+function matchesExitNodeSelector(
+  device: TailnetDevice,
+  selector: string,
+): boolean {
+  const selected = selector.trim();
+  const normalized = selected.toLowerCase().replace(/\.$/, '');
+
+  return (
+    device.id === selected ||
+    device.nodeId === selected ||
+    device.addresses?.includes(selected) === true ||
+    [device.hostname, device.name, device.name.split('.')[0]].some(
+      (name) => name?.toLowerCase().replace(/\.$/, '') === normalized,
+    )
+  );
+}
+
+/**
  * makes one authenticated, bounded Tailscale management request
  * @param apiKey Tailscale management API credential
  * @param path API path relative to the v2 base
@@ -251,4 +321,29 @@ async function requestTailnet<T>(
   return response.status === NO_CONTENT_STATUS
     ? (undefined as T)
     : ((await runOperation(async () => response.json())) as T);
+}
+
+/** observed exit-node identity from the guest's current Tailscale peer status */
+interface ObservedExitNode {
+  exitNodeIp?: string;
+  exitNodeName?: string;
+}
+
+/**
+ * confirms the currently selected exit node matches the explicit IP or hostname
+ * @param selection user-selected exit-node IP or hostname
+ * @param observed current guest Tailscale peer identity
+ * @returns whether the selected and observed identities agree
+ */
+export function matchesExitNode(
+  selection: string,
+  observed: ObservedExitNode,
+): boolean {
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(selection)) {
+    return observed.exitNodeIp === selection;
+  }
+  const selected = selection.toLowerCase().replace(/\.$/, '');
+  const actual = observed.exitNodeName?.toLowerCase().replace(/\.$/, '');
+
+  return actual === selected || actual?.startsWith(`${selected}.`) === true;
 }

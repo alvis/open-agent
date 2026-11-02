@@ -1,29 +1,32 @@
-import { runGuestResult } from '#adapters/guest/platform/run';
+import { runGuest, runGuestResult } from '#adapters/guest/platform/run';
 import { isRecord } from '#kernel/guards';
 
 import { ensureTailnetDaemon, enrollTailnet } from './daemon';
 import { tailscaleCommand } from './service';
 import { inspectTailscale } from './status';
 
-import type { NetworkEnrollParams } from '#application/ports/drivers';
+import type {
+  NetworkEnrollParams,
+  NetworkExitNode,
+} from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
 
-import type { NetworkStatus } from '#domain/observations/network';
+import type { TailnetStatus } from '#domain/observations/network';
 
 /**
  * starts the persistent Tailscale daemon and enrols through a session key file
  * @param guest target guest
- * @param enrollment device hostname and enrolment credential
+ * @param enrollment device hostname, enrolment credential and exit-node choice
  */
 export async function enrollTailscale(
   guest: GuestChannel,
   enrollment: NetworkEnrollParams,
 ): Promise<void> {
-  const { recordIdentity } = enrollment;
+  const { exitNode, recordIdentity } = enrollment;
   await ensureTailnetDaemon(guest);
-  await joinTailnet(guest, enrollment);
+  await selectTailnetExitNode(guest, enrollment);
   const status = await inspectTailscale(guest);
-  assertTailnetReady(status);
+  assertTailnetReady(status, exitNode);
   await recordIdentity({
     deviceId: status.deviceId,
     ip: status.ip,
@@ -31,15 +34,17 @@ export async function enrollTailscale(
 }
 
 /**
- * enrols a guest that is not yet registered, leaving a registered one as is
+ * enrols a new guest or updates the current native exit-node selection
  * @param guest target guest
- * @param enrollment device hostname and enrolment credential
+ * @param enrollment device hostname, enrolment credential and exit-node choice
  */
-async function joinTailnet(
+async function selectTailnetExitNode(
   guest: GuestChannel,
   enrollment: NetworkEnrollParams,
 ): Promise<void> {
-  const { hostname, credential } = enrollment;
+  const { hostname, credential, exitNode } = enrollment;
+  const selected =
+    typeof exitNode === 'string' ? exitNode : (exitNode?.ip ?? '');
   const current = await runGuestResult(
     guest,
     tailscaleCommand('status', '--json'),
@@ -49,6 +54,17 @@ async function joinTailnet(
   const enrolled =
     isRecord(status) && isRecord(status.Self) && Boolean(status.Self.ID);
   if (enrolled) {
+    await runGuest(guest, tailscaleCommand('set', '--accept-dns=false'));
+    await runGuest(
+      guest,
+      tailscaleCommand(
+        'set',
+        `--exit-node=${selected}`,
+        '--exit-node-allow-lan-access=false',
+        '--accept-dns=true',
+      ),
+    );
+
     return;
   }
   if (!credential) {
@@ -56,15 +72,41 @@ async function joinTailnet(
       'A Tailscale enrolment key is required for this unregistered device',
     );
   }
-  await enrollTailnet(guest, { authKey: credential, hostname });
+  await enrollTailnet(guest, { authKey: credential, selected, hostname });
 }
 
 /**
- * requires live connectivity evidence
+ * requires live route, DNS, and egress evidence for the selected exit node
  * @param status current native Tailscale status
+ * @param exitNode requested exit node
  */
-function assertTailnetReady(status: NetworkStatus): void {
+function assertTailnetReady(
+  status: TailnetStatus,
+  exitNode?: NetworkExitNode | string,
+): void {
   if (!status.online) {
     throw new Error('Tailscale did not confirm current tailnet connectivity');
+  }
+  if (!exitNode) {
+    return;
+  }
+  if (
+    !status.exitNode ||
+    status.routeDevice !== 'tailscale0' ||
+    !status.dnsReady ||
+    !status.egressIp
+  ) {
+    throw new Error(
+      'Tailscale did not confirm current exit route, DNS, and egress readiness',
+    );
+  }
+  const selectedIp =
+    typeof exitNode === 'string'
+      ? /^[0-9.]+$/.test(exitNode)
+        ? exitNode
+        : undefined
+      : exitNode.ip;
+  if (selectedIp && status.exitNodeIp !== selectedIp) {
+    throw new Error('Tailscale selected a different exit node than requested');
   }
 }

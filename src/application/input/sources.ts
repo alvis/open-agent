@@ -68,9 +68,10 @@ function profileKeys(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
 ): Set<string> {
   return new Set([
-    ...networksWithInputs(dependencies.registry).map(
-      ({ inputs }) => inputs.account.environment,
-    ),
+    ...networksWithInputs(dependencies.registry).flatMap(({ inputs }) => [
+      inputs.account.environment,
+      inputs.exitNode.environment,
+    ]),
     dependencies.registry.gateways.cliproxyapi.inputs.baseUrl.environment,
   ]);
 }

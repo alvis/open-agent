@@ -22,20 +22,20 @@ export const none: NetworkDriver<'none'> = {
   id: 'none',
   kind: 'networks',
   displayName: 'None',
-
+  supportsExitNode: false,
   tools: [],
   preflight: async () => Promise.resolve({ problems: [] }),
-
+  verifyExitNode: async () => Promise.reject(new Error(NOT_SELECTED)),
   issueCredential: async () => Promise.reject(new Error(NOT_SELECTED)),
   enroll: async () => Promise.resolve(),
   release: async () => Promise.resolve(),
   status: async () => Promise.resolve(notConnected()),
-
+  matchesExitNode: () => false,
   readiness: (): ReadinessFinding[] => [
     { name: 'private network', status: 'skipped' },
   ],
   identify: async () => Promise.resolve(notConnected()),
-
+  assertSafeTarget: async () => Promise.resolve(),
   cleanup: async (): Promise<NetworkCleanup> =>
     Promise.resolve({ ok: true, status: 'no device identity recorded' }),
 };

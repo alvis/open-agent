@@ -18,6 +18,8 @@ export interface ResolvedInputs {
   networkAccount?: string;
   /** single-use network enrollment credential */
   enrollmentKey?: string;
+  /** exit node selector */
+  exitNode?: string;
   proxyUrl?: string;
   proxyApiKey?: string;
   githubToken?: string;
@@ -40,6 +42,7 @@ export type RequiredInput =
   | 'providerToken'
   | 'networkEnrollment'
   | 'networkAccount'
+  | 'exitNode'
   | 'proxyUrl'
   | 'proxyApiKey'
   | 'gitIdentity'

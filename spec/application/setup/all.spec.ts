@@ -74,6 +74,7 @@ describe('fn:setupAll', () => {
       vi.spyOn(sprite, 'updateURLSettings').mockResolvedValue(undefined);
       const integrations = {
         network: false,
+        exitNode: false,
         cliproxyapi: false,
       };
       const profile = profileWith(integrations);
@@ -167,6 +168,7 @@ describe('fn:setupAll', () => {
             ].map((name) => ({ name, needs: [], status: 'running' as const })),
             network: {
               online: false,
+              dnsReady: false,
               skipped: true,
               reason: 'No private network is selected',
             },
@@ -253,6 +255,7 @@ describe('fn:setupAll', () => {
       .mockResolvedValue(undefined);
     const profile = profileWith({
       network: false,
+      exitNode: false,
       cliproxyapi: false,
     });
     const context: SetupContext = {
@@ -324,6 +327,7 @@ describe('fn:setupAll', () => {
     const exposure = vi.spyOn(sprite, 'updateURLSettings');
     const integrations = {
       network: false,
+      exitNode: false,
       cliproxyapi: true,
     };
     const context: SetupContext = {

@@ -1,6 +1,9 @@
 import type { CommandOptions } from '#application/contracts';
 import type { ResolvedInputs } from '#application/input/types';
-import type { ProviderDriver } from '#application/ports/drivers';
+import type {
+  ProviderDriver,
+  NetworkExitNode,
+} from '#application/ports/drivers';
 import type { Interaction } from '#application/ports/interaction';
 import type { SetupSession } from '#application/ports/session';
 import type { WorkstationProfile } from '#domain/profile';
@@ -30,5 +33,6 @@ export interface SetupContext {
   isReleaseChanged: boolean;
   /** whether the guest already holds a device identity on the selected network */
   networkEnrolled: boolean;
+  verifiedExitNode?: NetworkExitNode;
   mutation: SetupProgress;
 }

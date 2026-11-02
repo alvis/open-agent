@@ -9,12 +9,18 @@ import { agentService } from '#domain/services';
 
 import { installSetupPlan } from './installation';
 
-import type { NetworkWithDaemon } from '#application/catalog/networks';
+import type {
+  NetworkWithDaemon,
+  RegisteredNetwork,
+} from '#application/catalog/networks';
 import type { NetworkSetupData } from '#application/data';
+import type { ResolvedInputs } from '#application/input/types';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { NetworkExitNode } from '#application/ports/drivers';
 import type { GuestEnvironmentAccess } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { ProductDeclarations } from '#domain/declarations';
+import type { WorkstationProfile } from '#domain/profile';
 import type { GuestServiceState } from '#domain/services';
 
 import type { SetupContext } from './context';
@@ -34,14 +40,14 @@ interface ConsumerDetachment {
 }
 
 /**
- * enrolls the selected network;
+ * enrolls the selected network or update the existing device's exit route;
  * when the network had to be installed, the installation is recorded ready
  * only once the device enrolled, so a failed enrolment leaves it `incomplete`
  * for recovery to find
  * @param dependencies the registered drivers, the guest mechanics
  * @param guest guest channel of the managed workstation
  * @param context network choices, prompts, and redaction values
- * @returns selected network summary
+ * @returns selected network route summary
  */
 export async function setupNetwork(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'guest'>,
@@ -58,9 +64,14 @@ export async function setupNetwork(
 
     return { network: { status: 'disabled', readiness: 'skipped' } };
   }
-  if (network.inputs && !input.networkAccount) {
+  const { isExitNodeEnabled } = profile.options;
+  if (
+    network.inputs &&
+    (!input.networkAccount || (isExitNodeEnabled && !input.exitNode))
+  ) {
     throw new Error(`Validated ${network.displayName} inputs were unavailable`);
   }
+  const verified = context.verifiedExitNode;
   const authKey =
     networkEnrolled || !network.inputs
       ? undefined
@@ -70,19 +81,52 @@ export async function setupNetwork(
   if (!networkEnrolled) {
     await removeRecordedDevice(dependencies, guest, context);
   }
+  const selectedExitNode = isExitNodeEnabled
+    ? (verified?.ip ?? input.exitNode)
+    : undefined;
   await network.enroll(guest, {
     hostname: context.workstation.name,
     credential: authKey,
+    exitNode: selectedExitNode,
     recordIdentity: dependencies.guest.environment.identityRecorder(
       guest,
       network.id,
     ),
   });
+  await assertExitNodeActive(guest, network, selectedExitNode);
   if (installed) {
     await markInstallationReady(dependencies.guest, guest);
   }
 
-  return { network: { status: 'configured' } };
+  return {
+    network: {
+      status: 'configured',
+      exitNode: isExitNodeEnabled
+        ? (verified?.name ?? input.exitNode)
+        : undefined,
+    },
+  };
+}
+
+/**
+ * refuses to go on when the enrolled device does not route through the
+ * selected exit node
+ * @param guest guest channel of the managed workstation
+ * @param network the enrolled network
+ * @param exitNode address of the selected exit node, if any
+ * @throws {Error} when the network's status does not match the exit node
+ */
+async function assertExitNodeActive(
+  guest: GuestChannel,
+  network: RegisteredNetwork,
+  exitNode: string | undefined,
+): Promise<void> {
+  const observed = await network.status(guest);
+  if (exitNode && !network.matchesExitNode(exitNode, observed)) {
+    throw new Error(
+      `The selected exit node does not match current ${network.displayName} status`,
+    );
+  }
 }
 
 /**
@@ -139,6 +183,29 @@ async function installSelectedNetwork(
 }
 
 /**
+ * verifies selected exit routing before any setup mutation
+ * @param dependencies the registered drivers
+ * @param input resolved local network credentials and selectors
+ * @param targeted the part of the profile this setup run applies
+ * @returns approved exit identity when caller-side management access is available
+ */
+export async function verifySetupExitNode(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  input: ResolvedInputs,
+  targeted: WorkstationProfile,
+): Promise<NetworkExitNode | undefined> {
+  const network = networkDriver(dependencies.registry, targeted.network);
+  const management = networkManagement(input);
+
+  return network.supportsExitNode &&
+    targeted.options.isExitNodeEnabled &&
+    management?.account &&
+    input.exitNode
+    ? network.verifyExitNode(management, input.exitNode)
+    : undefined;
+}
+
+/**
  * stops the managed network daemon while retaining enrolment and cleanup
  * identity, detaching the agent service that depended on it, and records the
  * workstation without a network; the setup plan that follows reinstalls the
@@ -174,6 +241,7 @@ export async function disableNetwork(
   await access.writeProfile(guest, {
     ...environment.profile,
     network: NO_NETWORK,
+    options: { ...environment.profile.options, isExitNodeEnabled: false },
   });
 }
 

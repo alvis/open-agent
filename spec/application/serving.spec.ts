@@ -12,6 +12,7 @@ const FULL_INSPECTION = {
   services: [],
   network: {
     online: false,
+    dnsReady: false,
     skipped: true,
     reason: 'No private network is selected',
   },

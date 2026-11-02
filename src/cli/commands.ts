@@ -47,6 +47,7 @@ type BooleanKeys<T> = {
 type OptionalBooleanKey =
   | 'withPairCode'
   | 'proxy'
+  | 'useExitNode'
   | 'github'
   | 'gitIdentity'
   | 'plugins'

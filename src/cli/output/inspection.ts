@@ -43,6 +43,12 @@ export interface NetworkOutput {
   online: boolean;
   skipped: boolean;
   reason?: string;
+  exitNode?: string;
+  exitNodeIp?: string;
+  exitNodeName?: string;
+  routeDevice?: string;
+  dnsReady?: boolean;
+  egressIp?: string;
 }
 
 /** whether the gateway answered */
@@ -165,6 +171,12 @@ export function projectNetworkStatus(network: NetworkStatus): NetworkOutput {
     online: same,
     skipped: same,
     reason: same,
+    exitNode: same,
+    exitNodeIp: same,
+    exitNodeName: same,
+    routeDevice: same,
+    dnsReady: same,
+    egressIp: same,
   });
 }
 

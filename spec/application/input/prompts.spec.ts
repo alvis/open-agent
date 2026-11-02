@@ -218,6 +218,7 @@ describe('fn:resolveInteractiveInputs', () => {
     const input = emptyInput();
     input.profile = profileWith({
       network: true,
+      exitNode: true,
       cliproxyapi: true,
     });
     const asked: string[] = [];
@@ -232,6 +233,9 @@ describe('fn:resolveInteractiveInputs', () => {
         }
         if (message.includes('tailnet')) {
           return 'example-tailnet';
+        }
+        if (message.includes('exit node')) {
+          return 'exit-node';
         }
 
         return 'https://proxy.example.test';
@@ -263,6 +267,7 @@ describe('fn:resolveInteractiveInputs', () => {
       required: [
         'name',
         'networkAccount',
+        'exitNode',
         'proxyUrl',
         'providerToken',
         'networkEnrollment',
@@ -274,10 +279,11 @@ describe('fn:resolveInteractiveInputs', () => {
       expect.stringContaining('lowercase DNS label'),
       undefined,
     ]);
-    expect(asked).toHaveLength(6);
+    expect(asked).toHaveLength(7);
     expect(input).toMatchObject({
       name: 'valid-name',
       networkAccount: 'example-tailnet',
+      exitNode: 'exit-node',
       proxyUrl: 'https://proxy.example.test',
       providerToken: 'provider-token',
       networkKey: 'network-key',

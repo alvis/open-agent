@@ -1,7 +1,7 @@
 import { CommandFault, ensureError } from '#kernel/faults';
 import { cancellationReason, currentOperation } from '#kernel/operation';
 
-import { deleteTailnetDevice, findTailnetDevice } from './api';
+import { deleteTailnetDevice, findTailnetDevice, resolveExitNode } from './api';
 import { ensureTailnetDaemon } from './daemon';
 import { inspectTailscale } from './status';
 
@@ -9,8 +9,46 @@ import type {
   NetworkCleanup,
   NetworkCleanupParams,
   NetworkStaleDeviceParams,
+  NetworkTargetParams,
 } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
+
+import type { TailnetStatus } from '#domain/observations/network';
+
+/**
+ * protects the selected home exit node from cleanup even under a bad identity
+ * @param params captured guest identity, management credential and selected home exit node
+ */
+export async function assertSafeTailnetTarget(
+  params: NetworkTargetParams<TailnetStatus>,
+): Promise<void> {
+  const { identity, management, exitNode } = params;
+  const {
+    deviceId: guestNodeId,
+    ip: tailnetIp,
+    exitNode: exitNodeId,
+  } = identity;
+  if (guestNodeId && guestNodeId === exitNodeId) {
+    throw new CommandFault({
+      code: 'CONFLICT',
+      message: 'Refusing to delete a Sprite configured as its own exit node',
+    });
+  }
+  if (!guestNodeId || !management?.account || !exitNode) {
+    return;
+  }
+  const homeNode = await resolveExitNode(
+    management.credential,
+    management.account,
+    exitNode,
+  );
+  if (homeNode.id === guestNodeId || homeNode.ip === tailnetIp) {
+    throw new CommandFault({
+      code: 'CONFLICT',
+      message: 'Refusing to delete the selected home exit node',
+    });
+  }
+}
 
 /**
  * deletes the captured guest node after Sprite deletion, or reports work remaining

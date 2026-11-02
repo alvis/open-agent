@@ -28,6 +28,11 @@ const inputs: NetworkInputs = {
     environment: 'PARTIAL_ENROLLMENT_KEY',
     flag: '--network-auth-key-source SOURCE',
   },
+  exitNode: {
+    environment: 'PARTIAL_EXIT_NODE',
+    prompt: 'Exit node',
+    flag: '--exit-node NODE',
+  },
 };
 
 const daemon: ServiceDefinition = {

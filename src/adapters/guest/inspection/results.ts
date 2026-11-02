@@ -37,6 +37,7 @@ export function settleInspectionResults(
     deviceId: environment.networkIdentity?.deviceId,
     ip: environment.networkIdentity?.ip,
     online: false,
+    dnsReady: false,
     skipped: false,
     reason: probeFailures.find((failure) => failure.probe === 'network')
       ?.reason,

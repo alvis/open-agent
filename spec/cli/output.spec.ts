@@ -51,6 +51,7 @@ const inspection: GuestInspection = {
   services: [],
   network: {
     online: false,
+    dnsReady: false,
     skipped: true,
     reason: 'No private network is selected',
   },
@@ -747,7 +748,7 @@ describe('fn:prepareResult', () => {
       skipped: [],
       probeFailures: [],
       services: [{ name: 't3-code', state: 'running' }],
-      network: { ...inspection.network, deviceId: 'node-1234' },
+      network: { ...inspection.network, exitNodeName: 'home-router' },
       hub: inspection.hub,
       native: inspection.native,
       environment: inspection.environment,
@@ -766,7 +767,7 @@ describe('fn:prepareResult', () => {
     expect(output.stdout).toBe('');
     expect(output.stderr).toContain('Readiness check failed');
     expect(output.stderr).toContain('T3 environment endpoint');
-    expect(output.stderr).toContain('node-1234');
+    expect(output.stderr).toContain('home-router');
   });
 
   it('should keep retained identity and partial cleanup facts on stderr', () => {

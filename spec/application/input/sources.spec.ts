@@ -26,6 +26,7 @@ describe('fn:readInputSources', () => {
       join(profileDirectory, 'profile.json'),
       JSON.stringify({
         TAILSCALE_TAILNET: 'profile-tailnet',
+        TAILSCALE_EXIT_NODE: 'profile-exit',
         CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
         SPRITES_TOKEN: 'profile-secret-must-be-ignored',
         GH_TOKEN: 'profile-github-must-be-ignored',
@@ -56,6 +57,7 @@ describe('fn:readInputSources', () => {
         },
         profile: {
           TAILSCALE_TAILNET: 'profile-tailnet',
+          TAILSCALE_EXIT_NODE: 'profile-exit',
           CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
         },
         token: 'process-secret-for-source-test',

@@ -5,9 +5,9 @@ import { Secret } from '#kernel/secret';
 
 import type { NetworkEnrollParams } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
-import type { NetworkStatus } from '#domain/observations/network';
+import type { TailnetStatus } from '#domain/observations/network';
 
-const statuses = vi.hoisted(() => new WeakMap<GuestChannel, NetworkStatus>());
+const statuses = vi.hoisted(() => new WeakMap<GuestChannel, TailnetStatus>());
 const boundary = vi.hoisted(
   () =>
     ({
@@ -26,6 +26,11 @@ const boundary = vi.hoisted(
             ip: '100.64.0.2',
             online: true,
             skipped: false,
+            dnsReady: true,
+            exitNode: 'home',
+            exitNodeIp: '100.64.0.1',
+            routeDevice: 'tailscale0',
+            egressIp: '198.51.100.1',
           },
       ),
     }) satisfies Partial<
@@ -63,18 +68,34 @@ const recordIdentity = vi.fn<NetworkEnrollParams['recordIdentity']>(
 const enrollment = { hostname: 'workstation', recordIdentity };
 
 describe('fn:enrollTailscale', () => {
-  it('should leave an enrolled device as is and persist live identity', async () => {
-    await enrollTailscale(
-      guest as Partial<GuestChannel> as GuestChannel,
-      enrollment,
-    );
+  it.each([
+    { exitNode: 'home', selected: 'home' },
+    {
+      exitNode: { id: 'home', name: 'home', ip: '100.64.0.1' },
+      selected: '100.64.0.1',
+    },
+    { selected: '' },
+  ])(
+    'should update an enrolled device to exit $selected and persist live identity',
+    async ({ selected, ...options }) => {
+      await enrollTailscale(guest as Partial<GuestChannel> as GuestChannel, {
+        ...enrollment,
+        ...options,
+      });
 
-    expect(recordIdentity.mock.calls).toEqual([
-      [{ deviceId: 'workstation', ip: '100.64.0.2' }],
-    ]);
-    expect(guest.exec).toHaveBeenCalledOnce();
-    expect(boundary.enrollTailnet).not.toHaveBeenCalled();
-  });
+      expect(recordIdentity.mock.calls).toEqual([
+        [{ deviceId: 'workstation', ip: '100.64.0.2' }],
+      ]);
+      expect(
+        guest.exec.mock.calls.map(([command]) => command.arguments),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([`--exit-node=${selected}`]),
+        ]),
+      );
+      expect(boundary.enrollTailnet).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('Tailscale registration', () => {
@@ -90,7 +111,11 @@ describe('Tailscale registration', () => {
       } satisfies Partial<GuestChannel> as Partial<GuestChannel> as GuestChannel;
       const credential = Secret.fromHost('provider-api', 'enrollment-key');
 
-      await enrollTailscale(channel, { ...enrollment, credential });
+      await enrollTailscale(channel, {
+        ...enrollment,
+        credential,
+        exitNode: '100.64.0.1',
+      });
 
       expect(recordIdentity.mock.calls).toEqual([
         [{ deviceId: 'workstation', ip: '100.64.0.2' }],
@@ -100,6 +125,7 @@ describe('Tailscale registration', () => {
           channel,
           {
             authKey: credential,
+            selected: '100.64.0.1',
             hostname: 'workstation',
           },
         ],
@@ -125,18 +151,37 @@ describe('Tailscale registration', () => {
 });
 
 describe('Tailscale readiness', () => {
-  it('should not persist an identity when live connectivity fails', async () => {
-    const channel = { ...guest } as Partial<GuestChannel> as GuestChannel;
-    statuses.set(channel, {
-      deviceId: 'workstation',
-      ip: '100.64.0.2',
-      online: false,
-      skipped: false,
-    });
+  it.each([
+    { overrides: { online: false }, error: /connectivity/iu },
+    { overrides: { exitNode: '' }, error: /readiness/iu },
+    { overrides: { routeDevice: 'eth0' }, error: /readiness/iu },
+    { overrides: { dnsReady: false }, error: /readiness/iu },
+    { overrides: { egressIp: '' }, error: /readiness/iu },
+    {
+      overrides: { exitNodeIp: '100.64.0.99' },
+      error: /different exit node/iu,
+    },
+  ])(
+    'should not persist an identity when live readiness fails %j',
+    async ({ overrides, error }) => {
+      const channel = { ...guest } as Partial<GuestChannel> as GuestChannel;
+      statuses.set(channel, {
+        deviceId: 'workstation',
+        ip: '100.64.0.2',
+        online: true,
+        skipped: false,
+        dnsReady: true,
+        exitNode: 'home',
+        exitNodeIp: '100.64.0.1',
+        routeDevice: 'tailscale0',
+        egressIp: '198.51.100.1',
+        ...overrides,
+      });
 
-    await expect(enrollTailscale(channel, enrollment)).rejects.toThrow(
-      /connectivity/iu,
-    );
-    expect(recordIdentity).not.toHaveBeenCalled();
-  });
+      await expect(
+        enrollTailscale(channel, { ...enrollment, exitNode: '100.64.0.1' }),
+      ).rejects.toThrow(error);
+      expect(recordIdentity).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -261,7 +261,7 @@ function expectReadinessJson(
           { length: skipped.length },
           (_, index) => skipped.at(index) ?? null,
         ),
-        network: { online: network.online },
+        network: { online: network.online, dnsReady: network.dnsReady },
       },
     },
   });
@@ -283,7 +283,10 @@ function expectShowJson(
     expect(output).toMatchObject({
       data: {
         inspection: {
-          network: { online: inspection.network.online },
+          network: {
+            online: inspection.network.online,
+            dnsReady: inspection.network.dnsReady,
+          },
           governor: { recorded: inspection.governor.recorded },
         },
       },
