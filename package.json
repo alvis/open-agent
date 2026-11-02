@@ -1,0 +1,51 @@
+{
+  "name": "open-agent",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Persistent coding workstations with your choice of machine provider, ACP agent, harnesses and network",
+  "bugs": {
+    "url": "https://github.com/alvis/open-agent/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alvis/open-agent.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Alvis HT Tang",
+    "email": "alvis@hilbert.space"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "run build",
+    "lint": "run lint --",
+    "prepare": "run prepare",
+    "test": "run test",
+    "test:coverage": "run test:coverage --",
+    "typecheck": "run typecheck"
+  },
+  "devDependencies": {
+    "@presetter/preset-esm": "^9.1.0",
+    "@presetter/preset-react": "^9.1.0",
+    "@presetter/preset-strict": "^9.1.0",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^4.0.0",
+    "presetter": "^9.1.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  },
+  "packageManager": "pnpm@12.11.0",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.0.0",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
