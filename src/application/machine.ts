@@ -9,6 +9,8 @@ import type {
   WorkstationSetupState,
 } from '#domain/workstation';
 
+import type { PairingSecret } from '#kernel/pairing-secret';
+
 const DNS_LABEL_MAX_LENGTH = 63;
 
 /** control-plane details only; guest state is never inferred from this projection */
@@ -18,7 +20,7 @@ export interface MachineSummary {
   organization: string;
   createdAt?: string;
   state: string;
-  agentUrl?: string;
+  agentUrl?: string | PairingSecret;
   setup: WorkstationSetupState;
   /** driver selection recorded in provider metadata; absent when unrecorded */
   profile?: ProfileSummary;
@@ -49,14 +51,16 @@ export function validateMachineName(name: string): void {
 }
 
 /**
- * converts a live provider record into control-plane data
+ * converts a live provider record into control-plane data with optional pairing consent
  * @param dependencies the registered drivers
  * @param workstation freshly fetched provider record
+ * @param pairingCode explicitly disclosed native agent pairing code to attach to its normal URL
  * @returns a control-plane summary with guest readiness marked uninspected
  */
 export function summarizeMachine(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   workstation: WorkstationRecord,
+  pairingCode?: PairingSecret,
 ): MachineSummary {
   if (!workstation.id || !workstation.organization) {
     throw new CommandFault({
@@ -71,7 +75,11 @@ export function summarizeMachine(
     organization: workstation.organization,
     createdAt: workstation.createdAt,
     state: workstation.state,
-    agentUrl: workstation.url,
+    agentUrl: workstation.url
+      ? pairingCode
+        ? pairingCode.forUrl(workstation.url)
+        : workstation.url
+      : undefined,
     setup: workstation.metadata.setup,
     profile: registeredSummary(
       dependencies.registry,

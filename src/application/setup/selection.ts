@@ -8,7 +8,8 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
   {
     value: 'agent',
     label: 'ACP agent',
-    description: 'Configure the agent service',
+    description:
+      'Configure the agent service; pair via the workstation action menu',
   },
   {
     value: 'network',
@@ -34,6 +35,9 @@ export async function selectSetupSection(
 ): Promise<SetupSection> {
   if (options.section) {
     return options.section;
+  }
+  if (options.withPairCode) {
+    return 'agent';
   }
   if (!interaction || options.nonInteractive) {
     throw new Error('Non-interactive setup requires --section');

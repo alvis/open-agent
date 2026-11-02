@@ -18,18 +18,22 @@ import { dependencies } from '../mocks/dependencies';
 describe('fn:requireValidProfile', () => {
   it('should return a valid resolved profile', () => {
     expect(
-      requireValidProfile(dependencies, {
-        candidate: DISABLED_NETWORK_PROFILE,
-      }),
+      requireValidProfile(
+        dependencies,
+        { candidate: DISABLED_NETWORK_PROFILE },
+        {},
+      ),
     ).toEqual(DISABLED_NETWORK_PROFILE);
   });
 
   it('should report capability violations', () => {
     let failure: unknown;
     try {
-      requireValidProfile(dependencies, {
-        candidate: { ...DISABLED_NETWORK_PROFILE, harnesses: [] },
-      });
+      requireValidProfile(
+        dependencies,
+        { candidate: { ...DISABLED_NETWORK_PROFILE, harnesses: [] } },
+        {},
+      );
     } catch (error) {
       failure = error;
     }
@@ -44,16 +48,18 @@ describe('fn:requireValidProfile', () => {
 describe('fn:requireValidSuppliedSelection', () => {
   it('should accept a compatible supplied selection', () => {
     expect(() =>
-      requireValidSuppliedSelection(dependencies, { provider: 'sprite' }),
+      requireValidSuppliedSelection(dependencies, { provider: 'sprite' }, {}),
     ).not.toThrow();
   });
 
   it('should report an unknown driver before workstation lookup', () => {
     let failure: unknown;
     try {
-      requireValidSuppliedSelection(dependencies, {
-        agent: 'unregistered-agent',
-      });
+      requireValidSuppliedSelection(
+        dependencies,
+        { agent: 'unregistered-agent' },
+        {},
+      );
     } catch (error) {
       failure = error;
     }

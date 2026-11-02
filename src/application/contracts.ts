@@ -36,6 +36,8 @@ export interface CommandOptions {
   quiet?: boolean;
   /** reads and saves credentials on this computer when enabled */
   localCredentials?: boolean;
+  /** requests a pairing code from an agent that supports pairing */
+  withPairCode?: boolean;
   /** adds a live guest inspection to show */
   inspect?: boolean;
   /** source reference of the provider management credential */

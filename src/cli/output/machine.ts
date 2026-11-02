@@ -3,6 +3,8 @@ import { projectProfileSummary } from './profile';
 
 import type { MachineSummary } from '#application/machine';
 
+import type { PairingSecret } from '#kernel/pairing-secret';
+
 import type { FieldProjectors } from './fields';
 import type { ProfileSummaryOutput } from './profile';
 
@@ -13,7 +15,7 @@ export interface MachineOutput {
   organization: string;
   createdAt?: string;
   state: string;
-  agentUrl?: string;
+  agentUrl?: string | PairingSecret;
   setup: string;
   profile?: ProfileSummaryOutput;
   readiness: 'not inspected';

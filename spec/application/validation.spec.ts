@@ -45,6 +45,15 @@ describe('fn:validateCommandRequest', () => {
       validateCommandRequest({ command: 'setup', options: {} }),
     ).not.toThrow();
   });
+
+  it('should refuse a pairing code for a non-pairing section', () => {
+    expect(() =>
+      validateCommandRequest({
+        command: 'setup',
+        options: { section: 'network', withPairCode: true },
+      }),
+    ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+  });
 });
 
 describe('fn:validateSetupIntegrationOptions', () => {

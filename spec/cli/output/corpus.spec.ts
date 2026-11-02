@@ -185,6 +185,7 @@ function expectSuccessJson(result: CommandSuccess, output: unknown): void {
             ready: result.data.readiness.ready,
             failures: result.data.readiness.failures,
           },
+          pairing: { status: result.data.pairing.status },
         },
       });
       break;

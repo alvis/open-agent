@@ -120,17 +120,19 @@ async function installedSprite(
 }
 
 /**
- * creates a managed SDK boundary with one workstation
+ * creates a managed SDK boundary whose guest mints one pairing code
  * @param root isolated guest filesystem root
+ * @param pairingCode the code the agent's pairing command prints
  * @returns provider client and the guest's answer to every command other
  * than a file program
  */
 async function managedSprite(
   root: string,
+  pairingCode: string,
 ): Promise<{ client: SpritesClient; execute: Mock<GuestExecute> }> {
   const client = new SpritesClient('test-org/1/0abc/0def');
   const execute = vi.fn<GuestExecute>(async () => ({
-    stdout: '',
+    stdout: `Token: ${pairingCode}\nExpires: 2099-01-01T00:00:00Z\n`,
     stderr: '',
     exitCode: 0,
   }));
@@ -145,6 +147,10 @@ async function managedSprite(
     },
   );
   vi.spyOn(client, 'getSprite').mockResolvedValue(sprite);
+  // pairing reads the recorded agent from the guest environment
+  await sprite
+    .filesystem()
+    .writeFile(ENVIRONMENT_PATH, JSON.stringify(environmentOf(PROFILE)));
 
   return { client, execute };
 }
@@ -523,6 +529,7 @@ describe('cmd:show', () => {
             command: 'show',
             options: {
               yes: true,
+              withPairCode: true,
               inspect: true,
               localCredentials: false,
             },
@@ -551,7 +558,7 @@ describe('cmd:show', () => {
     expect(client.deleteSprite).not.toHaveBeenCalled();
   }, 15_000);
 
-  it('should keep inspection off for details, then inspects only when selected', async () => {
+  it('should keep inspection and pairing off for details, then inspects only when selected', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-show-inspect-'),
     );
@@ -564,6 +571,7 @@ describe('cmd:show', () => {
             machine: 'temporary',
             options: {
               inspect: true,
+              withPairCode: true,
             },
           },
           provider: providerOf(client),
@@ -575,6 +583,7 @@ describe('cmd:show', () => {
     expect(details.matchedSteps, details.output).toBe(1);
     expect(details.result).toMatchObject({ command: 'show', ok: true });
     expect(details.result.data).not.toHaveProperty('inspection');
+    expect(details.result.data).not.toHaveProperty('pairing');
     expect(sprite.listServices).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
 
@@ -714,11 +723,114 @@ describe('cmd:show', () => {
     expect(client.deleteSprite).not.toHaveBeenCalled();
   }, 15_000);
 
-  it('should show the ordinary URL without opening the guest', async () => {
+  it('should disclose one pairing URL, code and expiry after a real menu choice without leaking the SDK token', async () => {
     await using directory = await mkdtempDisposable(
-      join(tmpdir(), 'open-agent-show-url-'),
+      join(tmpdir(), 'open-agent-show-pairing-'),
     );
-    const { client, execute } = await managedSprite(directory.path);
+    const pairingCode = 'menu-pairing-code-' + 'abc123'.repeat(24);
+    const { client, execute } = await managedSprite(
+      directory.path,
+      pairingCode,
+    );
+    const observed = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: {
+            command: 'show',
+            machine: 'primary',
+            options: {},
+          },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [
+        { waitFor: 'Workstation action', input: 'Pair another' },
+        { waitFor: 'Search: Pair another', input: '\r' },
+      ],
+    );
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    let human = '';
+    let diagnostic = '';
+    stdout.on('data', (chunk: Buffer) => {
+      human += chunk.toString();
+    });
+    stderr.on('data', (chunk: Buffer) => {
+      diagnostic += chunk.toString();
+    });
+    try {
+      writePreparedResult(
+        prepareResult({
+          result: observed.result,
+          options: {},
+          streams: { stdout, stderr },
+        }),
+        { stdout, stderr },
+      );
+    } finally {
+      stdout.destroy();
+      stderr.destroy();
+    }
+
+    expect(observed.matchedSteps, observed.output).toBe(2);
+    expect(observed.result).toMatchObject({
+      ok: true,
+      data: {
+        pairing: { expiresAt: '2099-01-01T00:00:00Z' },
+      },
+    });
+    expect(human).toContain(`Pairing code: ${pairingCode}`);
+    expect(human).toContain(
+      `https://primary.sprites.app/#token=${pairingCode}`,
+    );
+    expect(human).toContain('2099-01-01T00:00:00Z');
+    expect(human.match(/https:\/\/primary\.sprites\.app/gu)).toHaveLength(1);
+    expect(human).not.toContain('Pairing URL:');
+    expect(human).not.toContain('test-org/1/0abc/0def');
+    expect(diagnostic).toBe('');
+    expect(observed.output).not.toContain('test-org/1/0abc/0def');
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('should create pairing only when explicitly requested', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-pairing-'),
+    );
+    const pairingCode = 'direct-pairing-code-' + 'abc123'.repeat(24);
+    const { client, execute } = await managedSprite(
+      directory.path,
+      pairingCode,
+    );
+
+    const result = await showWorkstation(dependencies, {
+      request: {
+        command: 'show',
+        machine: 'primary',
+        options: { withPairCode: true },
+      },
+      provider: providerOf(client),
+    });
+
+    expect(serializeResult(projectResult(result))).toMatchObject({
+      ok: true,
+      data: {
+        machine: {
+          agentUrl: `https://primary.sprites.app/#token=${pairingCode}`,
+        },
+        pairing: { token: pairingCode, expiresAt: '2099-01-01T00:00:00Z' },
+      },
+    });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('should show the ordinary URL without opening the guest or minting pairing', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-pairing-'),
+    );
+    const { client, execute } = await managedSprite(
+      directory.path,
+      'unused-pairing-code',
+    );
 
     const result = await showWorkstation(dependencies, {
       request: {
@@ -733,6 +845,7 @@ describe('cmd:show', () => {
       ok: true,
       data: { machine: { agentUrl: 'https://primary.sprites.app' } },
     });
+    expect(result.data).not.toHaveProperty('pairing');
     expect(execute).not.toHaveBeenCalled();
   });
 });

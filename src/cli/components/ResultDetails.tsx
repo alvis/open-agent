@@ -18,6 +18,8 @@ const FIELD_LABELS: Record<string, string> = {
   machine: 'Workstation',
   currentReadiness: 'Readiness',
   agentUrl: 'Agent URL',
+  pairing: 'Agent pairing',
+  expiresAt: 'Expires at',
   id: 'ID',
   gh: 'GitHub CLI',
   jj: 'Jujutsu',

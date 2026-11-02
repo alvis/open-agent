@@ -1,4 +1,33 @@
+import { CommandFault } from '#kernel/faults';
+
 import type { DriverRegistry } from '#application/ports/drivers';
+import type { GuestChannel } from '#application/ports/guest-channel';
+import type { AgentPairing } from '#domain/declarations';
+import type { AgentId } from '#domain/ids';
+
+/**
+ * issues a pairing code through the agent
+ * @param registry every registered driver
+ * @param guest guest channel of the workstation
+ * @param agent selected agent identifier
+ * @returns the pairing credential
+ * @throws {CommandFault} when the agent cannot pair
+ */
+export async function pairAgent(
+  registry: Pick<DriverRegistry, 'agents'>,
+  guest: GuestChannel,
+  agent: AgentId,
+): Promise<AgentPairing> {
+  const driver = registry.agents[agent];
+  if (!driver.pair) {
+    throw new CommandFault({
+      code: 'UNEXPECTED',
+      message: `Agent ${agent} cannot issue pairing codes`,
+    });
+  }
+
+  return driver.pair(guest);
+}
 
 /**
  * labels every managed service for human output

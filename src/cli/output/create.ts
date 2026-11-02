@@ -6,6 +6,7 @@ import {
   projectServiceSummary,
 } from './inspection';
 import { projectMachine } from './machine';
+import { projectPairing } from './pairing';
 import { projectProfile } from './profile';
 import { projectReadiness } from './readiness';
 
@@ -19,6 +20,7 @@ import type {
   ServiceSummaryOutput,
 } from './inspection';
 import type { MachineOutput } from './machine';
+import type { PairingOutput } from './pairing';
 import type { ProfileOutput } from './profile';
 import type { ReadinessOutput } from './readiness';
 
@@ -38,6 +40,7 @@ export interface CreateDataOutput {
   network: NetworkOutput;
   services: ServiceSummaryOutput[];
   native?: NativeOutput;
+  pairing: PairingOutput;
 }
 
 /** what a failed creation still verified */
@@ -78,6 +81,7 @@ export function projectCreate(data: CreateData): CreateDataOutput {
     network: projectNetworkStatus,
     services: each(projectServiceSummary),
     native: projectNative,
+    pairing: projectPairing,
   });
 }
 

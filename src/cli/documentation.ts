@@ -11,25 +11,29 @@ export const createDocumentation = {
   fullDescription: `Creates a private workstation, verifies readiness, then exposes its agent URL.
 Interactive runs ask for the provider, ACP agent, harnesses, then network; a
 step with one choice is skipped. Flags and
-OPEN_AGENT_* environment variables answer the same questions.
+OPEN_AGENT_* environment variables answer the same questions. --with-pair-code
+alone requests a new five-minute pairing code.
 
 EXAMPLES
   open-agent create --name devbox
   open-agent create --name devbox --network none
-  open-agent create --name devbox --json --non-interactive`,
+  open-agent create --name devbox --with-pair-code --json --non-interactive`,
 } as const;
 
-/** setup sections remain explicit */
+/** setup sections remain explicit even when pairing selects the agent section */
 export const setupDocumentation = {
   brief: 'configure an existing workstation',
   customUsage: ['[<workstation>] [--section SECTION] [options]'],
   fullDescription: `Changes only the selected setup section. Without a workstation name,
 interactive mode offers a selection. --section all can change the harnesses
 and network; the provider and ACP agent are fixed at creation.
+--with-pair-code selects the agent section when --section is omitted; it also
+works with --section all.
 
 EXAMPLES
   open-agent setup devbox --section agent
-  open-agent setup devbox --section all --network none --yes`,
+  open-agent setup devbox --section all --network none --yes
+  open-agent setup devbox --with-pair-code`,
 } as const;
 
 /** list guidance keeps the provider-only read and output modes clear */
@@ -49,20 +53,21 @@ EXAMPLES
   open-agent list --no-local-credentials --provider-token-source env:MY_TOKEN`,
 } as const;
 
-/** documents workstation details and explicit inspection */
+/** documents workstation details, explicit inspection and pairing */
 export const showDocumentation = {
   brief: 'show a workstation from current control-plane state',
-  customUsage: ['[<workstation>] [--inspect] [options]'],
+  customUsage: ['[<workstation>] [--inspect] [--with-pair-code] [options]'],
   fullDescription: `Shows current provider details and the ordinary agent URL without
 waking the guest. --inspect checks live guest services and may wake it; use
-doctor for a readiness-focused report. A bare interactive show
+doctor for a readiness-focused report. --with-pair-code creates one code
+valid for five minutes and appends it to the agent URL. A bare interactive show
 opens the workstation action menu. ${PROVIDER_SELECTION} Credentials precede
 output controls below.
 
 EXAMPLES
   open-agent show devbox
   open-agent show devbox --inspect
-  open-agent show devbox --inspect --json`,
+  open-agent show devbox --with-pair-code --json`,
 } as const;
 
 /** deletion consent is command-specific and exact-name scoped */

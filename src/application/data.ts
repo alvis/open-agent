@@ -9,6 +9,16 @@ import type { ProviderId } from '#domain/ids';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { WorkstationProfile } from '#domain/profile';
 import type { CommandErrorCode } from '#kernel/faults';
+import type { PairingSecret } from '#kernel/pairing-secret';
+
+/** pairing metadata with explicitly marked disclosure material */
+export interface PairingData {
+  status: 'created' | 'failed' | 'not requested';
+  expiresAt?: string;
+  token?: PairingSecret;
+  reason?: string;
+  retry?: string;
+}
 
 /** current service state without executable arguments */
 export interface ServiceSummary {
@@ -29,6 +39,7 @@ export interface CreateData {
   network: GuestInspection['network'];
   services: ServiceSummary[];
   native: GuestInspection['native'];
+  pairing: PairingData;
 }
 
 /** a provider list could not query, with the normalized failure code */
@@ -58,6 +69,7 @@ export interface ListData {
 export interface ShowData {
   machine: MachineSummary;
   inspection?: GuestInspection & { readiness?: ReadinessAssessment };
+  pairing?: PairingData;
   action?: 'copy';
 }
 
@@ -81,9 +93,10 @@ export interface TerminateData {
   workstation: { status: 'deleted'; id: string; name: string };
 }
 
-/** native agent setup */
+/** native agent setup or explicitly requested pairing */
 export interface AgentSetupData {
   service?: 'configured';
+  pairing: PairingData;
 }
 
 /** selected native networking outcome */

@@ -99,6 +99,14 @@ export interface HarnessDeclaration<
   spawnEnvironment: Readonly<Record<string, string>>;
 }
 
+/** short-lived pairing credential an ACP agent issues */
+export interface AgentPairing {
+  /** pairing secret; never logged */
+  token: string;
+  /** expiry as an ISO 8601 timestamp */
+  expiresAt?: string;
+}
+
 /** ACP agent identity and capabilities, declared as data */
 export interface AgentDeclaration<
   Name extends string = string,
@@ -108,6 +116,8 @@ export interface AgentDeclaration<
   supportedHarnesses: readonly HarnessName[];
   /** what the agent launches per harness */
   harnessLaunchMode: HarnessLaunchMode;
+  /** can issue a pairing code */
+  supportsPairing: boolean;
   /** command, account, public port and dependencies on nothing */
   service: ServiceDefinition;
 }

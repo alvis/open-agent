@@ -72,6 +72,7 @@ vi.mock('#composition/registry', async (importOriginal) => {
     displayName: 'T3 Code',
     supportedHarnesses: ['claude'],
     harnessLaunchMode: 'native-cli',
+    supportsPairing: true,
     service: {
       name: 'fixture',
       command: 'fixture',
@@ -86,6 +87,7 @@ vi.mock('#composition/registry', async (importOriginal) => {
     displayName: 'Relay',
     supportedHarnesses: ['claude'],
     harnessLaunchMode: 'acp-adapter',
+    supportsPairing: false,
     service: {
       name: 'fixture',
       command: 'fixture',
@@ -160,12 +162,17 @@ const valid: ProfileCandidate = {
 /**
  * lists the violation codes a candidate raises
  * @param candidate profile overrides applied to a valid candidate
+ * @param isPairingRequested whether pairing is requested
  * @returns violation codes, empty when the profile is valid
  */
-function violationCodes(candidate: Partial<ProfileCandidate>): string[] {
+function violationCodes(
+  candidate: Partial<ProfileCandidate>,
+  isPairingRequested = false,
+): string[] {
   const result = validateProfile({
     declarations: registry,
     candidate: { ...valid, ...candidate },
+    options: { isPairingRequested },
   });
 
   return result.isValid ? [] : result.violations.map(({ code }) => code);
@@ -289,6 +296,13 @@ describe('fn:validateProfile', () => {
     expect(violationCodes({ agent: 'relay', harnesses: ['claude'] })).toEqual(
       [],
     );
+  });
+
+  it('should reject pairing from an agent that does not declare it', () => {
+    expect(
+      violationCodes({ agent: 'relay', harnesses: ['claude'] }, true),
+    ).toEqual(['undeclared-capability']);
+    expect(violationCodes({}, true)).toEqual([]);
   });
 
   it('should aggregate every violation instead of stopping at the first', () => {

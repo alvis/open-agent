@@ -213,7 +213,7 @@ async function readStaticSetupInputs(
     sources,
     section,
   });
-  requireValidSuppliedSelection(dependencies, supplied);
+  requireValidSuppliedSelection(dependencies, supplied, options);
 
   return { sources, supplied };
 }
@@ -244,7 +244,11 @@ function setupSuccess(
     command: 'setup',
     ok: true,
     data: {
-      machine: summarizeMachine(dependencies, workstation),
+      machine: summarizeMachine(
+        dependencies,
+        workstation,
+        'pairing' in result ? result.pairing?.token : undefined,
+      ),
       retainedCredentials: context.input.retainedCredentials,
       ...result,
     },

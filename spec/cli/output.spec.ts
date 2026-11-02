@@ -6,6 +6,8 @@ import { commandError } from '#application/failures';
 import { resolveSecret } from '#application/input/sources';
 import { prepareResult, writePreparedResult } from '#cli/output';
 
+import { PairingSecret } from '#kernel/pairing-secret';
+
 import { rememberSecret } from '#kernel/redaction';
 
 import { environmentOf } from '../fixtures/environment';
@@ -418,6 +420,63 @@ describe('fn:prepareResult', () => {
       stdout: '',
       stderr: 'Typed name did not match\n',
     });
+  });
+
+  it('should disclose a marked pairing code and URL together but keeps other credentials redacted', () => {
+    const pairing = new PairingSecret({ token: 'requested-pairing-token' });
+    rememberSecret('hidden-reason-secret');
+    const result: CommandResult = {
+      command: 'show',
+      ok: true,
+      data: {
+        machine: {
+          ...machine,
+          agentUrl: pairing.forUrl('https://primary.sprites.app/'),
+        },
+        inspection: {
+          ...inspection,
+          network: { ...inspection.network, reason: 'hidden-reason-secret' },
+        },
+        pairing: { status: 'created', token: pairing },
+      },
+    };
+
+    const marked = captureResult(result, { json: true });
+    const disclosed = captureResult(result, {
+      json: true,
+      withPairCode: true,
+    });
+    const disclosedHuman = captureResult(result, { withPairCode: true });
+
+    expect(marked.stderr).toBe('');
+    expect(marked.stdout.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(marked.stdout)).toMatchObject({
+      schemaVersion: 1,
+      data: {
+        machine: {
+          agentUrl:
+            'https://primary.sprites.app/#token=requested-pairing-token',
+        },
+        pairing: { token: 'requested-pairing-token' },
+      },
+    });
+    expect(marked.stdout).not.toContain('hidden-reason-secret');
+    expect(JSON.stringify(result)).not.toContain('requested-pairing-token');
+    expect(disclosed.stderr).toBe('');
+    expect(disclosed.stdout.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(disclosed.stdout).data).toMatchObject({
+      machine: {
+        agentUrl: 'https://primary.sprites.app/#token=requested-pairing-token',
+      },
+      pairing: { token: 'requested-pairing-token' },
+      inspection: { network: { reason: '[REDACTED]' } },
+    });
+    expect(disclosed.stdout).not.toContain('hidden-reason-secret');
+    expect(disclosedHuman.stdout).toContain(
+      'https://primary.sprites.app/#token=requested-pairing-token',
+    );
+    expect(disclosedHuman.stdout).toContain('requested-pairing-token');
+    expect(disclosedHuman.stdout).not.toContain('hidden-reason-secret');
   });
 
   it('should redact a resolved value in nested results and non-Error failures in both output modes', async () => {

@@ -29,6 +29,19 @@ export function redactResolved(message: string): string {
 }
 
 /**
+ * permits one native pairing value while preserving unrelated credential redaction
+ * @param message marked pairing material
+ * @param token the exact native pairing code permitted for this value
+ * @returns pairing material sanitized for every other registered credential
+ */
+export function redactForPairing(message: string, token: string): string {
+  return redact(
+    message,
+    [...secretValues].filter((value) => value !== token),
+  );
+}
+
+/**
  * removes known secret values from diagnostic text
  * @param message diagnostic text to sanitize
  * @param secrets credential values to exclude

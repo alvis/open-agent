@@ -275,7 +275,7 @@ async function dispatchAuthenticated(
   const { request, provider, interaction } = params;
   const actions = {
     show: async () =>
-      interaction && !request.options.inspect
+      interaction && !request.options.withPairCode && !request.options.inspect
         ? chooseWorkstationAction(dependencies, {
             request,
             provider,

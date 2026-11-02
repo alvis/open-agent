@@ -35,13 +35,14 @@ interface WorkstationActionContext {
   interaction: Interaction;
 }
 
-type WorkstationAction = 'details' | 'inspect' | 'setup' | 'copy' | 'terminate';
+type WorkstationAction =
+  'details' | 'pair' | 'inspect' | 'setup' | 'copy' | 'terminate';
 
 /**
  * lists the actions for one workstation, named after its recorded drivers
  * @param dependencies the registered drivers, the profile defaults
  * @param machine selected workstation and its recorded driver selection
- * @returns menu choices
+ * @returns menu choices; pairing only when the recorded agent supports it
  */
 function workstationActions(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
@@ -52,8 +53,20 @@ function workstationActions(
       machine.profile?.agent ?? dependencies.defaults.selection.agent
     ];
 
+  const pairing: Array<InteractionChoice<WorkstationAction>> =
+    agent.supportsPairing
+      ? [
+          {
+            label: `Pair another ${agent.displayName} client`,
+            value: 'pair',
+            description: `Add a new pairing code to the ${agent.displayName} URL, valid for 5 minutes`,
+          },
+        ]
+      : [];
+
   return [
     { label: 'Show details', value: 'details' },
+    ...pairing,
     {
       label: 'Inspect workstation',
       value: 'inspect',
@@ -183,6 +196,7 @@ async function applyWorkstationAction(
         ...actionRequest,
         options: {
           ...actionRequest.options,
+          withPairCode: action === 'pair',
           inspect: action === 'inspect',
         },
       },
@@ -240,6 +254,7 @@ function menuActionRequest(request: CommandRequest): CommandRequest {
     options: {
       ...request.options,
       yes: false,
+      withPairCode: false,
       inspect: false,
     },
   };

@@ -1,8 +1,10 @@
+import { pairAgent } from '#application/catalog/services';
 import { probeProgress } from '#application/inspection/progress';
 
 import { CommandFault } from '#kernel/faults';
 
 import { promptUnavailableDetail } from '#kernel/operation';
+import { PairingSecret } from '#kernel/pairing-secret';
 
 import { commandError } from './failures';
 
@@ -19,8 +21,10 @@ import type {
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { ProviderDriver } from '#application/ports/drivers';
 import type { ReleaseSource } from '#application/ports/guest';
+import type { GuestChannel } from '#application/ports/guest-channel';
 import type { Interaction } from '#application/ports/interaction';
 import type { CommandResult } from '#application/result';
+import type { AgentPairing } from '#domain/declarations';
 import type { ProviderId } from '#domain/ids';
 import type { WorkstationRecord } from '#domain/workstation';
 import type { CommandErrorCode } from '#kernel/faults';
@@ -191,7 +195,7 @@ async function listProvider(
 }
 
 /**
- * shows current control-plane details; guest inspection is an explicit action
+ * shows current control-plane details; guest inspection and pairing are explicit actions
  * @param dependencies the registered drivers, the guest mechanics
  * @param params the call's inputs: request, provider, interaction
  * @returns control-plane details and any explicitly requested action result
@@ -202,12 +206,12 @@ export async function showWorkstation(
 ): Promise<CommandResult> {
   const { request, provider, interaction } = params;
   const options = request.options;
-  // a control-plane summary never wakes the guest; an inspection does
+  // a control-plane summary never wakes the guest; an inspection or pairing does
   const workstation = await selectManagedMachine(dependencies, {
     provider,
     requestedName: request.machine,
     interaction,
-    release: options.inspect ? 'guest' : 'metadata',
+    release: options.inspect || options.withPairCode ? 'guest' : 'metadata',
   });
   const inspected = options.inspect
     ? await dependencies.guest.inspection.inspect(
@@ -217,17 +221,36 @@ export async function showWorkstation(
         },
       )
     : undefined;
+  const pairing = options.withPairCode
+    ? await pairRecordedAgent(
+        dependencies,
+        await provider.openGuest(workstation),
+      )
+    : undefined;
 
   return {
     command: 'show',
     ok: true,
     data: {
-      machine: summarizeMachine(dependencies, workstation),
+      machine: summarizeMachine(
+        dependencies,
+        workstation,
+        pairing ? new PairingSecret({ token: pairing.token }) : undefined,
+      ),
       ...(inspected
         ? {
             inspection: {
               ...inspected,
               readiness: assessReadiness(dependencies, inspected),
+            },
+          }
+        : {}),
+      ...(pairing
+        ? {
+            pairing: {
+              status: 'created' as const,
+              expiresAt: pairing.expiresAt,
+              token: new PairingSecret({ token: pairing.token }),
             },
           }
         : {}),
@@ -303,4 +326,19 @@ export async function doctorWorkstation(
           machineId: workstation.id,
         },
       };
+}
+
+/**
+ * issues a pairing code through the agent the workstation records
+ * @param dependencies the registered drivers, the guest mechanics
+ * @param guest guest channel of the selected workstation
+ * @returns the pairing credential
+ */
+async function pairRecordedAgent(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'guest'>,
+  guest: GuestChannel,
+): Promise<AgentPairing> {
+  const { profile } = await dependencies.guest.environment.read(guest);
+
+  return pairAgent(dependencies.registry, guest, profile.agent);
 }

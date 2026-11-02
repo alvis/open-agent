@@ -5,6 +5,13 @@ import { selectSetupSection } from '#application/setup/selection';
 import { driveInk } from '../../fixtures/ink';
 
 describe('fn:selectSetupSection', () => {
+  it.each([{ options: { withPairCode: true }, section: 'agent' }] as const)(
+    'should select $section from explicit actions',
+    async ({ options, section }) => {
+      await expect(selectSetupSection(options)).resolves.toBe(section);
+    },
+  );
+
   it('should require a section when prompting is unavailable or explicitly disabled', async () => {
     await expect(selectSetupSection({})).rejects.toMatchObject({
       message: expect.stringContaining('--section'),

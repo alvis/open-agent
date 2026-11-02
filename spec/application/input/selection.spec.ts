@@ -174,20 +174,26 @@ describe('fn:resolveSetupSelection', () => {
 
 describe('fn:suppliedSelectionViolations', () => {
   it('should accept a complete compatible selection before workstation lookup', () => {
-    const violations = suppliedSelectionViolations(dependencies, {
-      provider: 'sprite',
-      agent: 't3',
-      harnesses: ['claude'],
-      network: 'none',
-    });
+    const violations = suppliedSelectionViolations(
+      dependencies,
+      {
+        provider: 'sprite',
+        agent: 't3',
+        harnesses: ['claude'],
+        network: 'none',
+      },
+      { isPairingRequested: false },
+    );
 
     expect(violations).toEqual([]);
   });
 
   it('should report an unknown supplied driver id', () => {
-    const violations = suppliedSelectionViolations(dependencies, {
-      agent: 'nope',
-    });
+    const violations = suppliedSelectionViolations(
+      dependencies,
+      { agent: 'nope' },
+      { isPairingRequested: false },
+    );
 
     expect(violations.map(({ message }) => message)).toEqual([
       expect.stringContaining('Unknown ACP agent "nope"'),

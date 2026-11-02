@@ -7,6 +7,7 @@ import { traceStage } from '#kernel/operation';
 
 import { installSetupPlan } from './installation';
 import { setupNetwork } from './network';
+import { setupAgent } from './sections';
 import { exposeWhenServing } from './serving';
 
 import type { AllSetupData } from '#application/data';
@@ -50,8 +51,11 @@ export async function setupAll(
   });
   await exposeWhenServing(dependencies, guest, context);
   await markInstallationReady(dependencies.guest, guest);
+  const agent = context.options.withPairCode
+    ? await setupAgent(dependencies, guest, context)
+    : undefined;
 
-  return configured.promise;
+  return { ...(await configured.promise), ...agent };
 }
 
 /**

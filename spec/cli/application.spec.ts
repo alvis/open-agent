@@ -106,6 +106,11 @@ describe('fn:cli', () => {
       command: null,
       message: 'unsupported',
     },
+    {
+      argv: ['show', '--no-pair', '--json'],
+      command: 'show',
+      message: '--no-pair was removed',
+    },
   ])(
     'should emit one structured usage failure for $argv',
     async ({ argv, command, message }) => {

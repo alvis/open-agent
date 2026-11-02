@@ -4,6 +4,7 @@ import type {
 } from '#application/ports/guest-channel';
 import type {
   AgentDeclaration,
+  AgentPairing,
   ExposureVisibility,
   HarnessDeclaration,
   NetworkDeclaration,
@@ -200,6 +201,12 @@ export interface AgentDriver<
    * @returns the environment the service reports, absent when it could not be probed
    */
   inspectEnvironment(guest: GuestChannel): Promise<Environment | undefined>;
+  /**
+   * issues a pairing code; present only when supportsPairing is true
+   * @param guest guest channel
+   * @returns pairing credential
+   */
+  pair?(guest: GuestChannel): Promise<AgentPairing>;
   /**
    * proves the installed agent supports the startup options core relies on
    * @param guest guest channel

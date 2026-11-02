@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   commonFlags,
   consentFlags,
+  pairingFlags,
   selectionFlags,
   setupFlags,
 } from '#cli/flags';
@@ -25,6 +26,7 @@ type ParserOptions = {
 const parserFlags = {
   ...commonFlags,
   ...consentFlags,
+  ...pairingFlags,
   ...selectionFlags,
   ...setupFlags,
 };
@@ -53,6 +55,15 @@ describe('cmd:setup', () => {
       ]).toEqual([[], [], []]);
     },
   );
+
+  it('should accept only the positive explicit pairing request', async () => {
+    const omitted = await parseFlags([]);
+    const requested = await parseFlags(['--with-pair-code']);
+
+    expect(omitted.options[0]).toHaveProperty('withPairCode', undefined);
+    expect(requested.options[0]).toHaveProperty('withPairCode', true);
+    expect(requested.exitCode).toBe(0);
+  });
 
   it('should parse a network choice with a setup section', async () => {
     const parsed = await parseFlags(['--network', 'none', '--section', 'all']);
