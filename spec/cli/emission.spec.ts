@@ -42,7 +42,7 @@ function machineWithUnreadableState(
  */
 function createdWith(machine: MachineSummary): CommandResult {
   const created = CORPUS.find(({ name }) => name === 'create-success-default');
-  if (!created?.result.ok) {
+  if (!created?.result.ok || created.result.command !== 'create') {
     throw new Error('The corpus has no default create success');
   }
 
@@ -112,14 +112,16 @@ describe('fn:emitResult', () => {
     });
   });
 
-  it('should render a success on stdout with zero exit code', () => {
-    const output = captureEmission(() => emitResult(createdWith(MACHINE)));
+  it('should render an empty list with zero exit code', () => {
+    const result: CommandResult = {
+      command: 'list',
+      ok: true,
+      data: { machines: [], unavailable: [] },
+    };
 
-    expect(output).toEqual({
-      stdout: expect.stringContaining('dev box'),
-      stderr: '',
-      exitCode: 0,
-    });
+    const output = captureEmission(() => emitResult(result));
+
+    expect(output).toEqual({ stdout: '', stderr: '', exitCode: 0 });
   });
 
   it('should write cancellation to stderr with exit code 130', () => {
@@ -176,6 +178,26 @@ describe('fn:emitResult', () => {
       label: 'create ready',
       result: createdWith(machineWithUnreadableState('ready')),
       stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\n`,
+    },
+    {
+      label: 'list',
+      result: {
+        command: 'list',
+        ok: true,
+        data: {
+          machines: [
+            {
+              ...MACHINE,
+              provider: 'sprite',
+              get state(): string {
+                throw new Error('unreadable listed state');
+              },
+            },
+          ],
+          unavailable: [],
+        },
+      } satisfies CommandResult,
+      stderr: 'The command result could not be rendered safely.\n',
     },
   ])(
     'should retain $label recovery from success render failure',

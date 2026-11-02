@@ -14,7 +14,7 @@ import type { PreparedResult } from '#cli/output';
 
 import type { CorpusCase } from '../../fixtures/output/corpus';
 
-type Variant = 'human-pipe' | 'tty-80' | 'tty-120';
+type Variant = 'human-pipe' | 'tsv' | 'tty-80' | 'tty-120';
 
 /** one corpus entry rendered one way */
 interface OutputCase {
@@ -23,14 +23,11 @@ interface OutputCase {
   entry: CorpusCase;
 }
 
-/** every case renders piped and at both terminal widths */
-const VARIANTS: Variant[] = ['human-pipe', 'tty-80', 'tty-120'];
-
 /** the instant every relative-time rendering is measured from */
 const FIXED_NOW = Date.parse('2026-10-09T00:12:00.000Z');
 
 const CASES: OutputCase[] = CORPUS.flatMap((entry) =>
-  VARIANTS.map((variant) => ({
+  variantsOf(entry).map((variant) => ({
     name: `${entry.name}.${variant}`,
     variant,
     entry,
@@ -50,16 +47,34 @@ describe('fn:prepareResult', () => {
 
       expect(output).toEqual({
         stdout: prepared.channel === 'stdout' ? prepared.text : '',
-        stderr: prepared.channel === 'stderr' ? prepared.text : '',
+        stderr:
+          (prepared.channel === 'stderr' ? prepared.text : '') +
+          (prepared.notes ?? ''),
       });
       for (const secret of CORPUS_SECRETS) {
         expect(`${output.stdout}${output.stderr}`).not.toContain(secret);
       }
 
-      expectHumanOutput(entry, prepared);
+      if (variant === 'tsv') {
+        expectTsvOutput(entry, prepared);
+      } else {
+        expectHumanOutput(entry, prepared);
+      }
     },
   );
 });
+
+/**
+ * chooses how a case is rendered
+ * @param entry corpus case
+ * @returns the piped form and both terminal widths
+ */
+function variantsOf(entry: CorpusCase): Variant[] {
+  const { result } = entry;
+  const piped = result.ok && result.command === 'list' ? 'tsv' : 'human-pipe';
+
+  return [piped, 'tty-80', 'tty-120'];
+}
 
 /**
  * renders one case through the real output preparation
@@ -115,6 +130,56 @@ function captureWrites(prepared: PreparedResult): {
 }
 
 /**
+ * checks exact ordinary TSV cells in column order, redacted secret cells, and notes
+ * @param entry input result
+ * @param prepared rendered result
+ */
+function expectTsvOutput(entry: CorpusCase, prepared: PreparedResult): void {
+  if (!entry.result.ok || entry.result.command !== 'list') {
+    throw new Error('TSV cases require a successful list result');
+  }
+  const { machines, unavailable } = entry.result.data;
+  const rows = prepared.text === '' ? [] : prepared.text.trimEnd().split('\n');
+
+  expect(prepared.channel).toBe('stdout');
+  const expectedRows = machines.map((machine) =>
+    [
+      machine.name,
+      machine.id,
+      machine.state,
+      machine.createdAt ?? '',
+      machine.agentUrl ?? '',
+      machine.setup,
+      machine.organization,
+      machine.provider,
+    ].map((value) => {
+      if (typeof value === 'string' && containsSecret(value)) {
+        return expect.stringContaining('[REDACTED]');
+      }
+
+      return typeof value === 'string' && !containsControlCharacter(value)
+        ? value
+        : expect.any(String);
+    }),
+  );
+
+  expect(rows.map((row) => row.split('\t'))).toEqual(expectedRows);
+  expect(Boolean(prepared.notes)).toBe(
+    unavailable.length > 0 ||
+      machines.some(
+        (machine) =>
+          'newerRelease' in machine && typeof machine.newerRelease === 'string',
+      ),
+  );
+  for (const provider of unavailable) {
+    expect(prepared.notes).toContain(provider.provider);
+  }
+  expect(prepared.text).not.toContain('\r');
+  expect(prepared.text).not.toContain('\u001b');
+  expect(prepared.text).not.toContain('\u009b');
+}
+
+/**
  * checks the human channel and whether there is visible content
  * @param entry input result
  * @param prepared rendered result
@@ -122,9 +187,20 @@ function captureWrites(prepared: PreparedResult): {
 function expectHumanOutput(entry: CorpusCase, prepared: PreparedResult): void {
   expect(prepared).toEqual({
     channel: entry.result.ok ? 'stdout' : 'stderr',
+    notes: undefined,
     text: expect.any(String),
   });
-  expect(prepared.text.trim().length).toBeGreaterThan(0);
+  const isEmptyList =
+    entry.result.ok &&
+    entry.result.command === 'list' &&
+    entry.result.data.machines.length === 0 &&
+    entry.result.data.unavailable.length === 0;
+
+  if (isEmptyList) {
+    expect(prepared.text.trim()).toBe('');
+  } else {
+    expect(prepared.text.trim().length).toBeGreaterThan(0);
+  }
   if (!entry.result.ok) {
     expectHumanFailure(entry.result.error, prepared.text);
   }
@@ -152,6 +228,16 @@ function expectHumanFailure(
   if (error.setupIncomplete) {
     expect(text).toMatch(/setup.*incomplete/iu);
   }
+}
+
+/**
+ * whether a field has delimiters or terminal controls requiring TSV escaping
+ * @param value input field
+ */
+function containsControlCharacter(value: string): boolean {
+  return ['\t', '\n', '\r', '\\', '\u001b', '\u009b'].some((character) =>
+    value.includes(character),
+  );
 }
 
 /**

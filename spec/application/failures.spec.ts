@@ -70,6 +70,8 @@ describe('D10 failure boundaries', () => {
         },
       }),
     ).toBe(1);
-    expect(resultExitCode({ command: 'create', ok: true })).toBe(0);
+    expect(
+      resultExitCode({ command: 'list', ok: true, data: { machines: [] } }),
+    ).toBe(0);
   });
 });

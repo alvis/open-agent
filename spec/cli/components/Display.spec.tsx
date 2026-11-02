@@ -3,7 +3,12 @@ import { render } from 'ink-testing-library';
 import { act } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { StatusMessage, TaskProgress } from '#cli/components/Display';
+import {
+  KeyValuePanel,
+  MachineTable,
+  StatusMessage,
+  TaskProgress,
+} from '#cli/components/Display';
 import { ResultDetails } from '#cli/components/ResultDetails';
 
 describe('rc:Display', () => {
@@ -88,6 +93,72 @@ describe('rc:Display', () => {
         ),
       ).toContain(`${kind.toUpperCase()}: observed`);
     }
+  });
+
+  it('should keep machine details readable in narrow and wide terminals', () => {
+    const machines = [
+      {
+        name: 'primary',
+        id: 'sprite-id',
+        state: 'running',
+        agentUrl: 'https://primary.sprites.app',
+        setup: 'ready',
+        organization: 'org',
+        createdAt: '2026-10-07',
+      },
+    ];
+    for (const columns of [40, 120]) {
+      const text = renderToString(
+        <MachineTable columns={columns} machines={machines} />,
+      );
+      expect(text).toContain('primary');
+      expect(text).toContain('sprite-id');
+      expect(text).toContain('ready');
+    }
+    expect(
+      renderToString(<MachineTable machines={[{ id: 'id-only' }, {}]} />),
+    ).toContain('Workstation');
+    expect(
+      renderToString(<MachineTable columns={180} machines={[{}]} />, {
+        columns: 180,
+      }),
+    ).toContain('not recorded');
+    expect(
+      renderToString(
+        <KeyValuePanel entries={[['state', 'ready']]} title="workstation" />,
+      ),
+    ).toContain('State: ready');
+  });
+
+  it('should show labelled agent and setup facts in narrow and wide lists', () => {
+    const machines = [
+      {
+        name: 'primary',
+        id: 'sprite-primary',
+        state: 'running',
+        createdAt: '2026-10-09',
+        agentUrl: 'https://primary.sprites.app/',
+        setup: 'ready',
+        organization: 'example',
+      },
+    ];
+    const narrow = renderToString(
+      <MachineTable columns={40} machines={machines} />,
+      { columns: 40 },
+    );
+    const wide = renderToString(
+      <MachineTable columns={180} machines={machines} />,
+      { columns: 180 },
+    );
+
+    expect(narrow).toContain('Workstation primary');
+    expect(narrow).toContain('Setup: ready');
+    expect(narrow).toContain('Agent URL:');
+    expect(narrow).not.toContain('agentUrl');
+    expect(wide).toContain('WORKSTATION');
+    expect(wide).toContain('AGENT URL');
+    expect(wide).toContain('https://primary.sprites.app/');
+    expect(wide.split('\n')).toHaveLength(2);
   });
 
   it('should animate elapsed progress and cleans up the timer when completed', () => {

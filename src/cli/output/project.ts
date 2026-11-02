@@ -1,5 +1,6 @@
 import { projectCreate, projectCreateFailure } from './create';
 import { projectError } from './failure';
+import { projectList } from './list';
 
 import type { CommandResult, CommandSuccess } from '#application/result';
 
@@ -22,11 +23,21 @@ export function projectResult(result: CommandResult): ResultOutput {
  * @returns output success
  */
 function projectSuccess(result: CommandSuccess): SuccessOutput {
-  return {
-    command: 'create',
-    ok: true,
-    data: projectCreate(result.data),
-  };
+  switch (result.command) {
+    case 'create':
+      return {
+        command: 'create',
+        ok: true,
+        data: projectCreate(result.data),
+      };
+    case 'list':
+      return {
+        command: 'list',
+        ok: true,
+        data: projectList(result.data),
+      };
+    // no default
+  }
 }
 
 /**
@@ -46,6 +57,8 @@ function projectFailure(result: Failed): FailureOutput {
         error,
         data: optional(result.data, projectCreateFailure),
       };
+    case 'list':
+      return { command: 'list', ok: false, error };
     // no default
   }
 }

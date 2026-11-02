@@ -15,6 +15,7 @@ import { SPRITE_PREREQUISITES, preflightSprite } from './sprite/prerequisites';
 import {
   assertManaged,
   assertVerifiedWorkstation,
+  isManaged,
   toRecord,
 } from './sprite/records';
 
@@ -102,6 +103,19 @@ export class SpriteProvider implements ProviderDriver<'sprite'> {
       channels: new Map(),
       restorableServices: [...binding.restorableServices],
     });
+  }
+
+  /**
+   * lists every managed Sprite from the live paginated provider API
+   * @returns current managed workstations
+   */
+  public async list(): Promise<WorkstationRecord[]> {
+    const session = this.#bound();
+    const sprites = await runOperation(async () =>
+      callSprites(async () => session.client.listAllSprites()),
+    );
+
+    return sprites.filter(isManaged).map((sprite) => this.#record(sprite));
   }
 
   /**

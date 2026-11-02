@@ -1,12 +1,7 @@
 import { buildApplication, buildCommand, run } from '@stricli/core';
 import { describe, expect, it } from 'vitest';
 
-import {
-  consentFlags,
-  outputFlags,
-  providerCredentialFlags,
-  selectionFlags,
-} from '#cli/flags';
+import { commonFlags, consentFlags, selectionFlags } from '#cli/flags';
 
 import type { StricliProcess } from '@stricli/core';
 
@@ -23,8 +18,7 @@ type ParserOptions = {
 };
 
 const parserFlags = {
-  ...providerCredentialFlags,
-  ...outputFlags,
+  ...commonFlags,
   ...consentFlags,
   ...selectionFlags,
 };

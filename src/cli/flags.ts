@@ -29,6 +29,12 @@ export const outputFlags = {
   nonInteractive: { kind: 'boolean', default: false, brief: 'disable prompts' },
 } as const;
 
+/** complete controls for read-only and shared workstation operations */
+export const commonFlags = {
+  ...providerCredentialFlags,
+  ...outputFlags,
+} as const;
+
 /** consent for selected create actions */
 export const consentFlags = {
   yes: {
@@ -38,7 +44,7 @@ export const consentFlags = {
   },
 } as const;
 
-/** provider choice */
+/** provider choice, which commands on an existing workstation also accept to skip the search across providers */
 export const providerFlags = {
   provider: {
     kind: 'parsed',

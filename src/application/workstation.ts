@@ -1,17 +1,29 @@
+import { providerPreflight } from '#application/catalog/preflight';
+import { bindProvider } from '#application/catalog/providers';
 import { createWorkstation } from '#application/create';
 import { commandError } from '#application/failures';
+import { resolveProviderCredential } from '#application/input/provider-credential';
+import { listWorkstations } from '#application/inspection';
 import { validateCommandRequest } from '#application/validation';
+import { PROVIDER_IDS } from '#domain/ids';
+import { prerequisiteDetails } from '#domain/prerequisites';
 import {
   currentOperation,
   cancellationReason,
   checkOperation,
   withOperation,
+  promptUnavailableDetail,
 } from '#kernel/operation';
+
+import { enterCommandCredential } from './workstation/credentials';
+import { providerAvailability, skippedProvider } from './workstation/providers';
 
 import type { CommandRequest } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { Interaction } from '#application/ports/interaction';
 import type { CommandResult } from '#application/result';
+import type { ProviderId } from '#domain/ids';
+import type { PrerequisiteProblem } from '#domain/prerequisites';
 import type { OperationContext } from '#kernel/operation';
 
 /** the interaction and caller-owned cancellation scope one command runs with */
@@ -30,7 +42,7 @@ export interface CommandSession {
  * @returns the structured command result with resolved errors redacted
  * @example
  * const result = await runCommand(createDependencies(), {
- *   command: 'create',
+ *   command: 'list',
  *   options: { credentialFile: '.env', nonInteractive: true },
  * });
  */
@@ -49,8 +61,11 @@ export async function runCommand(
     checkOperation();
     currentOperation()?.select(request.command);
     validateCommandRequest(request);
+    if (request.command === 'create') {
+      return await createWorkstation(dependencies, request, interaction);
+    }
 
-    return await createWorkstation(dependencies, request, interaction);
+    return await listAvailableProviders(dependencies, request, interaction);
   } catch (error) {
     return commandFailureResult(
       error,
@@ -93,4 +108,98 @@ function commandFailureResult(
           : failure.details,
     },
   };
+}
+
+/**
+ * reports every missing or misconfigured provider prerequisite at once
+ * @param request parsed command
+ * @param problems problems the provider preflight found
+ * @returns a typed INPUT failure before any provider call
+ */
+function prerequisiteFailure(
+  request: CommandRequest,
+  problems: readonly PrerequisiteProblem[],
+): CommandResult {
+  const promptHint = promptUnavailableDetail();
+
+  return {
+    command: request.command,
+    ok: false,
+    error: {
+      code: 'INPUT',
+      message: 'Provider prerequisites are missing or misconfigured',
+      details: [
+        ...prerequisiteDetails(problems),
+        ...(promptHint ? [promptHint] : []),
+      ],
+    },
+  };
+}
+
+/**
+ * lists workstations on every provider whose credential is available, so a
+ * failing provider is reported as unavailable rather than empty
+ * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
+ * @param request parsed list command
+ * @param interaction optional secret prompt when no provider has a credential
+ * @returns merged workstations and unavailable providers
+ */
+async function listAvailableProviders(
+  dependencies: ApplicationDependencies,
+  request: CommandRequest,
+  interaction?: Interaction,
+): Promise<CommandResult> {
+  const { options } = request;
+  // an explicit source names the credential of the selected provider only
+  const references = new Map<ProviderId, string>(
+    options.providerTokenSource
+      ? [
+          [
+            options.provider ?? dependencies.defaults.selection.provider,
+            options.providerTokenSource,
+          ],
+        ]
+      : [],
+  );
+  const found = await Promise.all(
+    PROVIDER_IDS.map(async (id) => ({
+      id,
+      credential: await resolveProviderCredential(dependencies, {
+        options,
+        provider: id,
+        selection: { reference: references.get(id) },
+      }),
+    })),
+  );
+  const available = found.filter(({ credential }) => credential.token);
+  if (available.length > 0) {
+    // a provider with no credential is skipped with a note, not a failure
+    return listWorkstations(dependencies, [
+      ...(await providerAvailability(dependencies, available)),
+      ...found
+        .filter(({ credential }) => !credential.token)
+        .map(({ id }) => skippedProvider(dependencies, id)),
+    ]);
+  }
+  const provider = dependencies.defaults.selection.provider;
+  const credential = await enterCommandCredential(dependencies, {
+    request,
+    provider,
+    interaction,
+  });
+  const problems = await providerPreflight(
+    { registry: dependencies.registry, host: dependencies.host },
+    provider,
+    credential,
+  );
+  if (!credential.token || problems.length > 0) {
+    return prerequisiteFailure(request, problems);
+  }
+
+  return listWorkstations(dependencies, [
+    {
+      id: provider,
+      driver: bindProvider(dependencies.registry, provider, credential.token),
+    },
+  ]);
 }

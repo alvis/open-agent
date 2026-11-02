@@ -29,7 +29,7 @@ export function toRecord(sprite: Sprite): WorkstationRecord {
  * @param sprite observed Sprite
  * @returns true for an open-agent Sprite
  */
-function isManaged(sprite: Sprite): boolean {
+export function isManaged(sprite: Sprite): boolean {
   return sprite.labels.includes(MANAGED_LABEL);
 }
 

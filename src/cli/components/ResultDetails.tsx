@@ -16,6 +16,7 @@ type ResultDetailsProps = {
 
 const FIELD_LABELS: Record<string, string> = {
   machine: 'Workstation',
+  agentUrl: 'Agent URL',
   id: 'ID',
   ...Object.fromEntries(
     [
@@ -66,7 +67,7 @@ export const ResultDetails: FC<ResultDetailsProps> = ({
  * @param key result key or section name
  * @returns human-readable label
  */
-function labelFor(key: string): string {
+export function labelFor(key: string): string {
   const words = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replaceAll('_', ' ');
 
   return (
