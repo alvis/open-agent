@@ -27,6 +27,7 @@ export function environmentOf(
     schedule: { dueDays: 7 },
     provider: {
       id: profile.provider,
+      serviceBackend: 'provider',
       keepAwakeMode: 'none',
       idleForms: ['provider-managed'],
       wakeMode: 'url-traffic',

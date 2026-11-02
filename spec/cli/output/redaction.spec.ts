@@ -24,7 +24,7 @@ const RESULT: CommandResult = {
       },
     ],
     unavailable: [
-      { provider: 'sprite', code: 'PROVIDER', reason: 'upstream-timeout' },
+      { provider: 'fly-machine', code: 'PROVIDER', reason: 'upstream-timeout' },
     ],
   },
 };

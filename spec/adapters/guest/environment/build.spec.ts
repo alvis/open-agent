@@ -70,10 +70,11 @@ describe('fn:buildEnvironment', () => {
   });
 
   it('should record no awake adapter for a provider without one', () => {
-    const { id, capabilities } = registry.providers.sprite;
+    const { id, capabilities, serviceBackend } = registry.providers.sprite;
     const provider = {
       id,
       capabilities: { ...capabilities, keepAwakeMode: 'none' },
+      serviceBackend,
     } satisfies Parameters<typeof buildEnvironment>[1]['provider'];
     const declarations = {
       ...registry,

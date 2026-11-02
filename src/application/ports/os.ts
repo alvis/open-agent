@@ -1,10 +1,14 @@
+import type { GuestServiceControl } from '#application/ports/guest-channel';
+import type { SetupStep } from '#application/ports/plan';
+import type { GuestSession } from '#application/ports/session';
 import type {
   GuestAsset,
   HomebrewSupport,
   OsFamilyId,
   OsRelease,
+  ServiceBackendId,
 } from '#domain/guest';
-import type { ToolOwner } from '#domain/tools';
+import type { ToolOwner, ToolSpec } from '#domain/tools';
 
 /** a distribution family's layer of host-driven setup, shared by every provider that runs it */
 export interface OsFamily {
@@ -40,16 +44,39 @@ export interface OsFamily {
    * @returns the support and its prerequisites, or why it is unsupported
    */
   homebrew(release: OsRelease): HomebrewSupport;
-  /** the family's helper library, sourced by setup and the updater */
+  /** the family's helper library, sourced by setup, the updater and the boot hook */
   library: GuestAsset;
   /** the system-package fragment of the updater */
   updaterFragment: GuestAsset;
 }
 
-/** what a service setup step is built with */
+/** what a backend's setup steps are built with */
 export interface ServiceStepContext {
   /** the guest's OS family, whose shell every step runs */
   family: Pick<OsFamily, 'shell'>;
   /** ids of the steps that must succeed first, such as the one writing environment.json */
   needs: readonly string[];
+}
+
+/** a backend setup installs to run the guest services, for a provider that runs none itself */
+export interface ServiceBackend {
+  /** backend identifier */
+  id: Exclude<ServiceBackendId, 'provider'>;
+  /** the tools the backend runs on, installed only on a provider it serves */
+  tools: readonly ToolSpec[];
+  /** the backend's helper library, sourced by setup and the boot hook */
+  library: GuestAsset;
+  /**
+   * builds the steps that install every service environment.json records,
+   * remove the backend's services it no longer records, and start the rest
+   * @param context the family and the steps that must succeed first
+   * @returns the steps
+   */
+  steps(context: ServiceStepContext): SetupStep[];
+  /**
+   * binds service control to a root session on the guest
+   * @param session a root session open on the guest
+   * @returns control of the backend's services
+   */
+  control(session: GuestSession): GuestServiceControl;
 }

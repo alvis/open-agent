@@ -1,8 +1,9 @@
 # open-agent's periodic jobs: each job environment.json records is one line of
-# a root-owned file in /etc/cron.d, which the cron service runs as the job's
-# account. Setup sources it as root; it reads JSON with the system's jq,
-# /usr/bin/jq. Every function is safe to rerun, reports why it failed on
-# stderr and returns non-zero
+# a root-owned file in /etc/cron.d, which the cron service, under whichever
+# backend runs the services, runs as the job's account. Setup and the boot
+# hook source it as root; it reads JSON with the system's jq, /usr/bin/jq.
+# Every function is safe to rerun, reports why it failed on stderr and
+# returns non-zero
 
 # the jobs' file; cron ignores a name with a dot, such as its temporary copy
 OA_CRON_FILE=/etc/cron.d/open-agent

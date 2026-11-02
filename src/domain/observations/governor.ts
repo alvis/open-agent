@@ -22,12 +22,16 @@ const SOURCE_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 /** a hashed session identifier, as the governor records it */
 const SESSION_HASH = /^[0-9a-f]{64}$/;
 
-const ADAPTER_ACTIONS: readonly unknown[] = ['apply-deadline'];
+const ADAPTER_ACTIONS: readonly unknown[] = [
+  'apply-deadline',
+  'enter-idle-form',
+];
 
 // every value of the axis, keyed so a value added to the axis fails typecheck
 // here until the reader accepts it
 const KEEP_AWAKE_MODES: Readonly<Record<KeepAwakeMode, true>> = {
   'native-deadline': true,
+  'governed': true,
   'none': true,
 };
 
@@ -46,8 +50,8 @@ interface AdapterResult {
   /** ISO 8601 instant of the call */
   at: string;
   /** what the governor asked the adapter to do */
-  action: 'apply-deadline';
-  /** the deadline applied; absent after a failure */
+  action: 'apply-deadline' | 'enter-idle-form';
+  /** the deadline applied, or the idle form entered; absent after a failure */
   result?: string;
   /** non-secret reason the call failed; absent after a success */
   failure?: string;
@@ -73,6 +77,8 @@ export interface GovernorState {
   openHolds: number;
   /** ISO 8601 instant the workstation stays awake until; absent when nothing keeps it awake */
   deadline?: string;
+  /** whether the governor may initiate sleep */
+  sleepPermitted: boolean;
   /** the last awake adapter call, kept across recomputes that make none */
   adapter?: AdapterResult;
   /** non-secret notes from the last recompute */
@@ -125,6 +131,7 @@ function isGovernorState(value: unknown): value is GovernorState {
     (value.lastHeartbeat === undefined || isInstant(value.lastHeartbeat)) &&
     hasRecordedHolds(value) &&
     (value.deadline === undefined || isInstant(value.deadline)) &&
+    typeof value.sleepPermitted === 'boolean' &&
     (value.adapter === undefined || isAdapterResult(value.adapter)) &&
     Array.isArray(value.diagnostics) &&
     value.diagnostics.length <= DIAGNOSTIC_LIMIT &&

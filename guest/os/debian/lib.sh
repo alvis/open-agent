@@ -1,5 +1,5 @@
 # open-agent's debian family library: the package, repository, account,
-# kernel and service helpers that setup and the updater source
+# kernel and service helpers that setup, the updater and the boot hook source
 # as root. Every function is safe to rerun, reports why it failed on stderr
 # and returns non-zero; none exits the shell or sets a trap in it, and each
 # keeps its variables under its own oa_ prefix since sh has no locals
@@ -14,6 +14,8 @@ OA_LISTS_STAMP=/var/lib/apt/periodic/open-agent-update-success-stamp
 # where the keyrings and sources of added repositories go
 OA_KEYRINGS=/etc/apt/keyrings
 OA_SOURCES=/etc/apt/sources.list.d
+# a copy of every added repository, which oa_replay puts back
+OA_REPOSITORIES=$OA_GUEST_ROOT/apt-repositories
 # the services whose vendor units are masked, one init script name a line
 OA_MASKED_SERVICES=/etc/open-agent/masked-services
 OA_POLICY_RC=/usr/sbin/policy-rc.d
@@ -205,10 +207,13 @@ oa_repo_key() {
   fi
 }
 
-# writes a repository's files atomically
+# writes a repository's files atomically and keeps a copy for oa_replay
 # arguments: work directory holding keyring and list, repository id
 oa_repo_install() {
   install -d -m 0755 "$OA_KEYRINGS" "$OA_SOURCES" || return 1
+  install -d -m 0700 "$OA_REPOSITORIES" || return 1
+  install -m 0644 "$1/keyring" "$OA_REPOSITORIES/$2.gpg" || return 1
+  install -m 0644 "$1/list" "$OA_REPOSITORIES/$2.list" || return 1
   install -m 0644 "$1/keyring" "$OA_KEYRINGS/open-agent-$2.gpg.new" &&
     mv -f "$OA_KEYRINGS/open-agent-$2.gpg.new" "$OA_KEYRINGS/open-agent-$2.gpg" || return 1
   install -m 0644 "$1/list" "$OA_SOURCES/open-agent-$2.list.new" &&
@@ -274,7 +279,8 @@ oa_repo_add() {
     "$oa_repo_id" "$oa_repo_pins" "$oa_repo_arch" "$oa_repo_keyring" \
     "$oa_repo_uri" "$oa_repo_suite" "$*")
   if test -s "$oa_repo_keyring" && test -f "$oa_repo_list" &&
-    test "$(cat "$oa_repo_list")" = "$oa_repo_entry"; then
+    test "$(cat "$oa_repo_list")" = "$oa_repo_entry" &&
+    test -s "$OA_REPOSITORIES/$oa_repo_id.gpg"; then
     return 0
   fi
   if ! command -v gpg >/dev/null 2>&1; then
@@ -287,6 +293,36 @@ oa_repo_add() {
   oa_repo_status=$?
   rm -rf "$oa_repo_work"
   return "$oa_repo_status"
+}
+
+# puts back the repositories open-agent added, from its copy on the guest root
+oa_repo_restore() {
+  for oa_restore_list in "$OA_REPOSITORIES"/*.list; do
+    test -f "$oa_restore_list" || continue
+    oa_restore_id=${oa_restore_list##*/}
+    oa_restore_id=${oa_restore_id%.list}
+    install -d -m 0755 "$OA_KEYRINGS" "$OA_SOURCES" || return 1
+    if ! cmp -s "$OA_REPOSITORIES/$oa_restore_id.gpg" "$OA_KEYRINGS/open-agent-$oa_restore_id.gpg"; then
+      install -m 0644 "$OA_REPOSITORIES/$oa_restore_id.gpg" "$OA_KEYRINGS/open-agent-$oa_restore_id.gpg" || return 1
+    fi
+    if ! cmp -s "$oa_restore_list" "$OA_SOURCES/open-agent-$oa_restore_id.list"; then
+      install -m 0644 "$oa_restore_list" "$OA_SOURCES/open-agent-$oa_restore_id.list" || return 1
+    fi
+  done
+}
+
+# reinstalls system packages on a rebuilt root filesystem from apt's local
+# lists and download cache only, after putting back the added repositories;
+# it never touches the network, so a package missing from the cache fails it
+# arguments: package names
+oa_replay() {
+  oa_pkg_names "$@" || return 1
+  oa_repo_restore || return 1
+  oa_dpkg_repair || return 1
+  if oa_pkg_installed "$@"; then
+    return 0
+  fi
+  oa_apt install --no-download --no-upgrade --no-install-recommends "$@"
 }
 
 # creates an account with the given ids unless it exists; an existing one

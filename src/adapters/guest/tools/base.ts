@@ -111,7 +111,7 @@ export const BASE_TOOLS: readonly ToolSpec[] = [
     sources: [apt('procps')],
   },
   {
-    // the provider runs cron as open-agent's own service
+    // the service backend runs cron as open-agent's own service
     name: 'cron',
     required: true,
     executables: [],

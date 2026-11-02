@@ -31,17 +31,18 @@ export interface CorpusCase {
 
 /** a workstation of any provider as the list command reports it */
 type ListedMachine = MachineSummary & {
-  provider: 'sprite';
+  provider: 'sprite' | 'fly-machine';
   newerRelease?: string;
 };
 
 /** credentials registered with the process before any result is rendered */
 export const CORPUS_SECRETS = [
   'v1-golden-nested-secret',
+  'v1-golden-key-secret',
   'v1-golden-hidden-proxy-key',
 ] as const;
 
-const [NESTED_SECRET, PROXY_SECRET] = CORPUS_SECRETS;
+const [NESTED_SECRET, KEY_SECRET, PROXY_SECRET] = CORPUS_SECRETS;
 
 const PAIRING = new PairingSecret({ token: 'v1-golden-pairing-token' });
 
@@ -54,17 +55,17 @@ const MACHINE: MachineSummary = {
   readiness: 'not inspected',
 };
 
-const DETAILED_MACHINE: MachineSummary = {
-  id: 'sprite-atlas',
+const FLY_MACHINE: MachineSummary = {
+  id: '3d8d7e1f5a2e18',
   name: 'atlas',
   organization: 'personal',
   createdAt: '2026-10-12T08:30:00.000Z',
-  state: 'running',
-  machine: { label: 'sprite', cpus: 8, memoryGb: 16 },
-  agentUrl: 'https://atlas.sprites.app/',
+  state: 'started',
+  machine: { label: 'shared-cpu-2x', cpus: 2, memoryGb: 4 },
+  agentUrl: 'https://atlas.fly.dev/',
   setup: 'ready',
   profile: {
-    provider: 'sprite',
+    provider: 'fly-machine',
     agent: 't3',
     harnesses: ['claude', 'codex'],
     network: 'tailscale',
@@ -103,6 +104,7 @@ const RECORDED_GOVERNOR: GovernorState = {
   holds: [],
   openHolds: 0,
   deadline: '2026-10-09T00:15:00.000Z',
+  sleepPermitted: false,
   diagnostics: [],
 };
 
@@ -220,6 +222,14 @@ const SKIPPED_TOOLS: GuestInspection['environment']['setup']['skipped'] = [
   { name: 'tmux', reason: 'no source is usable on this system' },
 ];
 
+const BOOT = {
+  status: 'halted',
+  startedAt: '2026-10-09T00:00:00.000Z',
+  durationMs: 4200,
+  unsuccessfulSteps: { 'link-tools': 'failed', [KEY_SECRET]: 'failed' },
+  log: ['step services ok', 'step link-tools failed'],
+} as const;
+
 const ERROR_CODES: readonly CommandErrorCode[] = [
   'USAGE',
   'INPUT',
@@ -269,7 +279,7 @@ export const CORPUS: readonly CorpusCase[] = [
             fallbackReason: 'Keychain is unavailable on this platform',
           },
         },
-        machine: DETAILED_MACHINE,
+        machine: FLY_MACHINE,
         preflight: PREFLIGHT,
         profile: TAILSCALE_PROFILE_WITH_EXIT,
         readiness: PASSING_READINESS,
@@ -637,6 +647,7 @@ export const CORPUS: readonly CorpusCase[] = [
           setup: 'not recorded',
           organization: 'org-two',
         },
+        { ...FLY_MACHINE, provider: 'fly-machine' },
       ],
     },
   }),
@@ -646,6 +657,12 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       machines: [{ ...SPRITE_LISTED, name: 'alpha', id: 'sprite-alpha' }],
       unavailable: [
+        {
+          provider: 'fly-machine',
+          code: 'INPUT',
+          reason:
+            'workstation status unknown, no Fly organization token was found; supply one in FLY_API_TOKEN',
+        },
         { provider: 'sprite', code: 'AUTH', reason: 'the token was revoked' },
       ],
     },
@@ -677,7 +694,7 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       machines: [],
       unavailable: [
-        { provider: 'sprite', code: 'PROVIDER', reason: 'timed out' },
+        { provider: 'fly-machine', code: 'PROVIDER', reason: 'timed out' },
       ],
     },
   }),
@@ -711,12 +728,12 @@ export const CORPUS: readonly CorpusCase[] = [
   corpusCase('show-plain', {
     command: 'show',
     ok: true,
-    data: { machine: DETAILED_MACHINE },
+    data: { machine: FLY_MACHINE },
   }),
   corpusCase('show-copy-action', {
     command: 'show',
     ok: true,
-    data: { machine: DETAILED_MACHINE, action: 'copy' },
+    data: { machine: FLY_MACHINE, action: 'copy' },
   }),
   corpusCase('show-inspection-disabled', {
     command: 'show',
@@ -727,7 +744,7 @@ export const CORPUS: readonly CorpusCase[] = [
     command: 'show',
     ok: true,
     data: {
-      machine: DETAILED_MACHINE,
+      machine: FLY_MACHINE,
       inspection: {
         ...INSPECTION,
         services: [{ name: 't3-code', status: 'running', needs: [] }],
@@ -738,6 +755,7 @@ export const CORPUS: readonly CorpusCase[] = [
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
         updates: UPDATES,
+        boot: BOOT,
         readiness: PASSING_READINESS,
       },
     },
@@ -783,10 +801,11 @@ export const CORPUS: readonly CorpusCase[] = [
           deadline: undefined,
           keepAwakeMode: undefined,
           openHolds: 1,
+          sleepPermitted: true,
           adapter: {
             at: '2026-10-09T00:10:00.000Z',
-            action: 'apply-deadline',
-            failure: 'deadline refused',
+            action: 'enter-idle-form',
+            failure: 'suspend refused',
           },
         }),
       },
@@ -802,8 +821,8 @@ export const CORPUS: readonly CorpusCase[] = [
         governor: governed({
           adapter: {
             at: '2026-10-09T00:10:00.000Z',
-            action: 'apply-deadline',
-            failure: 'deadline\u001b[2J refused\u009b31m',
+            action: 'enter-idle-form',
+            failure: 'suspend\u001b[2J refused\u009b31m',
           },
         }),
         network: {
@@ -917,6 +936,33 @@ export const CORPUS: readonly CorpusCase[] = [
       }),
     },
   }),
+  corpusCase('doctor-keep-awake-governed-awake', {
+    command: 'doctor',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      currentReadiness: currentReadiness({
+        governor: governed({
+          keepAwakeMode: 'governed',
+          deadline: '2026-10-10T00:00:00.000Z',
+        }),
+      }),
+    },
+  }),
+  corpusCase('doctor-keep-awake-governed-passed', {
+    command: 'doctor',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      currentReadiness: currentReadiness({
+        governor: governed({
+          keepAwakeMode: 'governed',
+          deadline: '2026-10-08T00:00:00.000Z',
+          sleepPermitted: true,
+        }),
+      }),
+    },
+  }),
   corpusCase('doctor-keep-awake-none', {
     command: 'doctor',
     ok: true,
@@ -927,11 +973,11 @@ export const CORPUS: readonly CorpusCase[] = [
       }),
     },
   }),
-  corpusCase('doctor-updates-and-tools', {
+  corpusCase('doctor-boot-updates-and-tools', {
     command: 'doctor',
     ok: true,
     data: {
-      machine: DETAILED_MACHINE,
+      machine: FLY_MACHINE,
       currentReadiness: currentReadiness({
         network: ONLINE_NETWORK,
         hub: REACHABLE_HUB,
@@ -940,6 +986,7 @@ export const CORPUS: readonly CorpusCase[] = [
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
         updates: UPDATES,
+        boot: BOOT,
         skipped: sdkObservation<string[]>(['first', undefined, 'third']),
       }),
     },
@@ -1056,6 +1103,23 @@ export const CORPUS: readonly CorpusCase[] = [
   ),
 
   // structural serialization
+  corpusCase('serialization-secret-keys-and-values', {
+    command: 'doctor',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      currentReadiness: currentReadiness({
+        boot: {
+          status: 'failed',
+          unsuccessfulSteps: {
+            [KEY_SECRET]: `rejected ${NESTED_SECRET}`,
+            plain: 'ok',
+          },
+          log: [`log with ${NESTED_SECRET}`, KEY_SECRET],
+        },
+      }),
+    },
+  }),
   corpusCase('serialization-date-and-undefined', {
     command: 'list',
     ok: true,

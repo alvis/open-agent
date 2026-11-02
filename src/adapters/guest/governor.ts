@@ -7,6 +7,7 @@ import { isGovernorReport } from '#domain/observations/governor';
 import { checkOperation } from '#kernel/operation';
 
 import type { AwakeAction } from '#adapters/guest/platform/awake';
+import type { ProviderDriver } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { ServiceStepContext } from '#application/ports/os';
 import type { SetupStep, StepCommand } from '#application/ports/plan';
@@ -14,7 +15,9 @@ import type {
   SessionAwakeHold,
   SessionCommand,
 } from '#application/ports/session';
+import type { ProviderCapabilities } from '#domain/declarations';
 import type { GovernorReport } from '#domain/observations/governor';
+import type { ServiceDefinition, PeriodicJob } from '#domain/services';
 
 /** id of the step that makes the governor's directories */
 export const IDLE_STEP = 'governor:directories';
@@ -33,6 +36,55 @@ const IDLE_STEP_LIMIT_MS = 30_000;
 
 /** longest the governor report may take */
 const REPORT_LIMIT_MS = 30_000;
+
+/**
+ * the relay of awake events into the machine's log, root's service on a
+ * backend that has such a log: it validates the one-line records the events
+ * leave on memory-backed storage and writes each as a line of that log, so
+ * what an event as the agent says reaches the log only as fields root checked
+ */
+export const awakeRelayService: ServiceDefinition = {
+  name: 'open-agent-awake-relay',
+  command: AWAKE_COMMAND,
+  arguments: ['relay'],
+  account: 'root',
+  needs: [],
+  machineLog: true,
+};
+
+/**
+ * lists the services the idle governor needs: the awake events' relay where
+ * the service backend is runit, whose machine log it writes to; a backend
+ * the provider runs the services on needs none
+ * @param provider the provider's service backend
+ * @returns the relay, or none
+ */
+export function governorServices(
+  provider: Pick<ProviderDriver, 'serviceBackend'>,
+): ServiceDefinition[] {
+  return provider.serviceBackend === 'runit' ? [awakeRelayService] : [];
+}
+
+/**
+ * lists the periodic jobs the idle governor needs: a governed provider's
+ * per-minute root tick, which puts the workstation into its idle form once
+ * the deadline passed; any other provider needs none
+ * @param capabilities whether the provider governs its keep-awake
+ * @returns the tick job, or none
+ */
+export function governorJobs(
+  capabilities: Pick<ProviderCapabilities, 'keepAwakeMode'>,
+): PeriodicJob[] {
+  return capabilities.keepAwakeMode === 'governed'
+    ? [
+        {
+          name: 'governor-tick',
+          everyMinutes: 1,
+          run: { command: AWAKE_COMMAND, arguments: ['tick'], account: 'root' },
+        },
+      ]
+    : [];
+}
 
 /**
  * renders a managed hold command keyed by a session shell's pid, which the

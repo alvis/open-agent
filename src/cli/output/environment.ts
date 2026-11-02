@@ -43,6 +43,7 @@ export interface SkippedToolOutput {
 /** provider behavior the guest recorded */
 export interface EnvironmentProviderOutput {
   id: string;
+  serviceBackend: string;
   keepAwakeMode: string;
   idleForms: readonly string[];
   wakeMode: string;
@@ -265,6 +266,7 @@ function projectProvider(
     provider,
     {
       id: same,
+      serviceBackend: same,
       keepAwakeMode: same,
       idleForms: same,
       wakeMode: same,

@@ -38,10 +38,12 @@ const options = { nonInteractive: true, localCredentials: false } as const;
 
 function withoutProviderCredentials(): void {
   vi.stubEnv('SPRITES_TOKEN', undefined);
+  vi.stubEnv('FLY_API_TOKEN', undefined);
 }
 
 function spriteCredential(): void {
   vi.stubEnv('SPRITES_TOKEN', TOKEN);
+  vi.stubEnv('FLY_API_TOKEN', undefined);
 }
 
 async function managedSprite(root: string): Promise<Sprite> {
@@ -135,6 +137,28 @@ describe('fn:runCommand', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it('should list available providers and mark providers without credentials unavailable', async () => {
+    spriteCredential();
+    const list = vi
+      .spyOn(SpritesClient.prototype, 'listAllSprites')
+      .mockResolvedValue([]);
+
+    const result = await runCommand(dependencies, {
+      command: 'list',
+      options,
+    });
+
+    expect(result).toMatchObject({
+      command: 'list',
+      ok: true,
+      data: {
+        machines: [],
+        unavailable: [{ provider: 'fly-machine', code: 'INPUT' }],
+      },
+    });
+    expect(list).toHaveBeenCalledOnce();
+  });
+
   it('should apply an explicit list credential source to the default provider', async () => {
     withoutProviderCredentials();
     vi.stubEnv('OPEN_AGENT_SPRITE_SOURCE', TOKEN);
@@ -155,7 +179,7 @@ describe('fn:runCommand', () => {
       ok: true,
       data: {
         machines: [],
-        unavailable: [],
+        unavailable: [{ provider: 'fly-machine', code: 'INPUT' }],
       },
     });
     expect(list).toHaveBeenCalledOnce();
@@ -211,8 +235,25 @@ describe('fn:runCommand', () => {
   it('should reject an entered credential that fails provider preflight', async () => {
     withoutProviderCredentials();
     const secret = vi.fn(async () => 'FlyV1 fm2_generated-macaroon');
+    const wired = dependenciesWith({
+      defaults: {
+        ...dependencies.defaults,
+        selection: {
+          ...dependencies.defaults.selection,
+          provider: 'fly-machine',
+        },
+      },
+      host: {
+        ...dependencies.host,
+        tools: {
+          ...dependencies.host.tools,
+          findTool: async () => undefined,
+        },
+      },
+    });
+
     const result = await runCommand(
-      dependencies,
+      wired,
       { command: 'list', options: { localCredentials: false } },
       { interaction: { ...interaction, secret } },
     );

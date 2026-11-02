@@ -77,6 +77,8 @@ export class SpriteProvider implements ProviderDriver<'sprite'> {
   public readonly images: readonly [OsImage, ...OsImage[]] = [
     { id: 'sprite', family: 'debian', arch: ['x86_64', 'aarch64'] },
   ];
+  // a Sprite runs its services itself
+  public readonly serviceBackend = 'provider';
   // the governor applies deadlines as the agent, so the agent runs the adapter
   public readonly awakeAsset = guestAsset(
     'drivers/providers/sprite/awake.sh',

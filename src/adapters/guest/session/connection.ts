@@ -2,6 +2,7 @@ import { sessionAwakeHold } from '#adapters/guest/governor';
 import { OS_FAMILIES } from '#adapters/guest/os/families';
 import { sessionGuest } from '#adapters/guest/platform/session/channel';
 import { openWorkstationSession } from '#adapters/guest/platform/session/open';
+import { SERVICE_BACKENDS } from '#adapters/guest/services/backends';
 
 import type { SessionGuest } from '#adapters/guest/platform/session/channel';
 import type { GuestExecResult } from '#application/ports/guest-channel';
@@ -132,7 +133,13 @@ export class SetupConnection implements SetupSession {
 
     const channel = await this.#provider.openGuest(this.#workstation);
 
-    return sessionGuest(this, channel, channel.services);
+    return sessionGuest(
+      this,
+      channel,
+      this.#provider.serviceBackend === 'provider'
+        ? channel.services
+        : SERVICE_BACKENDS[this.#provider.serviceBackend].control(this),
+    );
   }
 
   /**

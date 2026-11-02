@@ -24,10 +24,14 @@ const broken = new ProviderFault({ code: 'transient', message: 'down' });
 const record = {} as Awaited<ReturnType<ProviderDriver['get']>>;
 
 describe('fn:providersHolding', () => {
-  it('should name the provider that holds a named workstation', async () => {
+  it('should name the provider that holds a named workstation and ignore one that does not find it', async () => {
     const result = await providersHolding(
       [
         bound('sprite', {
+          get: vi.fn(async () => Promise.reject(notFound)),
+          list: vi.fn(async () => []),
+        }),
+        bound('fly-machine', {
           get: vi.fn(async () => record),
           list: vi.fn(async () => []),
         }),
@@ -35,21 +39,7 @@ describe('fn:providersHolding', () => {
       'mine',
     );
 
-    expect(result).toEqual({ holders: ['sprite'], failures: [] });
-  });
-
-  it('should ignore a provider that does not find the named workstation', async () => {
-    const result = await providersHolding(
-      [
-        bound('sprite', {
-          get: vi.fn(async () => Promise.reject(notFound)),
-          list: vi.fn(async () => []),
-        }),
-      ],
-      'mine',
-    );
-
-    expect(result).toEqual({ holders: [], failures: [] });
+    expect(result).toEqual({ holders: ['fly-machine'], failures: [] });
   });
 
   it('should report a provider that could not be asked instead of counting it as empty', async () => {
@@ -71,6 +61,10 @@ describe('fn:providersHolding', () => {
       bound('sprite', {
         get: vi.fn(async () => record),
         list: vi.fn(async () => [record]),
+      }),
+      bound('fly-machine', {
+        get: vi.fn(async () => record),
+        list: vi.fn(async () => []),
       }),
     ]);
 

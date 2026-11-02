@@ -126,7 +126,7 @@ export interface PlanRunParams {
 /** the provider facts a plan is assembled from */
 export type PlanProvider = Pick<
   ProviderDriver,
-  'id' | 'capabilities' | 'awakeAsset'
+  'id' | 'capabilities' | 'serviceBackend' | 'awakeAsset' | 'bootHookStep'
 >;
 
 /** what a plan is assembled from */
@@ -157,10 +157,10 @@ export interface SetupAssembly {
   resolutions: readonly Resolution[];
   /** the environment the plan writes, its setup still incomplete */
   environment: GuestEnvironment;
-  /** steps every package step builds on: guest libraries, accounts, bootstrap packages, Homebrew and sysctl */
+  /** steps every package step builds on: guest libraries, boot hook, accounts, bootstrap packages, Homebrew and sysctl */
   foundation: readonly SetupStep[];
   /** the steps after the foundation: tools, idle governor and environment.json */
   steps: readonly SetupStep[];
-  /** the cron jobs setup installs, in a plan of their own once the steps succeeded */
+  /** the services and cron jobs the backend installs and starts, in a plan of their own once the steps succeeded */
   services: readonly SetupStep[];
 }

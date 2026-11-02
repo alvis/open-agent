@@ -94,7 +94,11 @@ export interface SessionAwakeHold {
 /** the provider facts a setup connection opens sessions with */
 export type ConnectionProvider = Pick<
   ProviderDriver,
-  'images' | 'awaitGuestReady' | 'openRootShell' | 'openGuest'
+  | 'images'
+  | 'awaitGuestReady'
+  | 'openRootShell'
+  | 'openGuest'
+  | 'serviceBackend'
 >;
 
 /** what a setup connection is bound to */

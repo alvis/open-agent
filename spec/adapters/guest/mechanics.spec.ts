@@ -77,7 +77,7 @@ describe('fn:createGuestMechanics', () => {
     const mechanics = createGuestMechanics({ registry, defaults });
 
     const assembly = await mechanics.plan.assemble({
-      provider: registry.providers.sprite,
+      provider: registry.providers['fly-machine'],
       profile: PROFILE,
       release: RELEASE,
       version: OPEN_AGENT_VERSION,
@@ -104,7 +104,7 @@ describe('fn:createGuestMechanics', () => {
   it('should read installed and channel releases through the connected guest session', async () => {
     const mechanics = createGuestMechanics({ registry, defaults });
     await using connection = mechanics.session.connect({
-      provider: registry.providers.sprite,
+      provider: registry.providers['fly-machine'],
       workstation: WORKSTATION,
     });
 

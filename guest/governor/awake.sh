@@ -16,15 +16,24 @@
 # lasts while its process runs and ends with it, and any other hold lasts at
 # most the turn-hold maximum after its last refresh. A `native-deadline`
 # provider gets every new deadline through its awake adapter, always as the
-# agent. An event runs within its budget, --budget-ms or 8 seconds, and exits
-# 0 whatever happens, except for an unknown action; a
+# agent; a `governed` one is put into an idle form by the per-minute root
+# `tick` once the deadline passed, sleep is permitted and the workstation
+# has been awake an idle timeout since it last woke, so nothing sleeps with
+# a turn or hold open: the tick checks once more, and calls the adapter,
+# under a governor lock no event holds meanwhile. An event runs within its budget, --budget-ms or 8
+# seconds, and exits 0 whatever happens, except for an unknown action; a
 # refused or failed event is recorded as a diagnostic, and an event that is
 # not recorded counts as idleness. Root's `report` prints the newer of the
 # two recorded states for the host, and root's `install` and `check` make
 # and check the directories the governor keeps its state in. Every file it
 # reads from an awake directory is data: it is read without following links,
 # bounded and validated, and root takes nothing from the agent's directory
-# but holders, so its own state never carries a field the agent wrote.
+# but holders, so its own state never carries a field the agent wrote; a
+# scan that cannot see every holder never lets the workstation sleep.
+# Each event also leaves a one-line record in a directory on memory-backed
+# storage, which root's `relay`, a service of the machine, validates field by
+# field and rebuilds as one line of the machine's log; an event nothing is
+# there to relay leaves a record that is dropped unread
 
 set -u
 umask 077
@@ -42,7 +51,9 @@ OA_IDLE_SHARED=$OA_IDLE_RUN/awake
 OA_IDLE_MANAGED=$OA_IDLE_RUN/awake-root
 # the governor state each account records in its own awake directory
 OA_IDLE_STATE=governor.json
-# the governor lock, which every event takes shared
+OA_IDLE_TICK=$OA_IDLE_RUN/idle-tick.json
+# the governor lock: every event takes it shared, and the tick takes it
+# alone across its last check and the adapter's call
 OA_IDLE_LOCK=$OA_IDLE_RUN/governor.lock
 # the account harness hooks run as
 OA_IDLE_AGENT=agent
@@ -53,13 +64,26 @@ OA_IDLE_MAX_ENTRIES=8192
 OA_IDLE_MAX_HOLDERS=512
 OA_IDLE_HOLDER_BYTES=1024
 OA_IDLE_STATE_BYTES=16384
+OA_IDLE_TICK_BYTES=512
 # the limits of an awake event, in milliseconds
 OA_IDLE_DEFAULT_BUDGET_MS=8000
 OA_IDLE_MIN_BUDGET_MS=1000
 OA_IDLE_INPUT_WAIT_MS=1500
 OA_IDLE_INPUT_BYTES=65536
-# how long a state lock, or the governor lock shared, is waited for, in seconds
+# how long a state lock, or the governor lock shared, is waited for, and how
+# long the tick waits for the governor lock alone, in seconds
 OA_IDLE_LOCK_WAIT=3
+OA_IDLE_EXCLUSIVE_WAIT=10
+# where events leave their records for the relay, which makes the directory,
+# and how often and how much the relay drains: it reads at most the scan's
+# entries a pass, writes at most the lines' limit and removes any entry left
+# the stale minutes; an event leaves no record while the scan's entries wait
+OA_IDLE_EVENTS=$OA_SERVICE_STATE_DIRECTORY/awake-log
+OA_IDLE_RELAY_SECONDS=5
+OA_IDLE_RELAY_SCAN=200
+OA_IDLE_RELAY_LINES=50
+OA_IDLE_RELAY_STALE_MINUTES=5
+OA_IDLE_RECORD_BYTES=256
 OA_IDLE_USAGE='usage: open-agent-awake <heartbeat|hold-open|hold-close> --source <name> --session <id|-> [--budget-ms <1000-8000>]'
 
 # the jq definitions every computation shares: an instant as ISO 8601 with
@@ -82,7 +106,7 @@ OA_IDLE_JQ_DEFS=$(
   def count: type == "number" and . >= 0 and . == floor;
   def lines: split("\n") | map(select(. != ""));
   def isadapter: type == "object" and (.at | isinstant)
-    and .action == "apply-deadline"
+    and (.action | IN("apply-deadline", "enter-idle-form"))
     and (has("result") != has("failure"))
     and ((.result // .failure) | istext);
 EOF
@@ -170,7 +194,7 @@ oa_idle_settings() {
       if ($v | count) and $v >= $least then {v: $v}
       else {v: $default, note: "stored \($setting) is missing or invalid; the default of \($default) minutes applies"} end;
     (.provider // null) as $p
-    | if ($p | type) != "object" or ($p.keepAwakeMode | IN("native-deadline", "none") | not) then
+    | if ($p | type) != "object" or ($p.keepAwakeMode | IN("native-deadline", "governed", "none") | not) then
         error("no provider")
       else
         minutes($p.idleTimeoutMinutes; 0; 5; "idle timeout") as $i
@@ -179,6 +203,8 @@ oa_idle_settings() {
         | {
             provider: {
               keepAwakeMode: $p.keepAwakeMode,
+              wakeMode: $p.wakeMode,
+              supportsCliWakeSleep: ($p.supportsCliWakeSleep == true),
               awakeAdapter: (if $adapter then $p.awakeAdapter else null end)
             },
             idle: $i.v,
@@ -242,7 +268,7 @@ oa_idle_scan() {
     fi
   fi
   if test -n "$oa_idle_scan_problem"; then
-    printf 'the %s awake directory scan is incomplete: %s\n' \
+    printf 'the %s awake directory scan is incomplete, so sleep is not permitted: %s\n' \
       "$2" "$oa_idle_scan_problem" >>"$OA_IDLE_WORK/found"
     return 1
   fi
@@ -351,6 +377,7 @@ oa_idle_recompute() {
   if test -n "$oa_idle_event_failure"; then
     printf '%s\n' "$oa_idle_event_failure" >>"$OA_IDLE_WORK/found"
   fi
+  oa_idle_recompute_incomplete=false
   oa_idle_recompute_shared_own=false
   oa_idle_recompute_managed_own=false
   if test "$1" = prune; then
@@ -360,8 +387,10 @@ oa_idle_recompute() {
       oa_idle_recompute_managed_own=true
     fi
   fi
-  oa_idle_scan "$OA_IDLE_SHARED" shared "$oa_idle_agent_uid" false "$oa_idle_recompute_shared_own"
-  oa_idle_scan "$OA_IDLE_MANAGED" managed 0 true "$oa_idle_recompute_managed_own"
+  oa_idle_scan "$OA_IDLE_SHARED" shared "$oa_idle_agent_uid" false "$oa_idle_recompute_shared_own" ||
+    oa_idle_recompute_incomplete=true
+  oa_idle_scan "$OA_IDLE_MANAGED" managed 0 true "$oa_idle_recompute_managed_own" ||
+    oa_idle_recompute_incomplete=true
   oa_idle_read_state "$oa_idle_own" "$oa_idle_uid" previous.json
   test -f "$OA_IDLE_WORK/adapter.json" || : >"$OA_IDLE_WORK/adapter.json"
   /usr/bin/jq -nc --slurpfile holders "$OA_IDLE_WORK/holders" \
@@ -370,7 +399,8 @@ oa_idle_recompute() {
     --slurpfile adapter "$OA_IDLE_WORK/adapter.json" \
     --rawfile notes "$OA_IDLE_WORK/notes" --rawfile found "$OA_IDLE_WORK/found" \
     --rawfile live "$OA_IDLE_WORK/live" \
-    --argjson now "$oa_idle_recompute_now" --argjson asRoot "$oa_idle_as_root" "$OA_IDLE_JQ_DEFS"'
+    --argjson now "$oa_idle_recompute_now" --argjson asRoot "$oa_idle_as_root" \
+    --argjson incomplete "$oa_idle_recompute_incomplete" "$OA_IDLE_JQ_DEFS"'
     $settings[0] as $set
     | $set.provider as $p
     | ($now + $set.holdMax * 60000) as $limit
@@ -397,6 +427,8 @@ oa_idle_recompute() {
       deadline($holders; $recorded) as $d
     | (if ($adapter | length) > 0 then $adapter[0]
        elif $prev.adapter | isadapter then $prev.adapter else null end) as $result
+    | (($incomplete | not) and $p != null and $p.keepAwakeMode == "governed" and $set.idle > 0
+        and ($p.wakeMode == "url-traffic" or ($p.wakeMode == "cli-restore" and $p.supportsCliWakeSleep))) as $permitted
     | {
         deadline: $d.deadline,
         spent: [$holders[] | select(.managed == $asRoot)
@@ -411,6 +443,7 @@ oa_idle_recompute() {
               openHolds: ($d.holds | length)
             }
           + (if $d.deadline != null then {deadline: ($d.deadline | iso)} else {} end)
+          + {sleepPermitted: $permitted}
           + (if $result != null then {adapter: $result} else {} end)
           + {diagnostics: ((($notes | lines) + $set.notes + ($found | lines))[:8] | map(text))})
       }' >"$OA_IDLE_WORK/computed.json" || return 1
@@ -456,6 +489,20 @@ oa_idle_locked() {
   } 7<"$OA_IDLE_LOCK"
 }
 
+# runs a function under the governor lock alone, which no event holds
+# meanwhile; when it is not taken it sets oa_idle_lock_failure and returns 1
+# arguments: the function and its arguments
+oa_idle_exclusive() {
+  oa_idle_lock_failure="no idle form was entered: the governor lock $OA_IDLE_LOCK is missing"
+  test -f "$OA_IDLE_LOCK" || return 1
+  oa_idle_lock_failure="no idle form was entered: awake events held the governor lock for $OA_IDLE_EXCLUSIVE_WAIT s"
+  {
+    flock -w "$OA_IDLE_EXCLUSIVE_WAIT" 7 || return 1
+    oa_idle_lock_failure=
+    "$@"
+  } 7<"$OA_IDLE_LOCK"
+}
+
 # records the governor state under the caller's state lock, pruning its own
 # directory, or, when the lock is not taken, records it without pruning and
 # with the lock failure noted
@@ -464,6 +511,179 @@ oa_idle_record() {
   test -n "$oa_idle_lock_failure" || return 1
   printf '%s\n' "$oa_idle_lock_failure" >>"$OA_IDLE_WORK/notes"
   oa_idle_recompute keep record
+}
+
+# turns an adapter's idle-form answer into an adapter result in adapter.json
+# arguments: the answer's file, the adapter's exit status
+oa_idle_idle_form_result() {
+  oa_idle_idle_form_line=$(head -n 1 "$1")
+  oa_idle_idle_form_in_flight=
+  case $2:$oa_idle_idle_form_line in
+  124:* | 137:*)
+    oa_idle_idle_form_in_flight=1
+    set -- failure 'the adapter did not finish within 60000 ms'
+    ;;
+  *:'entered '?*) set -- result "${oa_idle_idle_form_line#entered }" ;;
+  *:'unknown '?*) set -- result "unknown: ${oa_idle_idle_form_line#unknown }" ;;
+  *:'failure '?*) set -- failure "${oa_idle_idle_form_line#failure }" ;;
+  *) set -- failure "the adapter exited $2 without naming an idle form" ;;
+  esac
+  /usr/bin/jq -nc --argjson now "$(oa_idle_now)" --arg field "$1" --arg value "$2" "$OA_IDLE_JQ_DEFS"'
+    {at: ($now | iso), action: "enter-idle-form", ($field): ($value | text)}' >"$OA_IDLE_WORK/adapter.json"
+}
+
+# prints the awake time and idle-form marker of the tick record, separated
+# by a space, the marker empty when there is none: the awake time restarts
+# at now after a reboot, a resume the boot clock shows or a gap of three
+# minutes between ticks, and the marker survives only a continuous run
+# arguments: current epoch milliseconds
+oa_idle_read_tick() {
+  oa_idle_read_tick_boot=$(cat "$OA_BOOT_ID_PATH" 2>/dev/null) || oa_idle_read_tick_boot=
+  oa_idle_read_tick_uptime=$(cut -d ' ' -f 1 /proc/uptime 2>/dev/null) || oa_idle_read_tick_uptime=
+  : >"$OA_IDLE_WORK/tick-copy"
+  if test "$(find "$OA_IDLE_TICK" -maxdepth 0 -type f -links 1 -user 0 2>/dev/null)" = "$OA_IDLE_TICK"; then
+    oa_idle_read "$OA_IDLE_TICK" "$OA_IDLE_TICK_BYTES" "$OA_IDLE_WORK/tick-copy" ||
+      : >"$OA_IDLE_WORK/tick-copy"
+  fi
+  /usr/bin/jq -nr --rawfile raw "$OA_IDLE_WORK/tick-copy" --argjson now "$1" \
+    --arg boot "$oa_idle_read_tick_boot" --arg uptime "$oa_idle_read_tick_uptime" '
+    def past: type == "number" and . <= $now;
+    (try ($raw | fromjson) catch {}) as $read
+    | (if ($read | type) == "object" then $read else {} end) as $r
+    | (if $boot == "" or $uptime == "" then true
+       elif $r.bootId == $boot and ($r.uptimeMs | type) == "number" and ($r.lastTickAt | past) then
+         (($uptime | tonumber) * 1000 | floor) - $r.uptimeMs
+         | . >= 0 and $now - $r.lastTickAt - . <= 10000
+       else false end) as $continuous
+    | (if $continuous and ($r.lastTickAt | past) and ($r.awakeSince | past)
+       then $now - $r.lastTickAt <= 180000 else false end) as $grace
+    | "\(if $grace then $r.awakeSince else $now end) \(if $continuous and ($r.enteringSince | past) then $r.enteringSince else "" end)"'
+}
+
+# writes the tick record, root's alone, with the boot clock it was taken at
+# arguments: the last tick, the awake time or empty, the idle-form marker or empty
+oa_idle_write_tick() {
+  oa_idle_write_tick_boot=$(cat "$OA_BOOT_ID_PATH" 2>/dev/null) || oa_idle_write_tick_boot=
+  oa_idle_write_tick_uptime=$(cut -d ' ' -f 1 /proc/uptime 2>/dev/null) || oa_idle_write_tick_uptime=
+  /usr/bin/jq -nc --argjson last "$1" --arg awake "$2" --arg entering "$3" \
+    --arg boot "$oa_idle_write_tick_boot" --arg uptime "$oa_idle_write_tick_uptime" '
+    {lastTickAt: $last}
+    + (if $awake != "" then {awakeSince: ($awake | tonumber)} else {} end)
+    + (if $entering != "" then {enteringSince: ($entering | tonumber)} else {} end)
+    + (if $boot != "" and $uptime != "" then {bootId: $boot, uptimeMs: (($uptime | tonumber) * 1000 | floor)} else {} end)' \
+    >"$OA_IDLE_WORK/tick.json" &&
+    oa_idle_place "$OA_IDLE_WORK/tick.json" "$OA_IDLE_RUN" idle-tick.json 0600
+}
+
+# prints whether the recomputed state puts a governed workstation into its
+# idle form: it has an adapter, sleep is permitted, no earlier call may
+# still run, the deadline passed and it has been awake an idle timeout
+# arguments: current epoch milliseconds, the awake time, whether an earlier
+# call may still run (true or false)
+oa_idle_due() {
+  /usr/bin/jq -r --argjson now "$1" --argjson awake "$2" --argjson inFlight "$3" \
+    --slurpfile settings "$OA_IDLE_WORK/settings.json" '
+    $settings[0] as $set
+    | $set.provider.keepAwakeMode == "governed" and $set.provider.awakeAdapter != null
+      and .state.sleepPermitted and ($inFlight | not)
+      and (.deadline == null or .deadline <= $now)
+      and $awake + $set.idle * 60000 <= $now' "$OA_IDLE_WORK/computed.json"
+}
+
+# the first section of a tick, under root's state lock: recomputes and
+# records the state, decides whether an idle form is due and marks it in
+# the tick record; it sets oa_idle_tick_due, oa_idle_tick_awake and
+# oa_idle_tick_marked
+oa_idle_tick_decide() {
+  oa_idle_tick_decide_now=$(oa_idle_now)
+  oa_idle_tick_decide_read=$(oa_idle_read_tick "$oa_idle_tick_decide_now") || return 1
+  oa_idle_tick_decide_awake=${oa_idle_tick_decide_read%% *}
+  oa_idle_tick_decide_entering=${oa_idle_tick_decide_read#* }
+  oa_idle_tick_decide_in_flight=false
+  if test -n "$oa_idle_tick_decide_entering" &&
+    test "$((oa_idle_tick_decide_now - oa_idle_tick_decide_entering))" -lt 120000; then
+    oa_idle_tick_decide_in_flight=true
+    echo 'an earlier idle-form call may still be running, so none is started' >>"$OA_IDLE_WORK/notes"
+  fi
+  oa_idle_recompute prune keep || return 1
+  oa_idle_tick_awake=$oa_idle_tick_decide_awake
+  oa_idle_tick_due=$(oa_idle_due "$oa_idle_tick_decide_now" "$oa_idle_tick_awake" \
+    "$oa_idle_tick_decide_in_flight") || return 1
+  if test "$oa_idle_tick_due" = true; then
+    oa_idle_tick_marked=$oa_idle_tick_decide_now
+  elif test "$oa_idle_tick_decide_in_flight" = true; then
+    oa_idle_tick_marked=$oa_idle_tick_decide_entering
+  else
+    oa_idle_tick_marked=
+  fi
+  oa_idle_write_tick "$oa_idle_tick_decide_now" "$oa_idle_tick_decide_awake" "$oa_idle_tick_marked"
+  /usr/bin/jq -c .state "$OA_IDLE_WORK/computed.json" >"$OA_IDLE_WORK/state.json" &&
+    oa_idle_place "$OA_IDLE_WORK/state.json" "$oa_idle_own" "$OA_IDLE_STATE" 0640
+}
+
+# the last section of a tick that found an idle form due, under root's
+# state lock: records the state with the adapter's result and settles the tick
+# record. The marker stays while the call may still run, and is cleared
+# only by the tick that set it; an entered idle form, or a call that ended
+# without an answer and may have frozen the machine, keeps no awake time, so
+# the first tick after a resume starts the idle timeout anew
+oa_idle_tick_settle() {
+  oa_idle_recompute prune record || return 1
+  oa_idle_tick_settle_now=$(oa_idle_now)
+  oa_idle_tick_settle_read=$(oa_idle_read_tick "$oa_idle_tick_settle_now") || return 1
+  oa_idle_tick_settle_awake=${oa_idle_tick_settle_read%% *}
+  oa_idle_tick_settle_marked=${oa_idle_tick_settle_read#* }
+  if test -s "$OA_IDLE_WORK/adapter.json" && /usr/bin/jq -e 'has("result")' "$OA_IDLE_WORK/adapter.json" >/dev/null; then
+    oa_idle_tick_settle_awake=
+  fi
+  if test -z "$oa_idle_idle_form_in_flight" && test "$oa_idle_tick_settle_marked" = "$oa_idle_tick_marked"; then
+    oa_idle_tick_settle_marked=
+  fi
+  oa_idle_write_tick "$oa_idle_tick_settle_now" "$oa_idle_tick_settle_awake" "$oa_idle_tick_settle_marked"
+}
+
+# the middle section of a tick that found an idle form due, under the
+# governor lock alone: recomputes the state once more and enters the idle
+# form through the adapter only while it is still due. Whatever an event
+# recorded before this check keeps the workstation awake; an event meanwhile
+# waits for the lock, or records itself without it once its wait ran out,
+# and then counts after the resume
+oa_idle_tick_enter() {
+  oa_idle_recompute keep keep || return 1
+  if test "$(oa_idle_due "$(oa_idle_now)" "$oa_idle_tick_awake" false)" != true; then
+    echo 'activity arrived after the idle decision, so no idle form was entered' >>"$OA_IDLE_WORK/notes"
+    return 0
+  fi
+  oa_idle_tick_adapter=$(oa_idle_setting .provider.awakeAdapter)
+  : >"$OA_IDLE_WORK/answer"
+  oa_idle_tick_status=0
+  timeout -k 5 60 /bin/sh "$oa_idle_tick_adapter" enter-idle-form \
+    >"$OA_IDLE_WORK/answer" 2>/dev/null </dev/null || oa_idle_tick_status=$?
+  oa_idle_idle_form_result "$OA_IDLE_WORK/answer" "$oa_idle_tick_status"
+}
+
+# the per-minute tick, root's alone: records the state and, once due, checks
+# again and puts the workstation into its idle form through the adapter
+# under the governor lock alone, then records the outcome
+oa_idle_tick() {
+  if ! oa_idle_locked oa_idle_tick_decide; then
+    test -n "$oa_idle_lock_failure" &&
+      printf '%s\n' "$oa_idle_lock_failure" >>"$OA_IDLE_WORK/notes"
+    oa_idle_recompute keep record
+    return 0
+  fi
+  test "$oa_idle_tick_due" = true || return 0
+  : >"$OA_IDLE_WORK/notes"
+  rm -f "$OA_IDLE_WORK/adapter.json"
+  if ! oa_idle_exclusive oa_idle_tick_enter && test -n "$oa_idle_lock_failure"; then
+    printf '%s\n' "$oa_idle_lock_failure" >>"$OA_IDLE_WORK/notes"
+  fi
+  if ! oa_idle_locked oa_idle_tick_settle; then
+    test -n "$oa_idle_lock_failure" &&
+      printf '%s\n' "$oa_idle_lock_failure" >>"$OA_IDLE_WORK/notes"
+    oa_idle_recompute keep record
+  fi
+  return 0
 }
 
 # applies the current deadline once through a native-deadline adapter and
@@ -647,19 +867,193 @@ oa_idle_parse() {
   fi
 }
 
+# names, as a short token, why an awake event was refused
+# arguments: the refusal's first line
+oa_idle_refusal_reason() {
+  case $1 in
+  *needs\ a\ value | unexpected\ option*) echo bad-option ;;
+  --budget-ms*) echo bad-budget ;;
+  --source*) echo bad-source ;;
+  --pid*) echo bad-pid ;;
+  --session*) echo bad-session ;;
+  hook*) echo bad-hook-input ;;
+  *) echo refused ;;
+  esac
+}
+
+# leaves the record of the event just handled in the event directory for the
+# relay, when the relay made it and is not behind: one line of the time, the
+# action, the source, the hash of the session, the outcome, the new deadline
+# and the reason, written first beside its entry and renamed into place so the
+# relay never reads half of it. It runs right after the event is recorded and
+# never changes the event's outcome or status
+# arguments: the outcome (recorded, refused or failed), the reason or -
+oa_idle_log_event() {
+  if ! test -d "$OA_IDLE_EVENTS" || test -L "$OA_IDLE_EVENTS"; then
+    return 0
+  fi
+  oa_idle_log_pending=$(find "$OA_IDLE_EVENTS" -mindepth 1 -maxdepth 1 2>/dev/null | head -n "$OA_IDLE_RELAY_SCAN" | wc -l)
+  test "$oa_idle_log_pending" -lt "$OA_IDLE_RELAY_SCAN" || return 0
+  oa_idle_log_source=$oa_idle_source
+  case $oa_idle_log_source in '' | [!a-z]* | *[!a-z0-9-]*) oa_idle_log_source=- ;; esac
+  test "${#oa_idle_log_source}" -le 32 || oa_idle_log_source=-
+  oa_idle_log_session=-
+  if test "$1" != refused && test -n "$oa_idle_session"; then
+    oa_idle_log_session=$(oa_idle_hash "$oa_idle_session") || oa_idle_log_session=-
+  fi
+  oa_idle_log_deadline=-
+  if test "$1" = recorded; then
+    oa_idle_log_deadline=$(/usr/bin/jq -r '.state.deadline // "-"' "$OA_IDLE_WORK/computed.json" 2>/dev/null) ||
+      oa_idle_log_deadline=-
+  fi
+  oa_idle_log_temporary=$(mktemp "$OA_IDLE_EVENTS/.tmp-XXXXXXXX" 2>/dev/null) || return 0
+  if printf '%s %s %s %s %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$oa_idle_event_kind" \
+    "$oa_idle_log_source" "$oa_idle_log_session" "$1" "$oa_idle_log_deadline" "$2" \
+    >"$oa_idle_log_temporary" 2>/dev/null &&
+    mv -f "$oa_idle_log_temporary" "$OA_IDLE_EVENTS/e-${oa_idle_log_temporary##*/.tmp-}" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$oa_idle_log_temporary"
+  return 0
+}
+
+# prints the line of the machine's log an event record stands for, or fails
+# when any field of it is not exactly of the shape an event writes. Nothing of
+# the record but fields it validated reaches the line, and none of them can
+# hold a space, control character or newline
+# arguments: the record's file
+oa_idle_relay_line() {
+  oa_idle_relay_extra=
+  IFS=' ' read -r oa_idle_relay_at oa_idle_relay_event oa_idle_relay_source oa_idle_relay_session \
+    oa_idle_relay_outcome oa_idle_relay_deadline oa_idle_relay_reason oa_idle_relay_extra <"$1" || return 1
+  test -z "$oa_idle_relay_extra" || return 1
+  case $oa_idle_relay_at in
+  [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;;
+  *) return 1 ;;
+  esac
+  case $oa_idle_relay_event in heartbeat | hold-open | hold-close) ;; *) return 1 ;; esac
+  case $oa_idle_relay_source in
+  - | [a-z]*) ;;
+  *) return 1 ;;
+  esac
+  case $oa_idle_relay_source in *[!a-z0-9-]*) return 1 ;; esac
+  test "${#oa_idle_relay_source}" -le 32 || return 1
+  case $oa_idle_relay_session in
+  -) ;;
+  *[!0-9a-f]*) return 1 ;;
+  *) test "${#oa_idle_relay_session}" -eq 64 || return 1 ;;
+  esac
+  case $oa_idle_relay_outcome in recorded | refused | failed) ;; *) return 1 ;; esac
+  case $oa_idle_relay_deadline in
+  - | [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z) ;;
+  *) return 1 ;;
+  esac
+  case $oa_idle_relay_reason in
+  - | bad-budget | bad-source | bad-pid | bad-session | bad-hook-input | bad-option | refused | not-recorded) ;;
+  *) return 1 ;;
+  esac
+  oa_idle_relay_text="open-agent-awake $oa_idle_relay_at event=$oa_idle_relay_event source=$oa_idle_relay_source"
+  if test "$oa_idle_relay_session" != -; then
+    oa_idle_relay_text="$oa_idle_relay_text session=$(printf '%.8s' "$oa_idle_relay_session")"
+  fi
+  oa_idle_relay_text="$oa_idle_relay_text outcome=$oa_idle_relay_outcome"
+  if test "$oa_idle_relay_deadline" != -; then
+    oa_idle_relay_text="$oa_idle_relay_text deadline=$oa_idle_relay_deadline"
+  fi
+  if test "$oa_idle_relay_reason" != -; then
+    oa_idle_relay_text="$oa_idle_relay_text reason=$oa_idle_relay_reason"
+  fi
+  printf '%s\n' "$oa_idle_relay_text"
+}
+
+# makes the event directory, root's, writable by the agent and sticky so no
+# account removes or renames another's entry; it fails when it is a link
+oa_idle_relay_prepare() {
+  for oa_idle_relay_path in "$OA_SERVICE_STATE_DIRECTORY" "$OA_IDLE_EVENTS"; do
+    if test -L "$oa_idle_relay_path"; then
+      echo "Refusing $oa_idle_relay_path: it is a link" >&2
+      return 1
+    fi
+  done
+  install -d -m 0755 "$OA_SERVICE_STATE_DIRECTORY" &&
+    mkdir -p "$OA_IDLE_EVENTS" &&
+    chown "root:$OA_IDLE_AGENT" "$OA_IDLE_EVENTS" &&
+    chmod 01770 "$OA_IDLE_EVENTS"
+}
+
+# writes the records of the event directory, up to the relay's limits, as
+# lines on stderr, which the service gives the machine's log, and removes what
+# it read: a record that is not of the shape is removed unwritten, the ones
+# beyond the line limit are removed and counted in one line, and any entry
+# left for the stale minutes is removed
+oa_idle_relay_drain() {
+  oa_idle_drain_count=0
+  oa_idle_drain_dropped=0
+  find "$OA_IDLE_EVENTS" -mindepth 1 -maxdepth 1 -type f -links 1 -name 'e-*' \
+    -printf '%f\n' 2>/dev/null | head -n "$OA_IDLE_RELAY_SCAN" >"$OA_IDLE_WORK/relay"
+  while IFS= read -r oa_idle_drain_name; do
+    case $oa_idle_drain_name in
+    e-*[!A-Za-z0-9]* | e-) continue ;;
+    e-*) ;;
+    *) continue ;;
+    esac
+    if test "$oa_idle_drain_count" -ge "$OA_IDLE_RELAY_LINES"; then
+      oa_idle_drain_dropped=$((oa_idle_drain_dropped + 1))
+    elif oa_idle_read "$OA_IDLE_EVENTS/$oa_idle_drain_name" "$OA_IDLE_RECORD_BYTES" "$OA_IDLE_WORK/record" &&
+      oa_idle_drain_line=$(oa_idle_relay_line "$OA_IDLE_WORK/record"); then
+      printf '%s\n' "$oa_idle_drain_line" >&2
+      oa_idle_drain_count=$((oa_idle_drain_count + 1))
+    fi
+    rm -f -- "$OA_IDLE_EVENTS/$oa_idle_drain_name"
+  done <"$OA_IDLE_WORK/relay"
+  if test "$oa_idle_drain_dropped" -gt 0; then
+    printf 'open-agent-awake %s dropped=%s reason=rate-limit\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$oa_idle_drain_dropped" >&2
+  fi
+  find "$OA_IDLE_EVENTS" -mindepth 1 -maxdepth 1 -mmin "+$OA_IDLE_RELAY_STALE_MINUTES" \
+    -exec rm -rf -- {} + 2>/dev/null
+  return 0
+}
+
+# the awake events' relay, a service of root's that keeps the event directory
+# in place and drains it into the machine's log, which is the service's
+# stderr; it never exits, and waits before it fails so a refused directory
+# does not restart it in a loop
+oa_idle_relay() {
+  oa_idle_relay_prepare || {
+    sleep 30
+    return 1
+  }
+  while :; do
+    oa_idle_relay_drain
+    sleep "$OA_IDLE_RELAY_SECONDS" &
+    wait $!
+  done
+}
+
 # records one awake event, then hands a native-deadline provider the new
 # deadline and records its result with the event's failure, if any
 # arguments: the action, then its options
 oa_idle_event() {
   oa_idle_action=$1
+  oa_idle_event_kind=$1
   shift
   if ! oa_idle_parse "$@" >"$OA_IDLE_WORK/refusal"; then
     oa_idle_action=
     printf 'refused an awake event: %s\n' "$(head -n 1 "$OA_IDLE_WORK/refusal")" >>"$OA_IDLE_WORK/notes"
+    oa_idle_log_event refused "$(oa_idle_refusal_reason "$(head -n 1 "$OA_IDLE_WORK/refusal")")"
     oa_idle_record
     return 0
   fi
-  oa_idle_record || return 0
+  if ! oa_idle_record; then
+    oa_idle_log_event failed not-recorded
+    return 0
+  fi
+  if test -n "$oa_idle_event_failure"; then
+    oa_idle_log_event failed not-recorded
+  else
+    oa_idle_log_event recorded -
+  fi
   if test "$(oa_idle_setting .provider.keepAwakeMode)" != native-deadline ||
     test -z "$(oa_idle_setting .provider.awakeAdapter)"; then
     return 0
@@ -684,12 +1078,13 @@ oa_idle_report() {
       and (.session | type == "string" and test("\\A[0-9a-f]{64}\\z"))
       and (.expiresAt | isinstant);
     def isstate: .version == 1 and (.updatedAt | isinstant)
-      and ((has("keepAwakeMode") | not) or (.keepAwakeMode | IN("native-deadline", "none")))
+      and ((has("keepAwakeMode") | not) or (.keepAwakeMode | IN("native-deadline", "governed", "none")))
       and (.idleTimeoutMinutes | count) and (.holdMaxMinutes | count)
       and ((has("lastHeartbeat") | not) or (.lastHeartbeat | isinstant))
       and (.holds | type == "array" and length <= 32 and all(.[]; ishold))
       and (.openHolds | count) and .openHolds >= (.holds | length)
       and ((has("deadline") | not) or (.deadline | isinstant))
+      and (.sleepPermitted | type == "boolean")
       and ((has("adapter") | not) or (.adapter | isadapter))
       and (.diagnostics | type == "array" and length <= 8 and all(.[]; istext));
     ($states + $agent) as $recorded
@@ -754,6 +1149,7 @@ oa_idle_main() {
   fi
   oa_idle_action=
   oa_idle_event_failure=
+  oa_idle_idle_form_in_flight=
   OA_IDLE_WORK=$(mktemp -d) || exit 1
   trap 'rm -rf "$OA_IDLE_WORK"' EXIT
   trap 'exit 143' HUP INT TERM
@@ -763,7 +1159,7 @@ oa_idle_main() {
   case $oa_idle_main_command in
   heartbeat | hold-open | hold-close) oa_idle_event "$oa_idle_main_command" "$@" ;;
   apply) oa_idle_apply ;;
-  report | install | check)
+  tick | report | install | check | relay)
     if test "$oa_idle_uid" -ne 0; then
       echo "open-agent-awake $oa_idle_main_command is root's alone" >&2
       exit 77
@@ -797,7 +1193,7 @@ heartbeat | hold-open | hold-close)
     /bin/sh "$oa_idle_self" "$@" >/dev/null 2>&1
   exit 0
   ;;
-apply | report | install | check)
+apply | tick | report | install | check | relay)
   oa_idle_main "$@"
   ;;
 *)

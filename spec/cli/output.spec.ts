@@ -45,6 +45,7 @@ const RECORDED_GOVERNOR: GovernorState = {
   holds: [],
   openHolds: 0,
   deadline: '2026-10-09T00:15:00.000Z',
+  sleepPermitted: false,
   diagnostics: [],
 };
 const inspection: GuestInspection = {
@@ -257,14 +258,15 @@ describe('fn:prepareResult', () => {
   });
 
   it('should name each unavailable provider on stderr beside piped TSV rows', () => {
-    const reason = 'the token was revoked';
+    const reason =
+      'workstation status unknown, no Fly organization token was found; supply one in FLY_API_TOKEN, or with --provider fly-machine --provider-token-source, to list its workstations';
     const output = captureResult(
       {
         command: 'list',
         ok: true,
         data: {
           machines: [{ ...machine, name: 'alpha', id: 'sprite-alpha' }],
-          unavailable: [{ provider: 'sprite', code: 'AUTH', reason }],
+          unavailable: [{ provider: 'fly-machine', code: 'INPUT', reason }],
         },
       },
       {},
@@ -272,7 +274,7 @@ describe('fn:prepareResult', () => {
 
     expect(output).toEqual({
       stdout: 'alpha\tsprite-alpha\trunning\t\t\tready\texample\tsprite\n',
-      stderr: `Unavailable provider sprite: ${reason}\n`,
+      stderr: `Unavailable provider fly-machine: ${reason}\n`,
     });
   });
 
@@ -503,7 +505,7 @@ describe('fn:prepareResult', () => {
     );
   });
 
-  it('should show no failed updates when optional native inspection is absent', () => {
+  it('should show an unrecorded boot and no failed updates when optional native inspection is absent', () => {
     const { native: _native, ...withoutNative } = inspection;
     const output = captureResult(
       {
@@ -514,12 +516,14 @@ describe('fn:prepareResult', () => {
           inspection: {
             ...withoutNative,
             updates: { tools: [] },
+            boot: { unsuccessfulSteps: {}, log: [] },
           },
         },
       },
       {},
     );
 
+    expect(output.stdout).toMatch(/Last boot[\s\S]*not recorded/u);
     expect(output.stdout).not.toContain('Failed tools:');
     expect(output.stdout).not.toContain('Unsuccessful steps:');
     expect(output.stdout).not.toContain('Native plugin inventory available:');
@@ -592,12 +596,14 @@ describe('fn:prepareResult', () => {
       }
     };
 
-    it('should show a native-deadline provider as awake until the deadline and then on its own idle rules', () => {
+    it('should show a native-deadline provider as awake until the deadline and then on its own idle rules, never as sleep not permitted', () => {
       const output = governorOutput(RECORDED_GOVERNOR);
 
       expect(output).toMatch(
         /Idle governor.*last heartbeat 2026-10-09T00:10:00\.000Z; 0 open holds; awake until 2026-10-09T00:15:00\.000Z, then the provider's idle rules apply/,
       );
+      expect(output).not.toContain('sleep not permitted');
+      expect(output).not.toContain('sleep permitted');
     });
 
     it('should mark a passed deadline as passed', () => {
@@ -621,6 +627,28 @@ describe('fn:prepareResult', () => {
       );
     });
 
+    it('should keep the sleep wording for a governed provider and mark its passed deadline', () => {
+      const governed = governorOutput({
+        ...RECORDED_GOVERNOR,
+        keepAwakeMode: 'governed',
+      });
+      const passed = governorOutput(
+        {
+          ...RECORDED_GOVERNOR,
+          keepAwakeMode: 'governed',
+          sleepPermitted: true,
+        },
+        NOW + 10 * 60_000,
+      );
+
+      expect(governed).toMatch(
+        /awake until 2026-10-09T00:15:00\.000Z; sleep not permitted/,
+      );
+      expect(passed).toMatch(
+        /awake until 2026-10-09T00:15:00\.000Z \(passed\); sleep permitted/,
+      );
+    });
+
     it('should show a provider that never keeps the workstation awake as not governed', () => {
       const output = governorOutput({
         ...NO_DEADLINE_GOVERNOR,
@@ -628,6 +656,7 @@ describe('fn:prepareResult', () => {
       });
 
       expect(output).toMatch(/0 open holds; not governed/);
+      expect(output).not.toContain('sleep');
     });
   });
 
@@ -671,10 +700,11 @@ describe('fn:prepareResult', () => {
                 },
               ],
               openHolds: 1,
+              sleepPermitted: true,
               adapter: {
                 at: '2026-10-09T00:10:00.000Z',
-                action: 'apply-deadline',
-                failure: 'deadline refused',
+                action: 'enter-idle-form',
+                failure: 'suspend refused',
               },
               diagnostics: [],
             },
@@ -699,7 +729,7 @@ describe('fn:prepareResult', () => {
       /Idle governor.*not recorded \(no awake event has been recorded yet\)/,
     );
     expect(failing.stdout.replaceAll(/\s+/g, ' ')).toMatch(
-      /Idle governor.*no heartbeat yet; 1 open hold; nothing keeps it awake; adapter failed: deadline refused/,
+      /Idle governor.*no heartbeat yet; 1 open hold; nothing keeps it awake; sleep permitted; adapter failed: suspend refused/,
     );
   });
 
@@ -721,10 +751,11 @@ describe('fn:prepareResult', () => {
                 holdMaxMinutes: 60,
                 holds: [],
                 openHolds: 0,
+                sleepPermitted: false,
                 adapter: {
                   at: '2026-10-09T00:10:00.000Z',
-                  action: 'apply-deadline',
-                  failure: 'deadline\u001b[2J refused\u009b31m',
+                  action: 'enter-idle-form',
+                  failure: 'suspend\u001b[2J refused\u009b31m',
                 },
                 diagnostics: [],
               },
@@ -737,7 +768,7 @@ describe('fn:prepareResult', () => {
 
     expect(output.stdout).not.toMatch(/\p{Cc}(?<!\n)/u);
     expect(output.stdout.replaceAll(/\s+/g, ' ')).toContain(
-      'adapter failed: deadline[2J refused31m',
+      'adapter failed: suspend[2J refused31m',
     );
   });
 

@@ -2,6 +2,7 @@ import { each, mapValues, projectFields, same } from './fields';
 
 import type { ServiceSummary } from '#application/data';
 import type { T3Environment } from '#domain/observations/agent';
+import type { BootReport } from '#domain/observations/boot';
 import type {
   GovernorReport,
   GovernorState,
@@ -114,6 +115,15 @@ export type GovernorOutput =
   | { recorded: true; state: Record<string, unknown> }
   | { recorded: false; reason: string };
 
+/** the boot report of the guest */
+export interface BootOutput {
+  status?: string;
+  startedAt?: string;
+  durationMs?: number;
+  unsuccessfulSteps: Readonly<Record<string, string>>;
+  log: readonly string[];
+}
+
 /** everything a guest inspection observed */
 export interface InspectionOutput {
   services: GuestServiceOutput[];
@@ -124,6 +134,7 @@ export interface InspectionOutput {
   updates?: UpdateStatusOutput;
   probeFailures: ProbeFailureOutput[];
   governor: GovernorOutput;
+  boot?: BootOutput;
 }
 
 type RecordedHold = GovernorState['holds'][number];
@@ -309,6 +320,7 @@ function projectGovernorState(state: GovernorState): Record<string, unknown> {
     ),
     openHolds: same,
     deadline: same,
+    sleepPermitted: same,
     adapter: (adapter: AdapterResult) =>
       projectFields<AdapterResult, Record<string, unknown>>(adapter, {
         at: same,
@@ -335,4 +347,19 @@ export function projectGovernor(report: GovernorReport): GovernorOutput {
         recorded: same,
         reason: same,
       });
+}
+
+/**
+ * projects the boot report
+ * @param boot internal report
+ * @returns output report
+ */
+export function projectBoot(boot: BootReport): BootOutput {
+  return projectFields<BootReport, BootOutput>(boot, {
+    status: same,
+    startedAt: same,
+    durationMs: same,
+    unsuccessfulSteps: same,
+    log: same,
+  });
 }

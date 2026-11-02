@@ -12,6 +12,7 @@ const INSPECTION_MESSAGES: Record<InspectionProbe, string> = {
   native: 'Checking harness configuration, plugins and the agent environment',
   proxy: 'Checking the selected model gateway catalogue',
   governor: 'Reading the idle governor state',
+  boot: 'Reading the last boot record',
 };
 
 /**

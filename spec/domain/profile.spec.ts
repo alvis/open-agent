@@ -65,6 +65,7 @@ vi.mock('#composition/registry', async (importOriginal) => {
     },
     shellAccounts: [],
     images: [{ id: 'fixture', family: 'debian', arch: ['x86_64'] }],
+    serviceBackend: 'provider',
   };
   const claude: HarnessDeclaration<'claude'> = {
     id: 'claude',
@@ -355,6 +356,36 @@ describe('fn:validateProfile', () => {
           fields: ['provider', 'minCpus', 'minMemoryGb'],
           message:
             'Sprite offers no machine with 9 CPUs and 16 GB; it offers at most 8 CPUs and 16 GB',
+        },
+      ],
+    });
+  });
+
+  it('should accept Fly’s largest offered size and reject higher CPU and memory minimums', () => {
+    const largest = validateProfile({
+      declarations: registry,
+      candidate: {
+        ...valid,
+        provider: 'fly-machine',
+        options: { ...valid.options, minCpus: 16, minMemoryGb: 128 },
+      },
+    });
+    const tooLarge = validateProfile({
+      declarations: registry,
+      candidate: {
+        ...valid,
+        provider: 'fly-machine',
+        options: { ...valid.options, minCpus: 17, minMemoryGb: 129 },
+      },
+    });
+
+    expect(largest).toMatchObject({ isValid: true });
+    expect(tooLarge).toMatchObject({
+      isValid: false,
+      violations: [
+        {
+          code: 'undeclared-capability',
+          fields: ['provider', 'minCpus', 'minMemoryGb'],
         },
       ],
     });

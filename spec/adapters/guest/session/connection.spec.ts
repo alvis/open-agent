@@ -54,7 +54,7 @@ const RESULT = { exitCode: 0, stdout: '[]', stderr: '' };
 describe('cl:SetupConnection', () => {
   it('should open on first use, reuse the session, and release it once', async () => {
     const connection = new SetupConnection(
-      registry.providers.sprite,
+      registry.providers['fly-machine'],
       WORKSTATION,
     );
 
@@ -83,7 +83,7 @@ describe('cl:SetupConnection', () => {
       [Symbol.asyncDispose]: async () => undefined,
     } satisfies GuestSession;
     const connection = new SetupConnection(
-      registry.providers.sprite,
+      registry.providers['fly-machine'],
       WORKSTATION,
     );
     const lost = await connection.open();
@@ -99,7 +99,7 @@ describe('cl:SetupConnection', () => {
 
   it('should lend a session without letting the borrower close it', async () => {
     const connection = new SetupConnection(
-      registry.providers.sprite,
+      registry.providers['fly-machine'],
       WORKSTATION,
     );
 
@@ -126,7 +126,7 @@ describe('cl:SetupConnection', () => {
       [Symbol.asyncDispose]: async () => undefined,
     } satisfies GuestSession;
     const connection = new SetupConnection(
-      registry.providers.sprite,
+      registry.providers['fly-machine'],
       WORKSTATION,
     );
     const lost = await connection.open();
@@ -164,6 +164,30 @@ describe('cl:SetupConnection', () => {
       guest.exec({ program: 'printf', arguments: ['ready'] }),
     ).resolves.toEqual(RESULT);
     expect(guest.services).toBe(channel.services);
+    expect(session.run).toHaveBeenCalledOnce();
+  });
+
+  it('should control runit services through the session on a Fly machine', async () => {
+    const channel = guestOf(
+      new Sprite('test', new SpritesClient('test-token')),
+    );
+    vi.spyOn(channel.services, 'list').mockImplementation(async () => {
+      throw new Error('Provider services must not handle this guest');
+    });
+    vi.spyOn(
+      registry.providers['fly-machine'],
+      'openGuest',
+    ).mockImplementationOnce(async () => channel);
+    const connection = new SetupConnection(
+      registry.providers['fly-machine'],
+      WORKSTATION,
+    );
+
+    const guest = await connection.guest();
+    const session = await connection.open();
+
+    expect(guest.services).not.toBe(channel.services);
+    await expect(guest.services.list()).resolves.toEqual([]);
     expect(session.run).toHaveBeenCalledOnce();
   });
 });

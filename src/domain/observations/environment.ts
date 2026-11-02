@@ -4,7 +4,7 @@ import type {
   NetworkLauncher,
   WakeMode,
 } from '#domain/declarations';
-import type { OsFamilyId } from '#domain/guest';
+import type { OsFamilyId, ServiceBackendId } from '#domain/guest';
 import type { GuestAccount, GuestCommand } from '#domain/guest-command';
 import type { GuestNetworkIdentity } from '#domain/observations/network';
 import type { WorkstationProfile } from '#domain/profile';
@@ -27,7 +27,7 @@ export interface EnvironmentTool {
   account: ToolOwner;
   /** executables a `brew` tool links into `/usr/local/bin` */
   executables: readonly string[];
-  /** the resolved source; the updater upgrades by its `kind` */
+  /** the resolved source; the updater upgrades and the boot hook relinks by its `kind` */
   source: ToolSource;
   /** the version the source's manager reports installed, which setup and the updater record; absent for a system tool or one whose version cannot be read */
   version?: string;
@@ -45,6 +45,8 @@ export interface SkippedTool {
 export interface EnvironmentProvider {
   /** provider identifier */
   id: string;
+  /** who runs the guest services */
+  serviceBackend: ServiceBackendId;
   /** who decides when the workstation sleeps */
   keepAwakeMode: KeepAwakeMode;
   /** idle forms in preference order */
@@ -148,9 +150,9 @@ export interface GuestEnvironment {
   agent: EnvironmentAgent;
   /** the selected network's launch facts; null when it runs no daemon */
   network: EnvironmentNetwork | null;
-  /** the services the provider runs, the agent's and the network daemon's included */
+  /** the services the service backend runs, the agent's and the network daemon's included */
   services: readonly ServiceDefinition[];
-  /** the commands the provider runs on a schedule */
+  /** the commands the service backend runs on a schedule */
   jobs: readonly PeriodicJob[];
   /** the retained network device identity, for cleanup; absent until a device enrolls */
   networkIdentity?: GuestNetworkIdentity;

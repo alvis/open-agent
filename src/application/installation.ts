@@ -86,15 +86,17 @@ export async function installWorkstation(
   });
   await params.beforeServices?.(await connection.guest());
   await runSteps(mechanics, params, { steps: assembly.services });
-  await traceStage({
-    stage: 'setup.services',
-    action: async () =>
-      mechanics.services.installProvider({
-        control: (await connection.guest()).services,
-        services: assembly.environment.services,
-        previous: previous?.services.map(({ name }) => name) ?? [],
-      }),
-  });
+  if (provider.serviceBackend === 'provider') {
+    await traceStage({
+      stage: 'setup.services',
+      action: async () =>
+        mechanics.services.installProvider({
+          control: (await connection.guest()).services,
+          services: assembly.environment.services,
+          previous: previous?.services.map(({ name }) => name) ?? [],
+        }),
+    });
+  }
 
   return assembly.environment;
 }

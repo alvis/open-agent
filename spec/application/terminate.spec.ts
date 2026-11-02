@@ -14,6 +14,7 @@ import {
   SCHEMA_LABEL,
 } from '#adapters/drivers/providers/sprite/labels';
 import { terminateWorkstation } from '#application/terminate';
+import { registry } from '#composition/registry';
 
 import { InteractionExit } from '#kernel/navigation';
 import { OperationContext, withOperation } from '#kernel/operation';
@@ -23,7 +24,7 @@ import {
   DISABLED_NETWORK_PROFILE,
   TAILSCALE_PROFILE,
 } from '../fixtures/profile';
-import { dependencies } from '../mocks/dependencies';
+import { dependencies, dependenciesWith } from '../mocks/dependencies';
 import { createFilesystemSprite, providerOf } from '../mocks/sprites';
 
 import type { Sprite } from '@fly/sprites';
@@ -106,6 +107,103 @@ function deletionInteraction(typedName: string): Interaction {
 }
 
 describe('fn:terminateWorkstation', () => {
+  it('should reject a Fly machine with an empty API identity before deletion', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
+      const path = new URL(input instanceof Request ? input.url : String(input))
+        .pathname;
+      const body: unknown =
+        path === '/v1/tokens/current'
+          ? { tokens: [{ org_slug: 'test-organization' }] }
+          : path === '/v1/apps/temporary'
+            ? {
+                id: 'app-temporary',
+                name: 'temporary',
+                internal_numeric_id: 42,
+                organization: { slug: 'test-organization' },
+              }
+            : path === '/v1/apps/temporary/machines'
+              ? [
+                  {
+                    id: '',
+                    state: 'started',
+                    config: {
+                      metadata: {
+                        'open-agent': 'managed',
+                        'open-agent-schema': '1',
+                      },
+                    },
+                  },
+                ]
+              : undefined;
+      if (body === undefined) {
+        throw new Error(`Unexpected Fly API request: ${path}`);
+      }
+
+      return Response.json(body);
+    });
+    vi.stubGlobal('fetch', fetch);
+    const provider = registry.providers['fly-machine'].authenticate({
+      credential: 'FlyV1 fm2_test',
+      restorableServices: [],
+    });
+
+    await expect(
+      terminateWorkstation(
+        dependenciesWith({
+          guest: {
+            ...dependencies.guest,
+            release: {
+              ...dependencies.guest.release,
+              assertSupported: async () => undefined,
+            },
+          },
+        }),
+        {
+          request: {
+            command: 'terminate',
+            machine: 'temporary',
+            options: { yes: true, nonInteractive: true },
+          },
+          provider,
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'PROVIDER',
+      message: expect.stringMatching(/^Selected workstation /u),
+    });
+    expect(
+      fetch.mock.calls.every(([, init]) => init?.method !== 'DELETE'),
+    ).toBe(true);
+  });
+
+  it.each([
+    { machine: undefined, yes: true },
+    { machine: 'named-target', yes: false },
+  ])(
+    'should refuse unattended deletion without an exact name and consent',
+    async ({ machine, yes }) => {
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-terminate-unattended-'),
+      );
+      const { client, request } = await createTerminationBoundary(
+        directory.path,
+      );
+
+      await expect(
+        terminateWorkstation(dependencies, {
+          request: {
+            ...request,
+            machine,
+            options: { ...request.options, yes },
+          },
+          provider: providerOf(client),
+        }),
+      ).rejects.toEqual(expect.objectContaining({ code: 'USAGE' }));
+      expect(client.getSprite).not.toHaveBeenCalled();
+      expect(client.deleteSprite).not.toHaveBeenCalled();
+    },
+  );
+
   it('should cancel before guest inspection when the typed name differs', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-terminate-typed-mismatch-'),

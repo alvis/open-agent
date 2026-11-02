@@ -24,8 +24,9 @@ export const ENVIRONMENT_PATH = `${GUEST_ROOT}/environment.json`;
 export const AGENT_HOME = accountHome('agent');
 
 /**
- * the agent account's user and group id; it stays clear of 1000, the first
- * user an image adds, such as the `ubuntu` account of the Sprite image
+ * the agent account's user and group id, the one the Fly boot hook restores
+ * too; it stays clear of 1000, the first user an image adds, such as the
+ * `ubuntu` account of the Sprite image
  */
 export const AGENT_ID = '2000';
 
@@ -60,7 +61,7 @@ export const SYSTEM_PATH = '/usr/sbin:/usr/bin:/sbin:/bin';
 /**
  * the directories Homebrew links its formulae's executables into, which the
  * agent's PATH searches before the system's. Root runs a formula's binaries,
- * such as tailscaled, only because the Homebrew account is a
+ * such as runit's and tailscaled, only because the Homebrew account is a
  * locked system account root alone writes, acting as it; the agent account
  * never writes anything root runs
  */
@@ -84,7 +85,7 @@ export const LOGIN_PROFILE_PATH = '/etc/profile.d/open-agent.sh';
 /**
  * the login profile's text: root's PATH puts the system's commands ahead of
  * the tool links, and an ordinary account's its own commands, then
- * Homebrew's, ahead of the system's
+ * Homebrew's, ahead of the system's; the Fly boot hook writes the same text
  */
 export const LOGIN_PROFILE = [
   "# open-agent: the system's commands ahead of the tool links for root; its own",
@@ -107,14 +108,25 @@ export const LOGIN_PROFILE = [
  */
 export const SESSION_DIRECTORY = '/run/open-agent-session';
 
-/** the lock a setup session holds while it runs, which the update gate and the network launcher test */
+/** the lock a setup session holds while it runs, which the boot, the update gate and the network launcher wait on or test */
 export const SESSION_LOCK = `${SESSION_DIRECTORY}/session.lock`;
+
+/**
+ * the memory-backed directory the runit backend keeps each service's runtime
+ * state in: a root-owned start marker per service, and a private directory
+ * owned by the service's account, which holds what the service captured of its
+ * own stderr for the service's finish hook to read; it never lives on the volume
+ */
+export const SERVICE_STATE_DIRECTORY = '/run/open-agent-service';
 
 /** the memory-backed directory setup delivers its secrets in */
 export const SECRET_DIRECTORY = '/dev/shm';
 
 /** the prefix of every directory a setup secret is delivered in, which a crash sweep removes */
 export const SECRET_PREFIX = `${SECRET_DIRECTORY}/open-agent.`;
+
+/** the kernel's id of the current boot */
+export const BOOT_ID_PATH = '/proc/sys/kernel/random/boot_id';
 
 /** the file whose `PRETTY_HOSTNAME` the agent reads as the human-readable name of the environment it runs in */
 export const MACHINE_INFO_PATH = '/etc/machine-info';

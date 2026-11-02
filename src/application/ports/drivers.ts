@@ -2,6 +2,7 @@ import type {
   GuestChannel,
   GuestProcess,
 } from '#application/ports/guest-channel';
+import type { SetupStep } from '#application/ports/plan';
 import type {
   AgentDeclaration,
   AgentPairing,
@@ -22,6 +23,7 @@ import type {
   ProviderId,
 } from '#domain/ids';
 import type { AgentEnvironments } from '#domain/observations/agent';
+import type { BootReport } from '#domain/observations/boot';
 import type {
   HarnessInspection,
   HarnessPluginEvidence,
@@ -167,6 +169,21 @@ export interface ProviderDriver<
    * @param workstation managed workstation
    */
   awaitGuestReady(workstation: WorkstationRecord): Promise<void>;
+  /**
+   * builds the step that installs the provider's boot hook and prepares the
+   * guest with it, which setup runs before any package step; absent when the
+   * provider declares no boot hook
+   * @param needs ids of the steps installing the libraries the hook sources
+   * @returns the boot hook step
+   */
+  bootHookStep?(needs: readonly string[]): Promise<SetupStep>;
+  /**
+   * reads what the boot hook recorded about the last boot, for doctor;
+   * absent when the provider declares no boot hook
+   * @param guest guest channel of the workstation
+   * @returns the last boot's result, its steps and its log's latest lines
+   */
+  inspectBoot?(guest: GuestChannel): Promise<BootReport>;
 }
 
 /** documented native client endpoints derived from one gateway hub URL */
