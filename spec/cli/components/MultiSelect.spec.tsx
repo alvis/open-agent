@@ -63,7 +63,7 @@ describe('rc:MultiSelect', () => {
       await vi.waitFor(() => expect(view.lastFrame()).toContain('Harnesses'));
       act(() => view.stdin.write('\x1b'));
 
-      await vi.waitFor(() => expect(onCancel.mock.calls).toEqual([[]]));
+      await vi.waitFor(() => expect(onCancel.mock.calls).toEqual([[true]]));
     } finally {
       view.unmount();
     }
@@ -73,6 +73,7 @@ describe('rc:MultiSelect', () => {
     const onSubmit = vi.fn<(values: string[]) => void>();
     const view = render(
       <MultiSelect
+        backLabel="parent menu"
         choices={[
           { label: 'Alpha', value: 'alpha', isPreselected: true },
           {

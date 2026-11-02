@@ -171,12 +171,12 @@ export function ensureError(exception: unknown): Error {
 }
 
 /**
- * identifies a user cancellation, distinct from failures
+ * identifies a user cancellation, distinct from back navigation and failures
  * @param error caught failure
  * @returns whether the user cancelled the operation
  */
 export function isCancellation(error: unknown): boolean {
-  return error instanceof InteractionExit;
+  return error instanceof InteractionExit && error.action === 'cancel';
 }
 
 /**

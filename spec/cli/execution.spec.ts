@@ -380,10 +380,10 @@ describe('fn:execute', () => {
   it('should reject a real flag conflict before reading a credential file', async () => {
     const selected: CommandRequest = {
       ...request,
-      command: 'terminate',
       options: {
         ...request.options,
         credentialFile: 'credentials.env',
+        section: 'agent',
       },
     };
 
@@ -395,7 +395,7 @@ describe('fn:execute', () => {
       exitCode: captured.exitCode,
     }).toEqual({
       stdout: '',
-      stderr: expect.stringContaining('Non-interactive termination requires'),
+      stderr: expect.stringContaining('Setup-only options'),
       exitCode: 2,
     });
     expect(readInputFile.mock.calls).toEqual([]);

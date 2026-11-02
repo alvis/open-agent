@@ -3,12 +3,17 @@ import type { Interaction } from '#application/ports/interaction';
 import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 import type { CommandName } from '#kernel/commands';
 
+/** targetable setup areas */
+export type SetupSection = 'all' | 'agent' | 'network';
+
 /** values parsed from CLI flags; secret-bearing fields contain references, never raw credentials */
 export interface CommandOptions {
   /** workstation name, from --name */
   name?: string;
   /** explicit credential dotenv file read before the ambient environment, from --credential-file */
   credentialFile?: string;
+  /** setup section to configure */
+  section?: SetupSection;
   /** selected provider */
   provider?: ProviderId;
   /** selected ACP agent */

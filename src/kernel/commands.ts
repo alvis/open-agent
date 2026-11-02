@@ -1,2 +1,3 @@
 /** supported workstation operations */
-export type CommandName = 'create' | 'list' | 'show' | 'terminate' | 'doctor';
+export type CommandName =
+  'create' | 'setup' | 'list' | 'show' | 'terminate' | 'doctor';

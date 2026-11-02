@@ -8,12 +8,29 @@ import {
 import { activePrompts } from './selection/sources';
 import { readSelection } from './selection/supplied';
 
+import type { SetupSection } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
-import type { ProfileCandidate } from '#domain/profile';
+import type { ProfileCandidate, WorkstationProfile } from '#domain/profile';
 import type { SelectionField } from '#domain/selection-inputs';
 
 import type { Prompts, SelectionContext } from './selection/sources';
 import type { SuppliedSelection } from './selection/supplied';
+
+/** what an existing workstation's setup run reads before reaching the workstation */
+interface SetupReadContext extends Omit<SelectionContext, 'interaction'> {
+  /** setup area the run targets */
+  section: SetupSection;
+}
+
+/** what an existing workstation's setup run may change */
+interface SetupSelectionContext extends SelectionContext {
+  /** the profile the workstation recorded */
+  recorded: WorkstationProfile;
+  /** setup area the run targets */
+  section: SetupSection;
+  /** values the run's flags and section-scoped environment supply */
+  supplied: SuppliedSelection;
+}
 
 /** a resolved, not yet validated selection */
 export interface SelectionResolution {
@@ -28,6 +45,25 @@ const CREATE_FIELDS: readonly SelectionField[] = [
   'harnesses',
   'network',
 ];
+
+/** the fields each setup section reads and saves; every other field keeps its recorded value */
+const SECTION_FIELDS: Readonly<
+  Partial<Record<SetupSection, readonly SelectionField[]>>
+> = {
+  all: ['harnesses', 'network'],
+  network: ['network'],
+};
+
+/**
+ * lists the profile fields a setup section reads and saves
+ * @param section setup area the run targets
+ * @returns the owned fields; empty when the section leaves the profile unchanged
+ */
+export function sectionFields(
+  section: SetupSection,
+): readonly SelectionField[] {
+  return SECTION_FIELDS[section] ?? [];
+}
 
 /** the named inputs of resolveCreateNetwork */
 interface CreateNetworkParams {
@@ -114,4 +150,73 @@ export async function resolveCreateSelection(
       network,
     },
   };
+}
+
+/**
+ * reads the values a setup run supplies, without the recorded profile: the
+ * provider and agent only from flags so a mismatch can be refused, and every
+ * other field only when the targeted section owns it
+ * @param dependencies the registered drivers, which declare the selection inputs
+ * @param context flags, sources and targeted section
+ * @returns the supplied values
+ */
+export function readSetupSelection(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  context: SetupReadContext,
+): SuppliedSelection {
+  return readSelection(dependencies, context, sectionFields(context.section));
+}
+
+/**
+ * merges a setup run's supplied values with the workstation's recorded
+ * profile; only the fields the targeted section owns may change, and prompts
+ * run only when every section is targeted
+ * @param dependencies the registered drivers, the profile defaults
+ * @param context recorded profile, targeted section, supplied values and prompts
+ * @returns the selection to validate
+ */
+export async function resolveSetupSelection(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
+  context: SetupSelectionContext,
+): Promise<SelectionResolution> {
+  const { recorded, section, supplied } = context;
+  const prompts = section === 'all' ? activePrompts(context) : undefined;
+  const harnesses =
+    supplied.harnesses ??
+    (await prompts?.chooseMany(
+      'Harnesses',
+      harnessChoices(dependencies, recorded.agent, recorded.harnesses),
+    )) ??
+    recorded.harnesses;
+  const network = await resolveSetupNetwork(dependencies, context, prompts);
+
+  return {
+    candidate: {
+      provider: supplied.provider ?? recorded.provider,
+      agent: supplied.agent ?? recorded.agent,
+      harnesses,
+      network,
+    },
+  };
+}
+
+/**
+ * resolves the network a setup run applies
+ * @param dependencies the registered drivers
+ * @param context recorded profile, targeted section and supplied values
+ * @param prompts prompts when the run targets every section
+ * @returns the network id, validated later against the catalog
+ */
+async function resolveSetupNetwork(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  context: SetupSelectionContext,
+  prompts: Prompts | undefined,
+): Promise<string> {
+  const { recorded, supplied } = context;
+
+  return (
+    supplied.network ??
+    (await prompts?.choose('Network', networkChoices(dependencies))) ??
+    recorded.network
+  );
 }

@@ -27,7 +27,7 @@ import type { GuestMechanics } from '#application/ports/guest';
 import type { Interaction } from '#application/ports/interaction';
 import type { GuestInspection } from '#domain/observations/inspection';
 
-// a guest command runs through the framed guest shell boundary
+// a selected setup section runs through the framed guest shell boundary
 vi.mock(
   '#adapters/guest/platform/session/open',
   async () => import('../mocks/session'),
@@ -285,6 +285,34 @@ describe('fn:runCommand', () => {
       },
     });
     expect(inspect).toHaveBeenCalledOnce();
+  });
+
+  it('should apply the selected network setup section to a managed workstation', async () => {
+    spriteCredential();
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-command-setup-'),
+    );
+    await managedSprite(directory.path);
+
+    const result = await runCommand(dependencies, {
+      command: 'setup',
+      machine: 'workstation',
+      options: {
+        ...options,
+        provider: 'sprite',
+        section: 'network',
+        network: 'none',
+      },
+    });
+
+    expect(result).toMatchObject({
+      command: 'setup',
+      ok: true,
+      data: {
+        section: 'network',
+        network: { status: 'disabled', readiness: 'skipped' },
+      },
+    });
   });
 
   it('should cancel termination when the typed workstation name differs', async () => {

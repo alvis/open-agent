@@ -122,8 +122,9 @@ describe('fault normalization', () => {
     });
   });
 
-  it('should recognize cancel navigation without treating faults as cancellation', () => {
+  it('should recognize cancel navigation without treating back or faults as cancellation', () => {
     expect(isCancellation(new InteractionExit('cancel'))).toBe(true);
+    expect(isCancellation(new InteractionExit('back'))).toBe(false);
     expect(isCancellation(new Error('cancel'))).toBe(false);
   });
 

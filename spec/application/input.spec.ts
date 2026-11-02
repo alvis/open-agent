@@ -5,7 +5,11 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { commandError } from '#application/failures';
-import { requireValidProfile, resolveCreateInputs } from '#application/input';
+import {
+  requireValidProfile,
+  requireValidSuppliedSelection,
+  resolveCreateInputs,
+} from '#application/input';
 import { resolveProviderCredential } from '#application/input/provider-credential';
 
 import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
@@ -33,6 +37,30 @@ describe('fn:requireValidProfile', () => {
     expect(commandError(failure)).toMatchObject({
       code: 'INPUT',
       details: [expect.stringContaining('harness')],
+    });
+  });
+});
+
+describe('fn:requireValidSuppliedSelection', () => {
+  it('should accept a compatible supplied selection', () => {
+    expect(() =>
+      requireValidSuppliedSelection(dependencies, { provider: 'sprite' }),
+    ).not.toThrow();
+  });
+
+  it('should report an unknown driver before workstation lookup', () => {
+    let failure: unknown;
+    try {
+      requireValidSuppliedSelection(dependencies, {
+        agent: 'unregistered-agent',
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(commandError(failure)).toMatchObject({
+      code: 'INPUT',
+      details: [expect.stringContaining('unregistered-agent')],
     });
   });
 });

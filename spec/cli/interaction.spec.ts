@@ -4,11 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { commandError } from '#application/failures';
 import { resolveSecret } from '#application/input/sources';
+import { withBackNavigation } from '#application/navigation';
 import { resultExitCode } from '#cli/exit';
 
 import { createInteraction } from '#cli/interaction';
 
-import { InteractionExit } from '#kernel/navigation';
+import { InteractionExit, returnOnBack } from '#kernel/navigation';
 
 import { driveInk } from '../fixtures/ink';
 import { dependencies } from '../mocks/dependencies';
@@ -129,7 +130,7 @@ describe('fn:createInteraction', () => {
 
   it.each([
     { action: 'interrupt', input: '\x03', exit: 'cancel' },
-    { action: 'cancel with Escape', input: '\x1b', exit: 'cancel' },
+    { action: 'cancel with Escape', input: '\x1b', exit: 'back' },
   ])(
     'should $action a multiple-choice prompt without submitting a selection',
     async ({ input, exit }) => {
@@ -137,9 +138,10 @@ describe('fn:createInteraction', () => {
         async (interaction) =>
           settleWithin(
             interaction
-              .multiselect({ message: 'Cancelable harnesses' }, [
-                { label: 'Harness', value: 'harness' },
-              ])
+              .multiselect(
+                { message: 'Cancelable harnesses', backLabel: 'harness menu' },
+                [{ label: 'Harness', value: 'harness' }],
+              )
               .then(
                 () => ({ submitted: true }),
                 (error: unknown) => ({
@@ -158,6 +160,22 @@ describe('fn:createInteraction', () => {
         expect(observed.result).toHaveProperty('code', 'CANCELLED');
       }
       expect(observed.result).toHaveProperty('exit.action', exit);
+      if (exit === 'back') {
+        const withoutParent = await driveInk(
+          async (interaction) =>
+            settleWithin(
+              interaction
+                .multiselect({ message: 'No parent choice' }, [
+                  { label: 'Harness', value: 'harness' },
+                ])
+                .catch((error: unknown) => error),
+            ),
+          [{ waitFor: 'No parent choice', input: '\x1b' }],
+        );
+
+        expect(withoutParent.matchedSteps).toBe(1);
+        expect(withoutParent.result).toHaveProperty('action', 'cancel');
+      }
     },
   );
 
@@ -266,7 +284,7 @@ describe('fn:createInteraction', () => {
     expect(observed.result).toEqual({ selected: 'primary', confirmed: true });
   });
 
-  it('should carry literal choice values through real selection', async () => {
+  it('should carry literal choice values through real selection and back navigation', async () => {
     const choices = [
       { label: 'Claude harness', value: 'claude' },
       { label: 'Other harness', value: 'other' },
@@ -274,14 +292,12 @@ describe('fn:createInteraction', () => {
     const consumeHarness = (harness: 'claude' | 'other') => harness;
     const observed = await driveInk(
       async (interaction) => {
+        const nested = withBackNavigation(interaction, 'harness menu');
         const selected = consumeHarness(
-          await interaction.select({ message: 'Choose a harness' }, choices),
+          await nested.select({ message: 'Choose a harness' }, choices),
         );
         const selectedMany = (
-          await interaction.multiselect(
-            { message: 'Choose harnesses' },
-            choices,
-          )
+          await nested.multiselect({ message: 'Choose harnesses' }, choices)
         ).map(consumeHarness);
 
         return { selected, selectedMany };
@@ -298,22 +314,40 @@ describe('fn:createInteraction', () => {
       selected: 'claude',
       selectedMany: ['claude'],
     });
+    expect(observed.output).toContain('Esc harness menu');
   });
 
-  it('should treat Ctrl-C as process cancellation', async () => {
+  it('should treat Escape as local back but Ctrl-C as process cancellation', async () => {
+    const back = await driveInk(
+      async (interaction) =>
+        returnOnBack(async () =>
+          interaction.input({
+            message: 'Choose a local value',
+            backLabel: 'previous menu',
+          }),
+        ),
+      [{ waitFor: 'Choose a local value', input: '\x1b' }],
+    );
     const cancelled = await driveInk(
       async (interaction) => {
         try {
-          await interaction.input({ message: 'Choose a value' });
+          await returnOnBack(async () =>
+            interaction.input({
+              message: 'Choose a value',
+              backLabel: 'previous menu',
+            }),
+          );
         } catch (error) {
           return commandError(error);
         }
 
-        throw new Error('Ctrl-C unexpectedly returned a value');
+        throw new Error('Ctrl-C unexpectedly returned to the local menu');
       },
       [{ waitFor: 'Choose a value', input: '\x03' }],
     );
 
+    expect(back.matchedSteps).toBe(1);
+    expect(back.result).toBeUndefined();
     expect(cancelled.matchedSteps).toBe(1);
     expect(cancelled.result.code).toBe('CANCELLED');
     expect(

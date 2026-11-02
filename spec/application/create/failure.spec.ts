@@ -383,7 +383,7 @@ describe('cmd:create retained setup recovery', () => {
         throw new Error('Expected incomplete setup');
       }
       expect(result.error.details).toContain(
-        `Workstation ${workstation.name} was retained.`,
+        `Workstation ${workstation.name} was retained. Run open-agent setup ${workstation.name} to recover.`,
       );
       if (privacyFails) {
         expect(result.error.details).toContain(
@@ -405,6 +405,12 @@ describe('cmd:create retained setup recovery', () => {
 });
 
 describe('cmd:create authorization failure', () => {
+  it('should preserve back navigation before provider creation', () => {
+    const back = new InteractionExit('back');
+
+    expect(() => authorizationFailure(back)).toThrow(back);
+  });
+
   it('should preserve a cancellation without claiming a workstation was created', () => {
     const result = authorizationFailure(new InteractionExit('cancel'));
     if (result.kind !== 'result') {

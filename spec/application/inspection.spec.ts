@@ -83,7 +83,7 @@ async function installedSprite(
   const sprite = Object.assign(createFilesystemSprite({ root, execute }), {
     id: 'sprite-temporary',
     organizationName: 'test-org',
-    // set up by this release
+    // set up by this release, so a section run leaves its labels as they are
     labels: mergeMetadataLabels([MANAGED_LABEL, SCHEMA_LABEL], {
       setup: 'ready',
       profile: summarizeProfile(PROFILE),

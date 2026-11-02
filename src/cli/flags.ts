@@ -35,7 +35,7 @@ export const commonFlags = {
   ...outputFlags,
 } as const;
 
-/** consent for selected create and terminate actions */
+/** consent for selected create, setup, and terminate actions */
 export const consentFlags = {
   yes: {
     kind: 'boolean',
@@ -79,5 +79,16 @@ export const selectionFlags = {
     optional: true,
     placeholder: 'NETWORK',
     brief: `NETWORK · ${networkIds().join(', ')}`,
+  },
+} as const;
+
+/** setup-only action selectors */
+export const setupFlags = {
+  section: {
+    kind: 'parsed',
+    parse: buildChoiceParser(['all', 'agent', 'network'] as const),
+    optional: true,
+    placeholder: 'SECTION',
+    brief: 'SECTION · all, agent, or network',
   },
 } as const;

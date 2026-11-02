@@ -9,9 +9,10 @@ import type { InteractionChoice } from '#application/ports/interaction';
 type SelectProps<V extends string> = {
   label: string;
   description?: string;
+  backLabel?: string;
   choices: ReadonlyArray<InteractionChoice<V>>;
   onSubmit: (value: V) => void;
-  onCancel: () => void;
+  onCancel: (back?: boolean) => void;
 };
 
 interface ChoiceWindow<V extends string> {
@@ -29,6 +30,7 @@ const CURSOR_CONTEXT = 5;
  * @param root0 selector props
  * @param root0.label prompt label
  * @param root0.description optional task context shown below the title
+ * @param root0.backLabel optional parent destination for Escape
  * @param root0.choices available choices
  * @param root0.onSubmit selected-value callback
  * @param root0.onCancel cancellation callback
@@ -37,6 +39,7 @@ const CURSOR_CONTEXT = 5;
 export function Select<V extends string>({
   label,
   description,
+  backLabel,
   choices,
   onSubmit,
   onCancel,
@@ -55,7 +58,7 @@ export function Select<V extends string>({
       return;
     }
     if (key.escape) {
-      onCancel();
+      onCancel(true);
 
       return;
     }
@@ -119,8 +122,8 @@ export function Select<V extends string>({
       <Text dimColor>
         {above > 0 && `↑ ${above} more · `}
         {below > 0 && `↓ ${below} more · `}
-        {matches.length} choices · ↑↓ move · Enter choose · Esc cancel · Ctrl+C
-        cancel
+        {matches.length} choices · ↑↓ move · Enter choose · Esc{' '}
+        {backLabel ?? 'cancel'} · Ctrl+C cancel
       </Text>
     </Box>
   );
@@ -131,6 +134,7 @@ export function Select<V extends string>({
  * @param root0 confirmation props
  * @param root0.label prompt label
  * @param root0.description optional task context shown below the title
+ * @param root0.backLabel optional parent destination for Escape
  * @param root0.defaultAnswer value accepted by Enter
  * @param root0.onSubmit answer callback
  * @param root0.onCancel cancellation callback
@@ -139,22 +143,24 @@ export function Select<V extends string>({
 export function ConfirmInput({
   label,
   description,
+  backLabel,
   defaultAnswer = false,
   onSubmit,
   onCancel,
 }: Readonly<{
   label: string;
   description?: string;
+  backLabel?: string;
   defaultAnswer?: boolean;
   onSubmit: (value: boolean) => void;
-  onCancel: () => void;
+  onCancel: (back?: boolean) => void;
 }>): React.JSX.Element {
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
       return;
     }
     if (key.escape) {
-      onCancel();
+      onCancel(true);
 
       return;
     }
@@ -177,8 +183,8 @@ export function ConfirmInput({
       </Text>
       {description && <Text dimColor>{description}</Text>}
       <Text dimColor>
-        Y yes · N no · Enter {defaultAnswer ? 'yes' : 'no'} · Esc cancel ·
-        Ctrl+C cancel
+        Y yes · N no · Enter {defaultAnswer ? 'yes' : 'no'} · Esc{' '}
+        {backLabel ?? 'cancel'} · Ctrl+C cancel
       </Text>
     </Box>
   );

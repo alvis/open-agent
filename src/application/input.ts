@@ -5,6 +5,7 @@ import { resolveBaseInputs } from './input/base';
 import { missingProvisioningInputs } from './input/missing';
 import { resolveInteractiveInputs } from './input/prompts';
 import { resolveCreateSelection } from './input/selection';
+import { suppliedSelectionViolations } from './input/selection/supplied';
 import { readEnvironmentSources } from './input/sources';
 
 import type { CommandOptions } from '#application/contracts';
@@ -13,6 +14,7 @@ import type { Interaction } from '#application/ports/interaction';
 import type { WorkstationProfile } from '#domain/profile';
 
 import type { SelectionResolution } from './input/selection';
+import type { SuppliedSelection } from './input/selection/supplied';
 import type { InputSources } from './input/sources';
 import type { ResolvedInputs, RequiredInput } from './input/types';
 
@@ -123,6 +125,25 @@ export function requireValidProfile(
   }
 
   return validation.profile;
+}
+
+/**
+ * validates, before any provider or guest call, what a setup run's flags and
+ * environment supply on their own
+ * @param dependencies the registered drivers, the profile defaults
+ * @param supplied values the run supplies
+ * @throws {CommandFault} listing every violation at once
+ */
+export function requireValidSuppliedSelection(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
+  supplied: SuppliedSelection,
+): void {
+  const details = suppliedSelectionViolations(dependencies, supplied).map(
+    ({ message }) => message,
+  );
+  if (details.length > 0) {
+    throw selectionFault(details);
+  }
 }
 
 /**

@@ -13,9 +13,10 @@ import type { InteractionChoice } from '#application/ports/interaction';
 type MultiSelectProps<V extends string> = {
   label: string;
   description?: string;
+  backLabel?: string;
   choices: ReadonlyArray<InteractionChoice<V>>;
   onSubmit: (values: V[]) => void;
-  onCancel: () => void;
+  onCancel: (back?: boolean) => void;
 };
 
 type InputKey = Parameters<Parameters<typeof useInput>[0]>[1];
@@ -32,7 +33,7 @@ interface MultiSelectInputContext<V extends string> {
   setFeedback: Dispatch<SetStateAction<string>>;
   setConfirmEmpty: Dispatch<SetStateAction<boolean>>;
   onSubmit: (values: V[]) => void;
-  onCancel: () => void;
+  onCancel: (back?: boolean) => void;
 }
 
 /** input chunk and current multiple-choice selection state */
@@ -47,6 +48,7 @@ interface MultiSelectInputParams<V extends string> {
  * @param root0 selector props
  * @param root0.label prompt label
  * @param root0.description optional task context shown below the title
+ * @param root0.backLabel optional parent destination for Escape
  * @param root0.choices available choices
  * @param root0.onSubmit selected-values callback
  * @param root0.onCancel cancellation callback
@@ -55,6 +57,7 @@ interface MultiSelectInputParams<V extends string> {
 export function MultiSelect<V extends string>({
   label,
   description,
+  backLabel,
   choices,
   onSubmit,
   onCancel,
@@ -132,7 +135,7 @@ export function MultiSelect<V extends string>({
         {below > 0 && `↓ ${below} more · `}
         {selected.size} selected · ↑↓ move ·{' '}
         {query ? 'Tab toggle · Space search' : 'Space/Tab toggle'} · Enter done
-        · Esc cancel · Ctrl+C cancel
+        · Esc {backLabel ?? 'cancel'} · Ctrl+C cancel
       </Text>
     </Box>
   );
@@ -159,7 +162,7 @@ function handleMultiSelectInput<V extends string>({
     return;
   }
   if (key.escape) {
-    context.onCancel();
+    context.onCancel(true);
 
     return;
   }

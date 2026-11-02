@@ -10,7 +10,7 @@ export const MANAGED_LABEL = 'open-agent';
 export const SCHEMA_LABEL = 'open-agent-schema-v1';
 /** marks a completed current provisioning attempt */
 export const SETUP_READY_LABEL = 'open-agent-setup-ready';
-/** marks a workstation whose setup did not finish */
+/** marks a workstation that needs a targeted setup retry */
 export const SETUP_INCOMPLETE_LABEL = 'open-agent-setup-incomplete';
 const SETUP_LABELS: readonly string[] = [
   SETUP_READY_LABEL,

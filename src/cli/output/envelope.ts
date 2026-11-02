@@ -4,12 +4,14 @@ import type { CreateDataOutput, CreateFailureDataOutput } from './create';
 import type { DoctorDataOutput } from './doctor';
 import type { ErrorOutput } from './failure';
 import type { ListDataOutput } from './list';
+import type { SetupDataOutput, SetupFailureDataOutput } from './setup';
 import type { ShowDataOutput } from './show';
 import type { TerminateDataOutput } from './terminate';
 
 /** success payload each command reports */
 export interface CommandDataOutput {
   create: CreateDataOutput;
+  setup: SetupDataOutput;
   list: ListDataOutput;
   show: ShowDataOutput;
   terminate: TerminateDataOutput;
@@ -19,6 +21,7 @@ export interface CommandDataOutput {
 /** observations each command keeps after failure */
 export interface CommandFailureDataOutput {
   create: CreateFailureDataOutput;
+  setup: SetupFailureDataOutput;
   list: never;
   show: never;
   terminate: TerminateDataOutput;

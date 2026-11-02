@@ -7,12 +7,13 @@ import { isPrintableInput } from '#cli/keystroke';
 type TextInputProps = {
   label: string;
   description?: string;
+  backLabel?: string;
   defaultValue?: string;
   required?: boolean;
   secret?: boolean;
   validate?: (value: string) => string | undefined;
   onSubmit: (value: string) => void;
-  onCancel: () => void;
+  onCancel: (back?: boolean) => void;
 };
 
 type InputKey = Parameters<Parameters<typeof useInput>[0]>[1];
@@ -25,7 +26,7 @@ interface EditContext {
   commit: (value: string, cursor: number) => void;
   setError: (message: string) => void;
   onSubmit: (value: string) => void;
-  onCancel: () => void;
+  onCancel: (back?: boolean) => void;
 }
 
 interface CharacterEditContext extends EditContext {
@@ -44,6 +45,7 @@ interface InputEventParams<Context extends EditContext> {
  * @param root0 text prompt props
  * @param root0.label prompt label
  * @param root0.description optional task context shown below the title
+ * @param root0.backLabel optional parent destination for Escape
  * @param root0.defaultValue initial non-secret value
  * @param root0.required whether a value is required
  * @param root0.secret whether to mask the value
@@ -55,6 +57,7 @@ interface InputEventParams<Context extends EditContext> {
 export function TextInput({
   label,
   description,
+  backLabel,
   defaultValue = '',
   required = false,
   secret = false,
@@ -108,7 +111,9 @@ export function TextInput({
       </Text>
       {description && <Text dimColor>{description}</Text>}
       {error && <Text color="red">{error}</Text>}
-      <Text dimColor>Enter confirm · Esc cancel · Ctrl+C cancel</Text>
+      <Text dimColor>
+        Enter confirm · Esc {backLabel ?? 'cancel'} · Ctrl+C cancel
+      </Text>
     </Box>
   );
 }
@@ -173,7 +178,7 @@ function handleCompletion({
     return true;
   }
   if (key.escape) {
-    context.onCancel();
+    context.onCancel(true);
 
     return true;
   }

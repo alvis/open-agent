@@ -160,7 +160,9 @@ function humanError(result: Extract<SerializedResult, { ok: false }>): string {
     lines.push(`Workstation ID: ${result.error.machineId}\n`);
   }
   if (result.error.setupIncomplete) {
-    lines.push('Setup is incomplete.\n');
+    lines.push(
+      'Setup is incomplete; run open-agent setup on this workstation.\n',
+    );
   }
   const recovery = isJsonObject(result.data?.recovery)
     ? result.data.recovery

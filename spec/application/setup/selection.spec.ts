@@ -1,0 +1,20 @@
+import { describe, expect, it } from 'vitest';
+
+import { selectSetupSection } from '#application/setup/selection';
+
+import { driveInk } from '../../fixtures/ink';
+
+describe('fn:selectSetupSection', () => {
+  it('should require a section when prompting is unavailable or explicitly disabled', async () => {
+    await expect(selectSetupSection({})).rejects.toMatchObject({
+      message: expect.stringContaining('--section'),
+    });
+    await expect(
+      driveInk(
+        async (interaction) =>
+          selectSetupSection({ nonInteractive: true }, interaction),
+        [],
+      ),
+    ).rejects.toMatchObject({ message: expect.stringContaining('--section') });
+  });
+});

@@ -18,7 +18,7 @@ import type { StatusUpdate } from '#kernel/status';
 /** submission and cancellation callbacks for one mounted prompt */
 interface PromptCallbacks<T> {
   onSubmit: (value: T) => void;
-  onCancel: () => void;
+  onCancel: (back?: boolean) => void;
 }
 
 /** persistent prompt and progress presented in one terminal root */
@@ -86,7 +86,7 @@ export function interactionRootElement({
  * @param params ordinary text prompt and callbacks
  * @param params.prompt prompt to present
  * @param params.onSubmit value submission handler
- * @param params.onCancel rejects the prompt
+ * @param params.onCancel rejects or returns to a parent prompt
  * @returns the text prompt element
  */
 export function inputPromptElement({
@@ -96,6 +96,7 @@ export function inputPromptElement({
 }: InputPromptElementParams): ReactElement {
   return (
     <TextInput
+      backLabel={prompt.backLabel}
       defaultValue={prompt.defaultValue}
       description={prompt.description}
       label={prompt.message}
@@ -112,7 +113,7 @@ export function inputPromptElement({
  * @param params secret prompt and callbacks
  * @param params.prompt prompt to present
  * @param params.onSubmit value submission handler
- * @param params.onCancel rejects the prompt
+ * @param params.onCancel rejects or returns to a parent prompt
  * @returns masked entry without prefilled plaintext
  */
 export function secretPromptElement({
@@ -122,6 +123,7 @@ export function secretPromptElement({
 }: SecretPromptElementParams): ReactElement {
   return (
     <SecretInput
+      backLabel={prompt.backLabel}
       description={prompt.description}
       label={prompt.message}
       required={prompt.required}
@@ -138,7 +140,7 @@ export function secretPromptElement({
  * @param params.prompt prompt to present
  * @param params.choices choices offered by the prompt
  * @param params.onSubmit value submission handler
- * @param params.onCancel rejects the prompt
+ * @param params.onCancel rejects or returns to a parent prompt
  * @returns the single-choice prompt element
  */
 export function selectPromptElement<V extends string>({
@@ -149,6 +151,7 @@ export function selectPromptElement<V extends string>({
 }: SelectPromptElementParams<V>): ReactElement {
   return (
     <Select
+      backLabel={prompt.backLabel}
       choices={choices}
       description={prompt.description}
       label={prompt.message}
@@ -164,7 +167,7 @@ export function selectPromptElement<V extends string>({
  * @param params.prompt prompt to present
  * @param params.choices choices offered by the prompt
  * @param params.onSubmit value submission handler
- * @param params.onCancel rejects the prompt
+ * @param params.onCancel rejects or returns to a parent prompt
  * @returns the multiple-choice prompt element
  */
 export function multiselectPromptElement<V extends string>({
@@ -175,6 +178,7 @@ export function multiselectPromptElement<V extends string>({
 }: MultiSelectPromptElementParams<V>): ReactElement {
   return (
     <MultiSelect
+      backLabel={prompt.backLabel}
       choices={choices}
       description={prompt.description}
       label={prompt.message}
@@ -189,7 +193,7 @@ export function multiselectPromptElement<V extends string>({
  * @param params confirmation prompt and callbacks
  * @param params.prompt prompt to present
  * @param params.onSubmit value submission handler
- * @param params.onCancel rejects the prompt
+ * @param params.onCancel rejects or returns to a parent prompt
  * @returns the confirmation prompt element
  */
 export function confirmPromptElement({
@@ -199,6 +203,7 @@ export function confirmPromptElement({
 }: ConfirmPromptElementParams): ReactElement {
   return (
     <ConfirmInput
+      backLabel={prompt.backLabel}
       defaultAnswer={prompt.defaultAnswer}
       description={prompt.description}
       label={prompt.message}

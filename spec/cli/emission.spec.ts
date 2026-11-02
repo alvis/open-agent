@@ -160,7 +160,7 @@ describe('fn:emitResult', () => {
         ok: true,
         data: { machine: machineWithUnreadableState('incomplete') },
       } satisfies CommandResult,
-      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete.\n  Inspect: open-agent show "dev box" --inspect\n`,
+      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete; run open-agent setup on this workstation.\n  Inspect: open-agent show "dev box" --inspect\n`,
     },
     {
       label: 'show ready',
@@ -187,7 +187,7 @@ describe('fn:emitResult', () => {
           },
         },
       } satisfies CommandResult,
-      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete.\n  Workstation deleted; do not retry the deletion.\n`,
+      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete; run open-agent setup on this workstation.\n  Workstation deleted; do not retry the deletion.\n`,
     },
     {
       label: 'list',
@@ -208,6 +208,19 @@ describe('fn:emitResult', () => {
         },
       } satisfies CommandResult,
       stderr: 'The command result could not be rendered safely.\n',
+    },
+    {
+      label: 'setup workstation',
+      result: {
+        command: 'setup',
+        ok: true,
+        data: {
+          section: 'network',
+          network: { status: 'disabled', readiness: 'skipped' },
+          machine: machineWithUnreadableState('incomplete'),
+        },
+      } satisfies CommandResult,
+      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete; run open-agent setup on this workstation.\n  Inspect: open-agent show "dev box" --inspect\n`,
     },
   ])(
     'should retain $label recovery from success render failure',

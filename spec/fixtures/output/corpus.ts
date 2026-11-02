@@ -184,7 +184,10 @@ export const CORPUS: readonly CorpusCase[] = [
       machine: 'primary',
       machineId: 'sprite-primary',
       setupIncomplete: true,
-      details: ['Workstation primary was retained.', 'Nothing was exposed'],
+      details: [
+        'Run open-agent setup primary to resume',
+        'Nothing was exposed',
+      ],
     },
     data: {
       preflight: PREFLIGHT,
@@ -206,6 +209,72 @@ export const CORPUS: readonly CorpusCase[] = [
       preflight: { checks: PREFLIGHT.checks, reminders: [] },
       recovery: { privacy: 'unconfirmed', incompleteLabel: 'unconfirmed' },
     },
+  }),
+
+  // setup: every section
+  corpusCase('setup-all', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'all',
+      machine: MACHINE,
+      service: 'configured',
+      network: { status: 'disabled', readiness: 'skipped' },
+    },
+  }),
+  corpusCase('setup-all-disabled', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'all',
+      machine: MACHINE,
+      network: { status: 'disabled', readiness: 'skipped' },
+    },
+  }),
+  corpusCase('setup-agent', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'agent',
+      machine: MACHINE,
+      service: 'configured',
+    },
+  }),
+  corpusCase('setup-network-disabled', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'network',
+      machine: MACHINE,
+      network: { status: 'disabled', readiness: 'skipped' },
+    },
+  }),
+  corpusCase('setup-failure-bare', {
+    command: 'setup',
+    ok: false,
+    error: { code: 'AUTH', message: 'The provider rejected the token' },
+  }),
+  corpusCase('setup-failure-readiness-recovery', {
+    command: 'setup',
+    ok: false,
+    error: {
+      code: 'PREFLIGHT',
+      message: 'Setup finished but the workstation is not ready',
+      machine: 'primary',
+      machineId: 'sprite-primary',
+      setupIncomplete: true,
+      details: ['Inspect the T3 service'],
+    },
+    data: {
+      readiness: FAILING_READINESS,
+      recovery: { incompleteLabel: 'confirmed' },
+    },
+  }),
+  corpusCase('setup-failure-recovery-unconfirmed', {
+    command: 'setup',
+    ok: false,
+    error: { code: 'PROVIDER', message: 'Could not label the workstation' },
+    data: { recovery: { incompleteLabel: 'unconfirmed' } },
   }),
 
   // list

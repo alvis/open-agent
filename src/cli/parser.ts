@@ -135,6 +135,7 @@ function validateBooleanFlagSyntax(argv: string[]): CommandError | undefined {
 export function requestedCommand(argv: string[]): CommandName | null {
   switch (argv[0]) {
     case 'create':
+    case 'setup':
     case 'list':
     case 'show':
     case 'terminate':

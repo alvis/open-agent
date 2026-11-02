@@ -8,6 +8,7 @@ import {
   listWorkstations,
   showWorkstation,
 } from '#application/inspection';
+import { setupWorkstation } from '#application/setup';
 import { terminateWorkstation } from '#application/terminate';
 import { validateCommandRequest } from '#application/validation';
 import { PROVIDER_IDS } from '#domain/ids';
@@ -269,6 +270,8 @@ async function dispatchAuthenticated(
         requestedName: request.machine,
         interaction,
       }),
+    setup: async () =>
+      setupWorkstation(dependencies, { request, provider, interaction }),
     terminate: async () =>
       terminateWorkstation(dependencies, {
         request,

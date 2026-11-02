@@ -39,14 +39,14 @@ export function agentChoices(
  * offers the harnesses the selected ACP agent supports
  * @param dependencies the registered drivers, the profile defaults
  * @param agent selected agent id
- * @returns one labelled choice per supported harness, the defaults preselected
+ * @param preselected harnesses that start selected; the defaults when omitted
+ * @returns one labelled choice per supported harness, preselected where chosen
  */
 export function harnessChoices(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
   agent: string,
+  preselected: readonly HarnessId[] = defaultHarnesses(dependencies, agent),
 ): Array<InteractionChoice<HarnessId>> {
-  const preselected = defaultHarnesses(dependencies, agent);
-
   return supportedHarnesses(dependencies, agent).map((id) => ({
     label: dependencies.registry.harnesses[id].displayName,
     value: id,
