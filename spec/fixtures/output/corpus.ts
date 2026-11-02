@@ -419,6 +419,25 @@ export const CORPUS: readonly CorpusCase[] = [
     error: { code: 'INPUT', message: 'Workstation "missing" was not found' },
   }),
 
+  // terminate
+  corpusCase('terminate-success', {
+    command: 'terminate',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      workstation: {
+        status: 'deleted',
+        id: 'sprite-primary',
+        name: 'primary',
+      },
+    },
+  }),
+  corpusCase('terminate-failure-cancelled', {
+    command: 'terminate',
+    ok: false,
+    error: { code: 'CANCELLED', message: 'Typed name did not match' },
+  }),
+
   // parser failures and every error code
   corpusCase('parser-failure-usage', {
     command: null,

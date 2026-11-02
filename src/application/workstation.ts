@@ -8,6 +8,7 @@ import {
   listWorkstations,
   showWorkstation,
 } from '#application/inspection';
+import { terminateWorkstation } from '#application/terminate';
 import { validateCommandRequest } from '#application/validation';
 import { PROVIDER_IDS } from '#domain/ids';
 import { prerequisiteDetails } from '#domain/prerequisites';
@@ -77,7 +78,7 @@ export async function runCommand(
     }
     checkOperation();
     currentOperation()?.select(request.command);
-    validateCommandRequest(request);
+    validateCommandRequest(request, Boolean(interaction));
     if (request.command === 'create') {
       return await createWorkstation(dependencies, request, interaction);
     }
@@ -266,6 +267,12 @@ async function dispatchAuthenticated(
       doctorWorkstation(dependencies, {
         provider,
         requestedName: request.machine,
+        interaction,
+      }),
+    terminate: async () =>
+      terminateWorkstation(dependencies, {
+        request,
+        provider,
         interaction,
       }),
   } satisfies Record<AuthenticatedCommand, () => Promise<CommandResult>>;

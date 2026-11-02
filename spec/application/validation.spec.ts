@@ -6,13 +6,12 @@ import type { CommandRequest } from '#application/contracts';
 
 describe('fn:validateCommandRequest', () => {
   it.each([
-    { command: 'show', machine: 'Not A Name', options: {} },
-    { command: 'create', options: { name: 'Not A Name' } },
+    { command: 'terminate', options: { nonInteractive: true } },
   ] satisfies CommandRequest[])(
-    'should reject a request naming an invalid workstation: %j',
+    'should reject a request whose required consent conflicts with its options: %j',
     (request) => {
       expect(() => validateCommandRequest(request)).toThrow(
-        expect.objectContaining({ code: 'INPUT' }),
+        expect.objectContaining({ code: 'USAGE' }),
       );
     },
   );

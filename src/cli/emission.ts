@@ -77,8 +77,11 @@ function successRecovery(
     machineId: machine.id,
     setupIncomplete: machine.setup === 'incomplete' ? true : undefined,
     outcome: 'unknown',
-    details: [
-      `Inspect: open-agent show ${JSON.stringify(machine.name)} --inspect`,
-    ],
+    details:
+      result.command === 'terminate'
+        ? ['Workstation deleted; do not retry the deletion.']
+        : [
+            `Inspect: open-agent show ${JSON.stringify(machine.name)} --inspect`,
+          ],
   };
 }

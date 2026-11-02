@@ -3,6 +3,7 @@ import { projectDoctor } from './doctor';
 import { projectError } from './failure';
 import { projectList } from './list';
 import { projectShow } from './show';
+import { projectTerminate } from './terminate';
 
 import type { CommandResult, CommandSuccess } from '#application/result';
 
@@ -44,6 +45,12 @@ function projectSuccess(result: CommandSuccess): SuccessOutput {
         ok: true,
         data: projectShow(result.data),
       };
+    case 'terminate':
+      return {
+        command: 'terminate',
+        ok: true,
+        data: projectTerminate(result.data),
+      };
     case 'doctor':
       return {
         command: 'doctor',
@@ -75,6 +82,13 @@ function projectFailure(result: Failed): FailureOutput {
       return { command: 'list', ok: false, error };
     case 'show':
       return { command: 'show', ok: false, error };
+    case 'terminate':
+      return {
+        command: 'terminate',
+        ok: false,
+        error,
+        data: optional(result.data, projectTerminate),
+      };
     case 'doctor':
       return {
         command: 'doctor',

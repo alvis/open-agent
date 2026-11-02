@@ -287,6 +287,36 @@ describe('fn:runCommand', () => {
     expect(inspect).toHaveBeenCalledOnce();
   });
 
+  it('should cancel termination when the typed workstation name differs', async () => {
+    spriteCredential();
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-command-terminate-'),
+    );
+    await managedSprite(directory.path);
+    const input = vi.fn(async () => 'another-workstation');
+    const deletion = vi.spyOn(SpritesClient.prototype, 'deleteSprite');
+
+    const result = await runCommand(
+      dependencies,
+      {
+        command: 'terminate',
+        machine: 'workstation',
+        options: { provider: 'sprite', yes: false },
+      },
+      { interaction: { ...interaction, input } },
+    );
+
+    expect(result).toMatchObject({
+      command: 'terminate',
+      ok: false,
+      error: { code: 'CANCELLED' },
+    });
+    expect(input).toHaveBeenCalledWith(
+      expect.objectContaining({ required: true }),
+    );
+    expect(deletion).not.toHaveBeenCalled();
+  });
+
   it('should retain known identity and recovery guidance when its caller cancels', async () => {
     const controller = new AbortController();
     const operation = new OperationContext({ signal: controller.signal });
