@@ -46,7 +46,7 @@ is still listed. --json emits one structured result.
 EXAMPLES
   open-agent list
   open-agent list --json
-  open-agent list --provider-token-source env:MY_TOKEN`,
+  open-agent list --no-local-credentials --provider-token-source env:MY_TOKEN`,
 } as const;
 
 /** documents workstation details and explicit inspection */

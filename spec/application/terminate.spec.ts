@@ -61,6 +61,7 @@ async function createTerminationBoundary(root: string): Promise<{
       credentialFile: envPath,
       yes: true,
       nonInteractive: true,
+      localCredentials: false,
     },
   } satisfies CommandRequest;
 

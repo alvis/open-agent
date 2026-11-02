@@ -1,6 +1,10 @@
 import type { CreatePreflight } from '#application/create/context';
 import type { MachineSummary } from '#application/machine';
 import type { ReadinessAssessment } from '#application/readiness';
+import type {
+  CredentialSaveResult,
+  ManagementCredentialName,
+} from '#domain/credentials';
 import type { ProviderId } from '#domain/ids';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { WorkstationProfile } from '#domain/profile';
@@ -14,6 +18,9 @@ export interface ServiceSummary {
 
 /** successful creation with verified preflight and current guest evidence */
 export interface CreateData {
+  retainedCredentials?: Partial<
+    Record<ManagementCredentialName, CredentialSaveResult>
+  >;
   machine: MachineSummary;
   preflight: CreatePreflight;
   /** driver selection the workstation recorded */
@@ -105,6 +112,9 @@ export type AppliedSetupSection = {
 /** setup configures one guest */
 export type SetupData = AppliedSetupSection & {
   machine: MachineSummary;
+  retainedCredentials?: Partial<
+    Record<ManagementCredentialName, CredentialSaveResult>
+  >;
 };
 
 /** success payload for each executed command */

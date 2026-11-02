@@ -1,3 +1,4 @@
+import { projectRetainedCredentials } from './credentials';
 import { projectFields, same } from './fields';
 import { projectMachine } from './machine';
 import { projectReadiness } from './readiness';
@@ -11,14 +12,17 @@ import type {
 } from '#application/data';
 
 import type { MachineSummary } from '#application/machine';
+import type { CredentialSaveResult } from '#domain/credentials';
 
+import type { RetainedCredentialsOutput } from './credentials';
 import type { MachineOutput } from './machine';
 import type { ReadinessOutput } from './readiness';
 
-/** the outcome of a setup section */
+/** the outcome of a setup section, or of replacing the local credential */
 export interface SetupDataOutput {
   section?: string;
   machine?: MachineOutput;
+  retainedCredentials?: RetainedCredentialsOutput;
   service?: 'configured';
   network?: { status: 'disabled'; readiness: 'skipped' };
 }
@@ -33,6 +37,7 @@ type SetupFields = Partial<
   AllSetupData & {
     section: AppliedSetupSection['section'];
     machine: MachineSummary;
+    retainedCredentials: Partial<Record<string, CredentialSaveResult>>;
   }
 >;
 
@@ -52,13 +57,14 @@ function projectNetworkOutcome(
 
 /**
  * projects a setup outcome
- * @param data internal outcome, for one section
+ * @param data internal outcome, for one section or for the local credential
  * @returns output outcome
  */
 export function projectSetup(data: SetupData): SetupDataOutput {
   return projectFields<SetupFields, SetupDataOutput>(data, {
     section: same,
     machine: projectMachine,
+    retainedCredentials: projectRetainedCredentials,
     service: same,
     network: projectNetworkOutcome,
   });

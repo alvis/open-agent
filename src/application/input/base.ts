@@ -6,6 +6,10 @@ import { resolveProviderCredential } from './provider-credential';
 import type { CommandOptions } from '#application/contracts';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type {
+  CredentialStoreLocation,
+  ManagementCredentialName,
+} from '#domain/credentials';
 import type { WorkstationProfile } from '#domain/profile';
 
 import type { InputSources } from './sources';
@@ -20,11 +24,12 @@ interface SecretValues {
 interface BaseInputSelection {
   /** driver selection whose declared inputs are read */
   profile?: WorkstationProfile;
+  credentialStore?: CredentialStoreLocation;
 }
 
 /** environment names of the provider credentials this run reads */
 interface DeclaredNames {
-  provider: { environment: string };
+  provider: { environment: string; store: ManagementCredentialName };
 }
 
 /** the named inputs of resolve base inputs */
@@ -33,7 +38,7 @@ export interface ResolveBaseInputsParams {
   options: CommandOptions;
   /** process, credential file, and profile values */
   sources: InputSources;
-  /** resolved profile */
+  /** resolved profile and selected local credential fallback */
   selection?: BaseInputSelection;
 }
 
@@ -55,6 +60,7 @@ export async function resolveBaseInputs(
     options,
     profile,
     sources,
+    credentialStore: selection.credentialStore,
   });
   annotateSecretSources(secrets, {
     names,
@@ -85,31 +91,33 @@ function declaredNames(
     dependencies.registry.providers[profile.provider].prerequisites;
 
   return {
-    provider: { environment: credential.environment },
+    provider: { environment: credential.environment, store: credential.store },
   };
 }
 
 /** the named inputs of resolve selected secrets */
 interface ResolveSelectedSecretsParams {
-  /** parsed secret references */
+  /** parsed secret references and local credential policy */
   options: CommandOptions;
   /** driver selection whose provider credential is read */
   profile: WorkstationProfile;
   /** process and credential file values */
   sources: InputSources;
+  /** optional explicitly selected real store */
+  credentialStore?: CredentialStoreLocation;
 }
 
 /**
  * resolves secret references without transferring management credentials to the guest
  * @param dependencies the registered drivers, what this computer provides
- * @param params the call's inputs: options, profile, sources
+ * @param params the call's inputs: options, profile, sources, credentialStore
  * @returns the provider credential and its source
  */
 async function resolveSelectedSecrets(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'host'>,
   params: ResolveSelectedSecretsParams,
 ): Promise<SecretValues> {
-  const { options, profile, sources } = params;
+  const { options, profile, sources, credentialStore } = params;
   const provider = await runOperation(async () =>
     resolveProviderCredential(dependencies, {
       options,
@@ -117,6 +125,7 @@ async function resolveSelectedSecrets(
       selection: {
         reference: options.providerTokenSource,
         sources,
+        credentialStore,
       },
     }),
   );

@@ -395,7 +395,8 @@ describe('fn:execute', () => {
       options: {
         ...request.options,
         credentialFile: 'credentials.env',
-        section: 'agent',
+        localCredentials: false,
+        providerTokenSource: 'keychain:test/account',
       },
     };
 
@@ -412,7 +413,7 @@ describe('fn:execute', () => {
         ok: false,
         error: {
           code: 'USAGE',
-          message: expect.stringContaining('Setup-only options'),
+          message: expect.stringContaining('--no-local-credentials'),
         },
       },
       stderr: '',

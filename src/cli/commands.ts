@@ -28,7 +28,7 @@ import type { InvocationContext } from './parser';
 type BooleanKeys<T> = {
   [K in keyof T]-?: NonNullable<T[K]> extends boolean ? K : never;
 }[keyof T];
-type OptionalBooleanKey = 'color';
+type OptionalBooleanKey = 'localCredentials' | 'color';
 type RequiredBooleanFields<T> = Omit<T, BooleanKeys<T>> &
   Required<Pick<T, Exclude<BooleanKeys<T>, OptionalBooleanKey>>> &
   Pick<T, Extract<BooleanKeys<T>, OptionalBooleanKey>>;
@@ -179,6 +179,10 @@ const showCommand = buildCommand({
       },
       ...providerFlags,
       ...providerCredentialFlags,
+      localCredentials: {
+        ...providerCredentialFlags.localCredentials,
+        brief: 'use or skip the provider credential saved on this computer',
+      },
       ...outputFlags,
     },
     positional: machinePositional,

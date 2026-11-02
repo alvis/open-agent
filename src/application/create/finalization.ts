@@ -171,6 +171,7 @@ async function finishReadyCreate(
       workstation,
       observed,
       preflight: context.preflight,
+      retainedCredentials: context.input.retainedCredentials,
     });
     checkOperation();
 

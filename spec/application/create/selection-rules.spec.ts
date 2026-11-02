@@ -34,6 +34,7 @@ const request = {
     name: 'selection-rules',
     nonInteractive: true,
     yes: true,
+    localCredentials: false,
     harness: ['claude'],
     network: 'none',
   },

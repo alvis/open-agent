@@ -12,6 +12,7 @@ export const SPRITE_PREREQUISITES: ProviderPrerequisites = {
   credential: {
     label: 'Sprites API token',
     environment: 'SPRITES_TOKEN',
+    store: 'sprites',
     scope:
       'a Sprites organization token for the organization that owns the workstations',
     obtain:

@@ -2,6 +2,7 @@ import { readEnvironmentSources, resolveSecret } from './sources';
 
 import type { CommandOptions } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { CredentialStoreLocation } from '#domain/credentials';
 import type { ProviderId } from '#domain/ids';
 
 import type { InputSources } from './sources';
@@ -20,21 +21,23 @@ interface ProviderCredentialSources {
   reference?: string;
   /** process and credential file values, read from the options when omitted */
   sources?: Pick<InputSources, 'processEnv' | 'fileEnv'>;
+  /** explicitly selected real credential store */
+  credentialStore?: CredentialStoreLocation;
 }
 
 /** the named inputs of resolve provider credential */
 export interface ResolveProviderCredentialParams {
-  /** parsed env file path */
+  /** parsed env file path and local credential policy */
   options: CommandOptions;
   /** provider whose declared credential is read */
   provider: ProviderId;
-  /** explicit reference and preloaded sources */
+  /** explicit reference, preloaded sources and store location */
   selection?: ProviderCredentialSources;
 }
 
 /**
  * resolves a provider's management credential from its declared sources, in
- * explicit reference, credential file, then process environment order
+ * explicit reference, credential file, process environment, then local store order
  * @param dependencies the registered drivers, what this computer provides
  * @param params the call's inputs: options, provider, selection
  * @returns the credential and where it came from, if any source holds one
@@ -44,7 +47,7 @@ export async function resolveProviderCredential(
   params: ResolveProviderCredentialParams,
 ): Promise<ProviderCredential> {
   const { options, provider, selection = {} } = params;
-  const { reference } = selection;
+  const { reference, credentialStore } = selection;
   if (reference) {
     return {
       token: await resolveSecret(dependencies, reference, undefined),
@@ -72,6 +75,19 @@ export async function resolveProviderCredential(
       source: direct.source,
     };
   }
+  const stored =
+    options.localCredentials === false
+      ? undefined
+      : await dependencies.host.credentials.read(
+          credential.store,
+          credentialStore,
+        );
+  const token = await resolveSecret(dependencies, undefined, stored);
 
-  return {};
+  return token
+    ? {
+        token,
+        source: `the ${credential.store} credential saved in the local credential store`,
+      }
+    : {};
 }

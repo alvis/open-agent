@@ -58,6 +58,7 @@ describe('fn:setupAll', () => {
     const context: SetupContext = {
       ...workstationOf(sprite),
       options: {
+        localCredentials: false,
         nonInteractive: true,
       },
       input: {
@@ -143,6 +144,7 @@ describe('fn:setupAll', () => {
     const context: SetupContext = {
       ...workstationOf(sprite),
       options: {
+        localCredentials: false,
         nonInteractive: true,
       },
       input: { profile, sources: {}, missing: [] },

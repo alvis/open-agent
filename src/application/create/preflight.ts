@@ -2,6 +2,7 @@ import { networkDriver } from '#application/catalog/networks';
 import { bindProvider } from '#application/catalog/providers';
 import { commandError } from '#application/failures';
 import { resolveCreateInputs } from '#application/input';
+import { retainEnteredProviderToken } from '#application/input/prompts';
 import { runOperation, checkOperation } from '#kernel/operation';
 
 import { blockedPreparation, inputFailure } from './blockers';
@@ -20,6 +21,8 @@ import type { CreatePreparation } from './context';
 import type { RequiredCreateValues, ReviewContext } from './review';
 
 interface CreateProviderChecks {
+  /** the provider answered with the entered credential */
+  providerAccepted: boolean;
   collision: boolean;
   issues: CommandError[];
 }
@@ -64,7 +67,12 @@ export async function prepareCreate(
     values,
     input,
   });
-  const refused = providerCheckFailure(names, { name: values.name });
+  const refused = await providerCheckFailure(dependencies, names, {
+    input,
+    request,
+    interaction,
+    name: values.name,
+  });
   if (refused) {
     return refused;
   }
@@ -85,17 +93,34 @@ export async function prepareCreate(
 }
 
 /**
- * reports the first blocking provider or network check
+ * retains a provider credential the provider accepted, then reports the first
+ * blocking provider or network check
+ * @param dependencies the registered drivers, what this computer provides
  * @param names provider and network check outcomes
- * @param context requested name
+ * @param context resolved inputs, request, prompts and requested name
+ * @param context.input resolved create inputs
+ * @param context.request parsed create command
+ * @param context.interaction optional inline prompts
  * @param context.name requested workstation name
  * @returns the failure to return, or undefined when provisioning may continue
  */
-function providerCheckFailure(
+async function providerCheckFailure(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'host'>,
   names: CreateProviderChecks,
-  context: { name: string },
-): CreatePreparation | undefined {
-  const { name } = context;
+  context: {
+    input: ResolvedInputs;
+    request: CommandRequest;
+    interaction?: Interaction;
+    name: string;
+  },
+): Promise<CreatePreparation | undefined> {
+  const { input, request, interaction, name } = context;
+  if (names.providerAccepted) {
+    await retainEnteredProviderToken(dependencies, input, {
+      interaction,
+      options: request.options,
+    });
+  }
   const [firstIssue] = names.issues;
   if (firstIssue) {
     return blockedPreparation(
@@ -176,6 +201,7 @@ async function checkProviderAndNetwork(
   );
 
   return {
+    providerAccepted: taken.status === 'fulfilled',
     collision: taken.status === 'fulfilled' && taken.value,
     issues: [
       ...(taken.status === 'rejected' ? [commandError(taken.reason)] : []),

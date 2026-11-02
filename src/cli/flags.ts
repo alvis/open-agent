@@ -22,6 +22,12 @@ export const providerCredentialFlags = {
     brief:
       'SOURCE · provider management credential source reference, for the provider --provider selects (sprite when omitted)',
   },
+  localCredentials: {
+    kind: 'boolean',
+    optional: true,
+    withNegated: true,
+    brief: 'enable or disable saved credentials',
+  },
 } as const;
 
 /** output and automation controls shared by every operation */

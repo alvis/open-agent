@@ -148,6 +148,26 @@ export const CORPUS: readonly CorpusCase[] = [
       services: [{ name: 't3-code', state: 'running' }],
       native: INSPECTION.native,
     },
+    retainedCredential: { storage: 'keychain' },
+  }),
+  corpusCase('create-success-protected-file', {
+    command: 'create',
+    ok: true,
+    data: {
+      retainedCredentials: {
+        provider: {
+          storage: 'protected-file',
+          fallbackReason: 'Keychain is unavailable on this platform',
+        },
+      },
+      machine: DETAILED_MACHINE,
+      preflight: PREFLIGHT,
+      profile: DISABLED_NETWORK_PROFILE,
+      readiness: PASSING_READINESS,
+      network: INSPECTION.network,
+      services: [{ name: 't3-code', state: 'running' }],
+      native: INSPECTION.native,
+    },
   }),
 
   // create: failure
@@ -221,6 +241,7 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       section: 'all',
       machine: MACHINE,
+      retainedCredentials: { provider: { storage: 'keychain' } },
       service: 'configured',
       network: { status: 'disabled', readiness: 'skipped' },
     },

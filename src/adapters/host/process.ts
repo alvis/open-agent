@@ -20,6 +20,7 @@ export async function runLocal(params: LocalProcessParams): Promise<string> {
     program,
     arguments: arguments_,
     timeoutMs = DEFAULT_PROCESS_TIMEOUT_MS,
+    trimOutput = true,
   } = params;
   const result = await runOperation(async () =>
     execa(program, arguments_, {
@@ -35,7 +36,7 @@ export async function runLocal(params: LocalProcessParams): Promise<string> {
     throw new Error(`${program} failed (${result.exitCode ?? 'timeout'})`);
   }
 
-  return result.stdout.trim();
+  return trimOutput ? result.stdout.trim() : result.stdout;
 }
 
 /**
@@ -44,7 +45,12 @@ export async function runLocal(params: LocalProcessParams): Promise<string> {
  * @throws {Error} when the process exits unsuccessfully
  */
 export async function sendLocalInput(params: LocalInputParams): Promise<void> {
-  const { program, arguments: arguments_, input } = params;
+  const {
+    program,
+    arguments: arguments_,
+    input,
+    verifyResultExternally,
+  } = params;
   const result = await runOperation(async () =>
     execa(program, arguments_, {
       input,
@@ -55,7 +61,7 @@ export async function sendLocalInput(params: LocalInputParams): Promise<void> {
       reject: false,
     }),
   );
-  if (result.exitCode !== 0) {
+  if (result.exitCode !== 0 && !verifyResultExternally) {
     throw new Error(`${program} failed (${result.exitCode ?? 'timeout'})`);
   }
 }
