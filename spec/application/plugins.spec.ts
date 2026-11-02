@@ -53,23 +53,31 @@ describe('fn:normalizePluginOptions', () => {
       kind: 'skipped',
       harnesses: {
         claude: { skipped: false, marketplaces: [] },
+        codex: { skipped: false, marketplaces: [] },
       },
+      reuseMarketplacesSet: false,
     });
     expect(
-      normalizePluginOptions(pluginFlags({ claudePlugins: false })),
+      normalizePluginOptions(
+        pluginFlags({ codexPlugins: false, reuseMarketplaces: false }),
+      ),
     ).toMatchObject({
       kind: 'selected',
-      harnesses: { claude: { skipped: true } },
+      harnesses: { codex: { skipped: true } },
+      reuseMarketplaces: false,
+      reuseMarketplacesSet: true,
     });
   });
 });
 
 describe('fn:resolvePluginActions', () => {
-  it('should preserve harness actions', () => {
+  it('should preserve separate harness actions and use marketplace inheritance only when requested', () => {
     const selections = pluginFlags({
       claudeMarketplace: ['claude/source'],
       claudePlugin: ['alpha@claude'],
+      codexPlugin: ['beta@codex'],
       removeClaudeMarketplace: ['claude-old'],
+      disableCodexPlugin: ['codex-off'],
       uninstallClaudePlugin: ['claude-gone'],
     });
 
@@ -81,21 +89,46 @@ describe('fn:resolvePluginActions', () => {
         disablePlugins: [],
         uninstallPlugins: ['claude-gone'],
       },
+      codex: {
+        marketplaces: [],
+        plugins: ['beta@codex'],
+        removeMarketplaces: [],
+        disablePlugins: ['codex-off'],
+        uninstallPlugins: [],
+      },
+    });
+    expect(
+      resolveFlags({ ...selections, reuseMarketplaces: true }).codex,
+    ).toEqual({
+      marketplaces: ['claude/source'],
+      plugins: ['beta@codex'],
+      removeMarketplaces: [],
+      disablePlugins: ['codex-off'],
+      uninstallPlugins: [],
     });
     expect(resolveFlags({ plugins: false })).toEqual({
       claude: emptyActions,
+      codex: emptyActions,
     });
-    expect(resolveFlags(pluginFlags({ claudePlugins: false }))).toEqual({
-      claude: emptyActions,
-    });
+    expect(
+      resolveFlags(pluginFlags({ claudePlugins: false, codexPlugins: false })),
+    ).toEqual({ claude: emptyActions, codex: emptyActions });
   });
 
-  it('should reject skips that conflict with explicit changes', () => {
+  it('should reject skips that conflict with explicit changes or inheritance', () => {
     const conflicts: CommandOptions[] = [
       pluginFlags({ plugins: false, claudePlugin: ['alpha@market'] }),
+      pluginFlags({ plugins: false, codexPlugin: ['beta@market'] }),
+      { plugins: false, reuseMarketplaces: true },
       pluginFlags({
         claudePlugins: false,
         claudeMarketplace: ['claude/source'],
+      }),
+      pluginFlags({ codexPlugins: false, codexPlugin: ['beta@market'] }),
+      pluginFlags({
+        reuseMarketplaces: true,
+        claudeMarketplace: ['claude/source'],
+        codexMarketplace: ['codex/source'],
       }),
     ];
 
@@ -106,9 +139,16 @@ describe('fn:resolvePluginActions', () => {
     }
   });
 
-  it('should refuse actions for an unselected harness', () => {
+  it('should reuse the only marketplace-selecting harness for the others and refuse actions for an unselected harness', () => {
+    const reuse = pluginFlags({
+      reuseMarketplaces: true,
+      codexMarketplace: ['codex/source'],
+    });
+
+    expect(resolveFlags(reuse).claude.marketplaces).toEqual(['codex/source']);
+    expect(resolveFlags(reuse, ['codex']).claude).toEqual(emptyActions);
     expect(() =>
-      resolveFlags(pluginFlags({ claudePlugin: ['alpha@market'] }), []),
+      resolveFlags(pluginFlags({ claudePlugin: ['alpha@market'] }), ['codex']),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
   });
 });
@@ -128,9 +168,10 @@ describe('fn:hasActions', () => {
       hasExplicitFlags({ plugins: false }),
       hasExplicitFlags(pluginFlags({ claudePlugin: [] })),
       hasExplicitFlags(
-        pluginFlags({ uninstallClaudePlugin: ['plugin@market'] }),
+        pluginFlags({ uninstallCodexPlugin: ['plugin@market'] }),
       ),
-    ]).toEqual([false, false, false, true]);
+      hasExplicitFlags({ reuseMarketplaces: true }),
+    ]).toEqual([false, false, false, true, true]);
   });
 });
 
@@ -163,6 +204,7 @@ describe('fn:validateMarketplaceSources', () => {
               marketplaces: [source],
               plugins: source === 'owner/populated' ? ['selected@market'] : [],
             },
+            codex: emptyActions,
           },
           requireSelectedPluginCoverage: true,
         }),
@@ -173,7 +215,7 @@ describe('fn:validateMarketplaceSources', () => {
   it('should reject credential-bearing and unsupported sources before network access', async () => {
     await expect(
       validateMarketplaceSources(dependencies, {
-        actions: { claude: emptyActions },
+        actions: { claude: emptyActions, codex: emptyActions },
         requireSelectedPluginCoverage: true,
       }),
     ).resolves.toBeUndefined();
@@ -186,6 +228,7 @@ describe('fn:validateMarketplaceSources', () => {
               'https://private-user:private-password@example.test/source',
             ],
           },
+          codex: emptyActions,
         },
       }),
     ).rejects.toMatchObject({
@@ -195,7 +238,8 @@ describe('fn:validateMarketplaceSources', () => {
     await expect(
       validateMarketplaceSources(dependencies, {
         actions: {
-          claude: { ...emptyActions, marketplaces: ['not-a-repository'] },
+          claude: emptyActions,
+          codex: { ...emptyActions, marketplaces: ['not-a-repository'] },
         },
       }),
     ).rejects.toEqual(expect.objectContaining({ code: 'INPUT' }));
@@ -203,6 +247,7 @@ describe('fn:validateMarketplaceSources', () => {
       validateMarketplaceSources(dependencies, {
         actions: {
           claude: { ...emptyActions, plugins: ['absent@market'] },
+          codex: emptyActions,
         },
         requireSelectedPluginCoverage: true,
       }),

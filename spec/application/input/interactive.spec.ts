@@ -67,15 +67,16 @@ describe('input source resolution', () => {
         { waitFor: 'Minimum CPUs', input: '\r' },
         { waitFor: 'Minimum memory (GB)', input: '\r' },
         { waitFor: 'Release channel', input: '\r' },
+        { waitFor: 'Harnesses', input: '\r' },
         { waitFor: 'Route harnesses through CLIProxyAPI?', input: '\r' },
         { waitFor: 'Suspend after idle', input: '\r' },
       ],
     );
 
-    expect(observed.matchedSteps, observed.output).toBe(5);
+    expect(observed.matchedSteps, observed.output).toBe(6);
     expect(observed.result.candidate).toMatchObject({
       provider: 'sprite',
-      harnesses: ['claude'],
+      harnesses: ['claude', 'codex'],
       network: 'none',
       options: {
         minCpus: 2,

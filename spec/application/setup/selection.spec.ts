@@ -9,13 +9,13 @@ describe('fn:selectSetupSection', () => {
   it.each([
     { options: { withPairCode: true }, section: 'agent' },
     {
-      options: pluginFlags({ disableClaudePlugin: ['coding@alvis'] }),
+      options: pluginFlags({ disableCodexPlugin: ['coding@alvis'] }),
       section: 'plugins',
     },
     {
       options: pluginFlags({
         section: 'plugins',
-        disableClaudePlugin: ['coding@alvis'],
+        disableCodexPlugin: ['coding@alvis'],
       }),
       section: 'plugins',
     },
@@ -31,7 +31,7 @@ describe('fn:selectSetupSection', () => {
   it('should reject explicit plugin actions for a different section', async () => {
     const options = pluginFlags({
       section: 'tools',
-      disableClaudePlugin: ['coding@alvis'],
+      disableCodexPlugin: ['coding@alvis'],
     });
 
     await expect(selectSetupSection(options)).rejects.toMatchObject({

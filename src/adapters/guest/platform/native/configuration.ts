@@ -1,6 +1,10 @@
+import { parse } from 'smol-toml';
+
 import { guestFileExists, readGuestFile } from '#adapters/guest/platform/files';
 import { CommandFault } from '#kernel/faults';
 import { isRecord, isStringArray } from '#kernel/guards';
+
+import type { TomlTable } from 'smol-toml';
 
 import type { GuestChannel } from '#application/ports/guest-channel';
 
@@ -37,6 +41,33 @@ export async function readJsonObject(
   }
 
   return parsed;
+}
+
+/**
+ * reads optional native TOML configuration
+ * @param guest target guest
+ * @param path native configuration file
+ * @returns parsed TOML table, or an empty table for an absent file
+ */
+export async function readTomlObject(
+  guest: GuestChannel,
+  path: string,
+): Promise<TomlTable> {
+  if (!(await guestFileExists(guest, path))) {
+    return {};
+  }
+
+  const text = await readGuestFile(guest, path);
+  try {
+    return parse(text);
+  } catch (cause) {
+    throw new CommandFault({
+      code: 'INPUT',
+      message: `Native TOML configuration at ${path} is malformed`,
+      cause,
+      causeVisibility: 'private',
+    });
+  }
 }
 
 /**

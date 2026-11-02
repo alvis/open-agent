@@ -23,10 +23,21 @@ const FULL_INSPECTION = {
       awakeHooksInstalled: false,
       authentication: 'not-configured',
     },
+    codex: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
+      pluginListAvailable: false,
+      awakeHooksInstalled: false,
+      authentication: 'not-configured',
+    },
     harnesses: {
       claude: {
         selectedPlugins: [],
         evidence: { sdkPluginLoading: 'not-verified' },
+      },
+      codex: {
+        selectedPlugins: [],
+        evidence: undefined,
       },
     },
   },

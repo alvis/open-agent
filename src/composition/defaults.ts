@@ -7,7 +7,7 @@ export const defaults = {
   selection: {
     provider: 'sprite',
     agent: 't3',
-    harnesses: ['claude'],
+    harnesses: ['claude', 'codex'],
     network: NO_NETWORK,
   },
   options: {

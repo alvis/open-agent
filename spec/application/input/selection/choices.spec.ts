@@ -12,7 +12,7 @@ describe('fn:harnessChoices', () => {
   it('should offer registered harnesses when the selected agent is not recognized', () => {
     const choices = harnessChoices(dependencies, 'unregistered-agent');
 
-    expect(choices.map(({ value }) => value)).toEqual(['claude']);
+    expect(choices.map(({ value }) => value)).toEqual(['claude', 'codex']);
     expect(choices.every(({ isPreselected }) => isPreselected)).toBe(true);
   });
 });
@@ -27,7 +27,7 @@ describe('fn:defaultHarnesses', () => {
       },
     };
 
-    expect(defaultHarnesses(configured, 't3')).toEqual(['claude']);
+    expect(defaultHarnesses(configured, 't3')).toEqual(['claude', 'codex']);
   });
 });
 

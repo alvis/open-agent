@@ -62,7 +62,7 @@ const DETAILED_MACHINE: MachineSummary = {
   profile: {
     provider: 'sprite',
     agent: 't3',
-    harnesses: ['claude'],
+    harnesses: ['claude', 'codex'],
     network: 'none',
   },
   readiness: 'not inspected',
@@ -117,10 +117,21 @@ const INSPECTION: GuestInspection = {
       awakeHooksInstalled: false,
       authentication: 'not-configured',
     },
+    codex: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
+      pluginListAvailable: false,
+      awakeHooksInstalled: false,
+      authentication: 'not-configured',
+    },
     harnesses: {
       claude: {
         selectedPlugins: [],
         evidence: { sdkPluginLoading: 'not-verified' },
+      },
+      codex: {
+        selectedPlugins: [],
+        evidence: undefined,
       },
     },
   },
@@ -348,7 +359,7 @@ export const CORPUS: readonly CorpusCase[] = [
         status: 'configured',
         names: ['API_BASE', 'REGION'],
       },
-      plugins: { claude: 'applied' },
+      plugins: { claude: 'applied', codex: 'preserved' },
       network: { status: 'disabled', readiness: 'skipped' },
       proxy: { status: 'configured', baseUrl: 'https://hub.example.test/' },
       components: { installed: 6, skipped: 1, failed: 1 },
@@ -471,7 +482,7 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       section: 'plugins',
       machine: MACHINE,
-      plugins: { claude: 'applied' },
+      plugins: { claude: 'applied', codex: 'preserved' },
     },
   }),
   corpusCase('setup-tools-updated', {
@@ -675,6 +686,7 @@ export const CORPUS: readonly CorpusCase[] = [
         native: {
           ...INSPECTION.native!,
           claude: { ...INSPECTION.native!.claude!, awakeHooksInstalled: true },
+          codex: { ...INSPECTION.native!.codex!, awakeHooksInstalled: false },
         },
       },
     },
@@ -955,7 +967,7 @@ export const CORPUS: readonly CorpusCase[] = [
           profile: sdkObservation<MachineSummary['profile']>({
             provider: 'sprite',
             agent: 't3',
-            harnesses: ['claude', undefined],
+            harnesses: ['claude', undefined, 'codex'],
             network: 'none',
           }),
         },

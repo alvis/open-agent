@@ -60,10 +60,21 @@ const inspection: GuestInspection = {
       awakeHooksInstalled: false,
       authentication: 'not-configured',
     },
+    codex: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
+      pluginListAvailable: false,
+      awakeHooksInstalled: false,
+      authentication: 'not-configured',
+    },
     harnesses: {
       claude: {
         selectedPlugins: [],
         evidence: { sdkPluginLoading: 'not-verified' },
+      },
+      codex: {
+        selectedPlugins: [],
+        evidence: undefined,
       },
     },
   },
@@ -434,6 +445,10 @@ describe('fn:prepareResult', () => {
                 ...inspection.native!.claude!,
                 awakeHooksInstalled: true,
               },
+              codex: {
+                ...inspection.native!.codex!,
+                awakeHooksInstalled: false,
+              },
             },
           },
         },
@@ -442,7 +457,7 @@ describe('fn:prepareResult', () => {
     );
 
     expect(output.stdout.replaceAll(/\s+/g, ' ')).toMatch(
-      /Awake hooks installed: Yes/,
+      /Awake hooks installed: Yes.*Awake hooks installed: No/,
     );
   });
 

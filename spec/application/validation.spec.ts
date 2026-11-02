@@ -32,7 +32,7 @@ describe('fn:validateCommandRequest', () => {
         command: 'setup',
         options: {
           nonInteractive: true,
-          harnessPlugins: { claude: { disablePlugins: ['one@market'] } },
+          harnessPlugins: { codex: { disablePlugins: ['one@market'] } },
         },
       }),
     ).not.toThrow();
@@ -85,8 +85,11 @@ describe('fn:validateCommandRequest', () => {
       { section: 'plugins' },
       { pluginHarness: 'claude' },
       { harnessPlugins: { claude: { removeMarketplaces: ['old'] } } },
+      { harnessPlugins: { codex: { removeMarketplaces: ['old'] } } },
       { harnessPlugins: { claude: { disablePlugins: ['off@market'] } } },
+      { harnessPlugins: { codex: { disablePlugins: ['off@market'] } } },
       { harnessPlugins: { claude: { uninstallPlugins: ['gone@market'] } } },
+      { harnessPlugins: { codex: { uninstallPlugins: ['gone@market'] } } },
     ];
 
     for (const options of setupOnly) {
@@ -109,7 +112,17 @@ describe('fn:validateCommandRequest', () => {
         options: {
           section: 'plugins',
           pluginHarness: 'claude',
-          harnessPlugins: { claude: { plugins: ['one@market'] } },
+          harnessPlugins: { codex: { plugins: ['one@market'] } },
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+    expect(() =>
+      validateCommandRequest({
+        command: 'setup',
+        options: {
+          section: 'plugins',
+          pluginHarness: 'codex',
+          harnessPlugins: { codex: { plugins: ['one@market'] } },
         },
       }),
     ).not.toThrow();

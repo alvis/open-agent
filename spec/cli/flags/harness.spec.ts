@@ -31,6 +31,8 @@ describe('fn:harnessPluginOptions', () => {
       removeClaudeMarketplace: ['old'],
       disableClaudePlugin: ['disabled'],
       uninstallClaudePlugin: ['retired'],
+      codexPlugins: true,
+      codexMarketplace: ['codex-source'],
     });
 
     expect(options).toEqual({
@@ -42,12 +44,23 @@ describe('fn:harnessPluginOptions', () => {
         disablePlugins: ['disabled'],
         uninstallPlugins: ['retired'],
       },
+      codex: {
+        isEnabled: true,
+        marketplaces: ['codex-source'],
+        plugins: undefined,
+        removeMarketplaces: undefined,
+        disablePlugins: undefined,
+        uninstallPlugins: undefined,
+      },
     });
   });
 });
 
 describe('fn:harnessPluginToggleNames', () => {
   it('should expose the supported negatable plugin toggles', () => {
-    expect(harnessPluginToggleNames()).toEqual(['claude-plugins']);
+    expect(harnessPluginToggleNames()).toEqual([
+      'claude-plugins',
+      'codex-plugins',
+    ]);
   });
 });

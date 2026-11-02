@@ -108,13 +108,14 @@ describe('fn:resolveCreateSelection', () => {
       'Minimum CPUs',
       'Minimum memory (GB)',
       'Release channel',
+      'Harnesses',
       'Route harnesses through CLIProxyAPI?',
       'Suspend after idle (minutes, 0 = never)',
     ]);
     expect(candidate).toMatchObject({
       provider: 'sprite',
       agent: 't3',
-      harnesses: ['claude'],
+      harnesses: ['claude', 'codex'],
       network: 'none',
     });
   });
@@ -128,7 +129,7 @@ describe('fn:resolveCreateSelection', () => {
         cpu: 4,
         mem: 8,
         release: 'stable',
-        harness: ['claude'],
+        harness: ['codex'],
         network: 'none',
         proxy: false,
         idleMinutes: 0,

@@ -236,6 +236,11 @@ export const pluginFlags = {
     withNegated: true,
     brief: 'enable or disable plugins',
   },
+  reuseMarketplaces: {
+    kind: 'boolean',
+    default: false,
+    brief: 'reuse the first harness marketplace sources for the others once',
+  },
 } as const;
 
 /** setup-only action selectors */

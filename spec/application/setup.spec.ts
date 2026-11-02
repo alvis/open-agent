@@ -32,6 +32,18 @@ vi.mock(
   '#adapters/guest/platform/session/open',
   async () => import('../mocks/session'),
 );
+// The native Codex app server owns hook trust; this test exercises setup around it.
+vi.mock(
+  '#adapters/drivers/harnesses/codex/hook-trust',
+  () =>
+    ({
+      trustCodexHooks: vi.fn(async () => undefined),
+    }) satisfies Pick<
+      typeof import('#adapters/drivers/harnesses/codex/hook-trust'),
+      'trustCodexHooks'
+    >,
+);
+
 /**
  * a managed workstation with a ready guest record for section behavior
  * @param root temporary guest filesystem root

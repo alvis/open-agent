@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CLAUDE_SETTINGS } from '#adapters/drivers/harnesses/claude/paths';
+import { CODEX_CONFIG } from '#adapters/drivers/harnesses/codex/paths';
 import {
   MANAGED_LABEL,
   mergeMetadataLabels,
@@ -32,6 +33,18 @@ vi.mock(
   '#adapters/guest/platform/session/open',
   async () => import('../../mocks/session'),
 );
+// Codex trusts its hooks through its app server, a guest process only the live specs run
+vi.mock(
+  '#adapters/drivers/harnesses/codex/hook-trust',
+  () =>
+    ({
+      trustCodexHooks: vi.fn(async () => undefined),
+    }) satisfies Pick<
+      typeof import('#adapters/drivers/harnesses/codex/hook-trust'),
+      'trustCodexHooks'
+    >,
+);
+
 describe('fn:setupAll', () => {
   it.each([
     { isReleaseChanged: false, withPairCode: false, optionalSections: false },
@@ -157,6 +170,13 @@ describe('fn:setupAll', () => {
             },
             native: {
               claude: {
+                gatewayConfigured: false,
+                modelDiscoveryEnabled: false,
+                pluginListAvailable: false,
+                awakeHooksInstalled: true,
+                authentication: 'not-configured' as const,
+              },
+              codex: {
                 gatewayConfigured: false,
                 modelDiscoveryEnabled: false,
                 pluginListAvailable: false,
@@ -335,6 +355,10 @@ describe('fn:setupAll', () => {
       await sprite.filesystem().exists('/opt/open-agent/workstation-name'),
     ).toBe(true);
     expect(await sprite.filesystem().exists(CLAUDE_SETTINGS)).toBe(true);
+    expect(await sprite.filesystem().exists(CODEX_CONFIG)).toBe(true);
+    expect(
+      await sprite.filesystem().exists('/home/agent/.codex/hooks.json'),
+    ).toBe(true);
     expect(services).not.toHaveBeenCalled();
     expect(exposure).not.toHaveBeenCalled();
   });

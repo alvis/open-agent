@@ -49,9 +49,9 @@ describe('fn:configureHarnesses', () => {
 
 describe('fn:harnessDrivers', () => {
   it('should resolve drivers in the requested order', () => {
-    expect(harnessDrivers(registry, ['claude']).map(({ id }) => id)).toEqual([
-      'claude',
-    ]);
+    expect(
+      harnessDrivers(registry, ['codex', 'claude']).map(({ id }) => id),
+    ).toEqual(['codex', 'claude']);
   });
 });
 
@@ -103,6 +103,19 @@ describe('fn:proxyRoute', () => {
         expect.objectContaining({
           code: 'INPUT',
           message: 'Claude proxy URL and API key must be supplied together',
+        }),
+      );
+      expect(() =>
+        proxyRoute({
+          enabled: true,
+          gateway,
+          url,
+          apiKey,
+          drivers: harnessDrivers(registry, ['codex']),
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          message: 'Codex proxy URL and API key must be supplied together',
         }),
       );
     },

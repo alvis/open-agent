@@ -18,6 +18,23 @@ const guest =
   {} satisfies Partial<GuestChannel> as Partial<GuestChannel> as GuestChannel;
 
 describe('fn:setupPlugins', () => {
+  it('should reject actions for a harness other than the explicitly selected one', async () => {
+    const context = pluginContext(
+      pluginFlags({
+        pluginHarness: 'claude',
+        disableCodexPlugin: ['coding@alvis'],
+      }),
+    );
+
+    await expect(
+      setupPlugins(dependencies, guest, context),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('--plugin-harness'),
+    });
+
+    expect(context.mutation.started).toBe(false);
+  });
+
   it.each([
     { host: {}, token: 'marketplace-private-token' },
     { host: { githubHost: 'GITHUB.COM' }, token: 'marketplace-private-token' },

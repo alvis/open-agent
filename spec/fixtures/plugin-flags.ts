@@ -13,20 +13,32 @@ export function pluginFlags(
 ): CommandOptions {
   const {
     claudePlugins,
+    codexPlugins,
     claudeMarketplace,
+    codexMarketplace,
     claudePlugin,
+    codexPlugin,
     removeClaudeMarketplace,
+    removeCodexMarketplace,
     disableClaudePlugin,
+    disableCodexPlugin,
     uninstallClaudePlugin,
+    uninstallCodexPlugin,
     ...options
   } = values;
   const harnessPlugins = harnessPluginOptions({
     claudePlugins,
+    codexPlugins,
     claudeMarketplace,
+    codexMarketplace,
     claudePlugin,
+    codexPlugin,
     removeClaudeMarketplace,
+    removeCodexMarketplace,
     disableClaudePlugin,
+    disableCodexPlugin,
     uninstallClaudePlugin,
+    uninstallCodexPlugin,
   });
 
   return { ...options, harnessPlugins };

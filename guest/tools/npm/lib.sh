@@ -214,7 +214,7 @@ EOF
 # cleans up after an update of the agent's npm tools: the downloads npm kept of
 # superseded versions and the T3 runtimes nothing needs. The tools that keep
 # a copy per version of their own are the t3 package's runtimes alone: the
-# claude package holds its binaries inside its own package. It
+# claude and codex packages hold their binaries inside their own package. It
 # returns 2, noting why on stderr, when npm is not there
 oa_npm_clean() {
   if ! test -x "$OA_NPM_NODE/npm"; then
