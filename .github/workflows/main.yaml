@@ -1,0 +1,66 @@
+name: main
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or branch to check (defaults to the commit the run starts from)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Test and lint
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js and pnpm
+        uses: pnpm/setup@v3
+        with:
+          cache: true
+          install: false
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: |
+          if [ -z "$BASE_SHA" ] || ! git diff --quiet "$BASE_SHA" -- package.json pnpm-lock.yaml \
+            pnpm-workspace.yaml 'presetter.config.*' 'vitest.config.*' 'vite.config.*'; then
+            pnpm run test
+          elif ! git diff --quiet "$BASE_SHA" -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs'; then
+            pnpm run test -- --project='*:UNIT' --changed="$BASE_SHA"
+          fi
+
+      - name: Lint
+        run: |
+          if [ -z "$BASE_SHA" ]; then
+            pnpm run lint
+          else
+            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" -- \
+              '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' '*.json' '*.yaml' '*.yml' '*.md' \
+              ':(exclude)pnpm-lock.yaml' |
+              xargs -0 -r pnpm run lint --
+          fi
+          git diff --exit-code
