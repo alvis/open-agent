@@ -51,11 +51,17 @@ describe('fn:validateCommandRequest', () => {
     ).not.toThrow();
   });
 
-  it('should accept a non-interactive setup whose env file selects its section', () => {
+  it('should accept a non-interactive setup whose env or setup file selects its section', () => {
     expect(() =>
       validateCommandRequest({
         command: 'setup',
         options: { envFile: 'guest.env', nonInteractive: true },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateCommandRequest({
+        command: 'setup',
+        options: { setupFile: 'system.sh', nonInteractive: true },
       }),
     ).not.toThrow();
     expect(() =>
@@ -103,6 +109,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
   it.each([
     { release: 'latest' },
     { envFile: 'input.env' },
+    { setupFile: 'setup.sh' },
   ] satisfies CommandOptions[])(
     'should refuse integration input outside the section that applies it: %j',
     (options) => {

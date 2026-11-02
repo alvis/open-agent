@@ -43,9 +43,9 @@ describe('fn:setupAll', () => {
       await using directory = await mkdtempDisposable(
         join(tmpdir(), 'open-agent-setup-all-'),
       );
-      const envFile = join(directory.path, 'runtime.env');
+      const setupFile = join(directory.path, 'setup.sh');
       if (optionalSections || isReleaseChanged) {
-        await writeFile(envFile, 'PROJECT_COLOR=blue\n');
+        await writeFile(setupFile, '#!/bin/sh\nexit 0\n');
       }
       const sprite = createFilesystemSprite({
         root: directory.path,
@@ -74,7 +74,8 @@ describe('fn:setupAll', () => {
           gitIdentity: optionalSections ? true : false,
           gitName: optionalSections ? 'Ada' : undefined,
           gitEmail: optionalSections ? 'ada@example.test' : undefined,
-          envFile: optionalSections || isReleaseChanged ? envFile : undefined,
+          setupFile:
+            optionalSections || isReleaseChanged ? setupFile : undefined,
           localCredentials: false,
           nonInteractive: true,
           withPairCode,
@@ -124,7 +125,7 @@ describe('fn:setupAll', () => {
         native: {
           ...dependencies.guest.native,
           configureGit: async () => undefined,
-          configureRuntimeEnv: async () => {
+          runSetupFile: async () => {
             if (isReleaseChanged) {
               lifecycle.push({
                 event: 'final section',
@@ -180,14 +181,7 @@ describe('fn:setupAll', () => {
         tools: 'updated',
         ...(withPairCode ? { pairing: { status: 'created' } } : {}),
         ...(optionalSections
-          ? {
-              github: 'skipped',
-              gitIdentity: 'configured',
-              runtimeEnvironment: {
-                status: 'configured',
-                names: ['PROJECT_COLOR'],
-              },
-            }
+          ? { github: 'skipped', gitIdentity: 'configured', setupFile: 'ran' }
           : {}),
       });
 
@@ -213,12 +207,12 @@ describe('fn:setupAll', () => {
     },
   );
 
-  it('should leave the previous release serving when the final setup section fails before restart', async () => {
+  it('should leave the previous release serving when the final setup command fails before restart', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-setup-release-failure-'),
     );
-    const envFile = join(directory.path, 'runtime.env');
-    await writeFile(envFile, 'PROJECT_COLOR=blue\n');
+    const setupFile = join(directory.path, 'setup.sh');
+    await writeFile(setupFile, '#!/bin/sh\nexit 23\n');
     const sprite = createFilesystemSprite({
       root: directory.path,
       execute: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
@@ -231,7 +225,7 @@ describe('fn:setupAll', () => {
     const context: SetupContext = {
       ...workstationOf(sprite),
       options: {
-        envFile,
+        setupFile,
         github: false,
         gitIdentity: false,
         localCredentials: false,
@@ -246,20 +240,19 @@ describe('fn:setupAll', () => {
     const channel = await context.connection.guest();
     const agentName = registry.agents[profile.agent].service.name;
     await channel.services.ensure(agentService(registry, profile));
-    const failure = new Error('The runtime environment could not be written');
-    const observed: Array<{
-      status: string | undefined;
-      environment: Record<string, string>;
-    }> = [];
+    const failure = new Error(
+      'The selected setup command exited with status 23',
+    );
+    const observed: Array<{ status: string | undefined; script: string }> = [];
     const wired = dependenciesWith({
       guest: {
         ...dependencies.guest,
         native: {
           ...dependencies.guest.native,
-          configureRuntimeEnv: async (_guest, environment) => {
+          runSetupFile: async (_guest, bytes) => {
             observed.push({
               status: services.get(agentName)?.state?.status,
-              environment,
+              script: bytes.toString(),
             });
             throw failure;
           },
@@ -270,7 +263,7 @@ describe('fn:setupAll', () => {
     await expect(setupAll(wired, channel, context)).rejects.toBe(failure);
 
     expect(observed).toEqual([
-      { status: 'running', environment: { PROJECT_COLOR: 'blue' } },
+      { status: 'running', script: '#!/bin/sh\nexit 23\n' },
     ]);
     expect(services.get(agentName)?.state?.status).toBe('running');
     expect(

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   readInputSources,
+  readSetupFile,
   resolveSecret,
   runtimeEnvironment,
 } from '#application/input/sources';
@@ -151,6 +152,36 @@ describe('fn:resolveSecret', () => {
   });
 });
 
+describe('fn:readSetupFile', () => {
+  it('should return the file bytes unchanged', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'open-agent-setup-file-'));
+    const path = join(directory, 'setup.sh');
+    const bytes = Buffer.from([0x23, 0x21, 0x00, 0xff, 0x0a]);
+    await writeFile(path, bytes);
+
+    try {
+      await expect(readSetupFile(dependencies, path)).resolves.toEqual(bytes);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('should refuse an empty file with an input fault', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'open-agent-setup-file-'));
+    const path = join(directory, 'empty.sh');
+    await writeFile(path, '');
+
+    try {
+      await expect(readSetupFile(dependencies, path)).rejects.toMatchObject({
+        code: 'INPUT',
+        message: expect.stringContaining('is empty'),
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('input source failures', () => {
   it('should select and redact a keychain secret through the host boundary', async () => {
     const run = vi.fn<typeof dependencies.host.run>(
@@ -196,5 +227,20 @@ describe('input source failures', () => {
       code: 'INPUT',
       message: expect.stringContaining('keychain'),
     });
+  });
+
+  it('should classify an unreadable setup file as a private input fault', async () => {
+    const host = {
+      ...dependencies.host,
+      readInputBytes: vi.fn<typeof dependencies.host.readInputBytes>(
+        async () => {
+          throw new Error('private file contents');
+        },
+      ),
+    } satisfies typeof dependencies.host;
+
+    await expect(
+      readSetupFile({ host }, '/selected-setup'),
+    ).rejects.toMatchObject({ code: 'INPUT', causeVisibility: 'private' });
   });
 });

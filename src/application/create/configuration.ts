@@ -26,6 +26,8 @@ interface NewWorkstationConfiguration {
   githubHost?: string;
   gitIdentity?: GitIdentity;
   runtimeEnv: Record<string, string>;
+  /** executable run once as root after the native configuration */
+  setupFile?: Buffer;
 }
 
 /** the named inputs of configure new workstation */
@@ -95,7 +97,7 @@ interface EnrolAndConfigureParams {
 
 /**
  * enrols the selected network, writes the native harness and account
- * configuration
+ * configuration, then runs the selected setup file
  * @param dependencies the registered drivers, the guest mechanics
  * @param params the call's inputs: guest, configuration, interaction
  */
@@ -119,6 +121,18 @@ async function enrolAndConfigure(
     stage: 'create.configuration',
     action: async () => configureNative(dependencies, guest, configuration),
   });
+  const { setupFile } = configuration;
+  if (setupFile) {
+    interaction?.progress({
+      stage: 'configuration',
+      message: 'Running the setup file',
+    });
+    await traceStage({
+      stage: 'create.setup-file',
+      action: async () =>
+        dependencies.guest.native.runSetupFile(guest, setupFile),
+    });
+  }
 }
 
 /**

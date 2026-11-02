@@ -124,6 +124,11 @@ export interface EnvironmentSetupData {
     { status: 'configured'; names: string[] } | { status: 'skipped' };
 }
 
+/** whether the selected setup file ran */
+export interface SystemSetupData {
+  setupFile: 'ran' | 'skipped';
+}
+
 /** how many tools an update left current, did not run for, and failed */
 export interface ComponentCounts {
   /** tools current after the update */
@@ -160,6 +165,7 @@ export interface AllSetupData
     Partial<GithubSetupData>,
     Partial<GitSetupData>,
     Partial<EnvironmentSetupData>,
+    Partial<SystemSetupData>,
     NetworkSetupData,
     ToolsSetupData {}
 
@@ -171,6 +177,7 @@ interface SetupSectionData {
   github: GithubSetupData;
   git: GitSetupData;
   env: EnvironmentSetupData;
+  system: SystemSetupData;
   tools: ToolsSetupData;
 }
 

@@ -7,6 +7,7 @@ import { driveInk } from '../../fixtures/ink';
 describe('fn:selectSetupSection', () => {
   it.each([
     { options: { withPairCode: true }, section: 'agent' },
+    { options: { setupFile: 'setup.sh' }, section: 'system' },
     { options: { envFile: 'runtime.vars' }, section: 'env' },
   ] as const)(
     'should select $section from explicit actions',

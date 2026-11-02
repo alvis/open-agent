@@ -1,5 +1,6 @@
 import { pairAgent } from '#application/catalog/services';
 import { resolveInputs } from '#application/input';
+import { readSetupFile } from '#application/input/sources';
 import { markInstallationReady } from '#application/installation/readiness';
 import { CommandFault } from '#kernel/faults';
 import { PairingSecret } from '#kernel/pairing-secret';
@@ -14,6 +15,7 @@ import type {
   GithubSetupData,
   GitSetupData,
   EnvironmentSetupData,
+  SystemSetupData,
 } from '#application/data';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { GuestChannel } from '#application/ports/guest-channel';
@@ -225,4 +227,37 @@ export async function setupEnvironment(
       names: Object.keys(input.runtimeEnv),
     },
   };
+}
+
+/**
+ * runs the selected setup file once as root, asking for its path in a
+ * terminal and skipping the section when no file is selected and no prompt
+ * can ask for one
+ * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
+ * @param guest guest channel of the managed workstation
+ * @param context setup file choice, prompts, and mutation state
+ * @returns whether the setup file ran
+ */
+export async function setupSystem(
+  dependencies: ApplicationDependencies,
+  guest: GuestChannel,
+  context: SetupContext,
+): Promise<SystemSetupData> {
+  const { options, interaction, mutation } = context;
+  const path =
+    options.setupFile ??
+    (interaction && !options.nonInteractive
+      ? await interaction.input({ message: 'Setup file path', required: true })
+      : undefined);
+  if (!path) {
+    return { setupFile: 'skipped' };
+  }
+  const setupFile =
+    path === options.setupFile && context.input.setupFile
+      ? context.input.setupFile
+      : await readSetupFile(dependencies, path);
+  mutation.started = true;
+  await dependencies.guest.native.runSetupFile(guest, setupFile);
+
+  return { setupFile: 'ran' };
 }
