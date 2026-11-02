@@ -8,7 +8,7 @@ import type { HostPorts } from './host';
 export interface ApplicationDependencies {
   /** the registered drivers of every kind */
   registry: DriverRegistry;
-  /** the selection a workstation starts from */
+  /** the selection and options a workstation starts from */
   defaults: ProfileDefaults;
   /** the guest operations drivers and setup run over a channel */
   guest: GuestMechanics;

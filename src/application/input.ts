@@ -16,6 +16,7 @@ import type { CredentialStoreLocation } from '#domain/credentials';
 import type { WorkstationProfile } from '#domain/profile';
 
 import type { SelectionResolution } from './input/selection';
+import type { Resolved } from './input/selection/sources';
 import type { SuppliedSelection } from './input/selection/supplied';
 import type { InputSources } from './input/sources';
 import type { ResolvedInputs, RequiredInput } from './input/types';
@@ -113,7 +114,7 @@ export async function resolveCreateInputs(
 /**
  * validates a resolved selection against the catalog and driver capabilities
  * @param dependencies the registered drivers
- * @param resolution selection resolved from every source
+ * @param resolution selection resolved from every source, with its unreadable values
  * @param options parsed flags, for the pairing request
  * @returns the profile, once every catalog and capability rule holds
  * @throws {CommandFault} listing every violation at once
@@ -123,13 +124,22 @@ export function requireValidProfile(
   resolution: SelectionResolution,
   options: CommandOptions,
 ): WorkstationProfile {
+  const { candidate, problems, isIdleTimeoutRequested } = resolution;
   const validation = validateProfile({
     declarations: dependencies.registry,
-    candidate: resolution.candidate,
-    options: { isPairingRequested: options.withPairCode === true },
+    candidate,
+    options: {
+      isPairingRequested: options.withPairCode === true,
+      isIdleTimeoutRequested,
+    },
   });
-  if (!validation.isValid) {
-    throw selectionFault(validation.violations.map(({ message }) => message));
+  if (!validation.isValid || problems.length > 0) {
+    throw selectionFault([
+      ...problems,
+      ...(validation.isValid
+        ? []
+        : validation.violations.map(({ message }) => message)),
+    ]);
   }
 
   return validation.profile;
@@ -139,18 +149,21 @@ export function requireValidProfile(
  * validates, before any provider or guest call, what a setup run's flags and
  * environment supply on their own
  * @param dependencies the registered drivers, the profile defaults
- * @param supplied values the run supplies
+ * @param supplied values the run supplies, with its unreadable values
  * @param options parsed flags, for the pairing request
  * @throws {CommandFault} listing every violation at once
  */
 export function requireValidSuppliedSelection(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
-  supplied: SuppliedSelection,
+  supplied: Resolved<SuppliedSelection>,
   options: CommandOptions,
 ): void {
-  const details = suppliedSelectionViolations(dependencies, supplied, {
-    isPairingRequested: options.withPairCode === true,
-  }).map(({ message }) => message);
+  const details = [
+    ...supplied.problems,
+    ...suppliedSelectionViolations(dependencies, supplied.value, {
+      isPairingRequested: options.withPairCode === true,
+    }).map(({ message }) => message),
+  ];
   if (details.length > 0) {
     throw selectionFault(details);
   }

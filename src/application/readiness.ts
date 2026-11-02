@@ -1,3 +1,4 @@
+import { harnessDrivers } from '#application/catalog/harnesses';
 import { networkDriver } from '#application/catalog/networks';
 
 import { CommandFault } from '#kernel/faults';
@@ -105,6 +106,7 @@ function readinessChecks(
 ): ReadinessFinding[] {
   const { profile } = inspection.environment;
   const { native } = inspection;
+  const drivers = harnessDrivers(dependencies.registry, profile.harnesses);
   const agent = dependencies.registry.agents[profile.agent].readiness({
     services: inspection.services,
     environment: native?.agentEnvironment,
@@ -115,5 +117,6 @@ function readinessChecks(
     ...agent.service,
     ...agent.environment,
     ...network.readiness(inspection.network),
+    ...drivers.flatMap((driver) => driver.readiness(native?.[driver.id])),
   ];
 }

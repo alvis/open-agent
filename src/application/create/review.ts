@@ -50,6 +50,7 @@ export function reviewCreatePlan(
         `Create ${values.name} on ${provider.displayName}`,
         `Harnesses: ${profile.harnesses.map((id) => harnessLabel(id)).join(', ')}`,
         'No private network',
+        `Suspend after idle: ${idleSummary(profile.options.idleTimeoutMinutes)}`,
         `${dependencies.registry.agents[profile.agent].displayName} exposed after readiness`,
         `${credential.label}: ${input.sources[credential.environment] ?? 'prompt/session'}`,
       ].join('\n'),
@@ -84,4 +85,13 @@ export async function confirmCreation(
   }
 
   return undefined;
+}
+
+/**
+ * describes the idle suspension the profile records
+ * @param minutes minutes before suspension, 0 for never
+ * @returns review text
+ */
+function idleSummary(minutes: number): string {
+  return minutes ? `${minutes} minutes` : 'never';
 }

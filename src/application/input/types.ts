@@ -11,7 +11,7 @@ export interface ResolvedInputs {
   providerToken?: string;
   /** the provider credential was entered at a prompt in this run and is not saved yet */
   isProviderTokenEntered?: boolean;
-  /** driver selection this run resolved */
+  /** driver selection and options this run resolved */
   profile: WorkstationProfile;
   sources: Record<string, string>;
   missing: string[];

@@ -6,6 +6,7 @@ import { OPEN_AGENT_VERSION } from '#kernel/version';
 
 import { reportProgress } from './installation/progress';
 
+import type { ProviderDriver } from '#application/ports/drivers';
 import type { GuestMechanics } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { Interaction } from '#application/ports/interaction';
@@ -22,6 +23,8 @@ import type { WorkstationProfile } from '#domain/profile';
 
 /** what a workstation is installed with */
 export interface InstallParams {
+  /** the provider the workstation runs on */
+  provider: ProviderDriver;
   /** the root setup session the plan runs in */
   connection: SetupSession;
   /** the profile setup applies */
@@ -56,16 +59,17 @@ interface BottledAssembly {
  * registered last. The environment.json the plan writes stays `incomplete`
  * until the caller marks the installation ready
  * @param mechanics the guest's plan and provider services
- * @param params the session, profile, previous record, progress and what runs before the services
+ * @param params the provider, session, profile, previous record, progress and what runs before the services
  * @returns the environment the plan recorded
  */
 export async function installWorkstation(
   mechanics: Pick<GuestMechanics, 'plan' | 'services'>,
   params: InstallParams,
 ): Promise<GuestEnvironment> {
-  const { connection, previous } = params;
+  const { provider, connection, previous } = params;
   await connection.open();
   const base: AssemblyParams = {
+    provider,
     profile: params.profile,
     release: connection.release,
     version: OPEN_AGENT_VERSION,

@@ -3,6 +3,7 @@ import type { NetworkStatus } from '#domain/observations/network';
 import type { GuestServiceState } from '#domain/services';
 
 import type { GuestEnvironment } from './environment';
+import type { GovernorReport } from './governor';
 
 /** current explicit guest inspection result */
 export interface GuestInspection {
@@ -12,6 +13,8 @@ export interface GuestInspection {
   /** the environment setup recorded */
   environment: GuestEnvironment;
   probeFailures: InspectionProbeFailure[];
+  /** the idle governor's recorded state, reported but never a readiness failure */
+  governor: GovernorReport;
 }
 
 /** a live probe that could not establish its current guest state */

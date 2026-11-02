@@ -6,6 +6,7 @@ import { registry } from '#composition/registry';
 
 import { DISABLED_NETWORK_PROFILE } from '../../../fixtures/profile';
 
+import type { PlanProvider } from '#application/ports/plan';
 import type { ToolSpec } from '#domain/tools';
 
 vi.mock(
@@ -37,8 +38,15 @@ const tool = {
 
 describe('fn:foundationSteps', () => {
   it('should leave Homebrew optional when only optional tools need it', async () => {
+    const { id, capabilities } = registry.providers.sprite;
+    const provider = {
+      id,
+      capabilities: { ...capabilities, keepAwakeMode: 'none' },
+    } satisfies PlanProvider;
+
     const steps = await foundationSteps({
       registry,
+      provider,
       profile: DISABLED_NETWORK_PROFILE,
       release,
       family: familyOf(release),
@@ -54,6 +62,7 @@ describe('fn:foundationSteps', () => {
   it('should omit Homebrew when no tool resolves to a formula', async () => {
     const steps = await foundationSteps({
       registry,
+      provider: registry.providers.sprite,
       profile: DISABLED_NETWORK_PROFILE,
       release,
       family: familyOf(release),

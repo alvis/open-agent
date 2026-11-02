@@ -5,6 +5,7 @@ import {
   networkChoices,
   providerChoices,
 } from './selection/choices';
+import { resolveOptions } from './selection/options';
 import { activePrompts } from './selection/sources';
 import { readSelection } from './selection/supplied';
 
@@ -13,7 +14,7 @@ import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { ProfileCandidate, WorkstationProfile } from '#domain/profile';
 import type { SelectionField } from '#domain/selection-inputs';
 
-import type { Prompts, SelectionContext } from './selection/sources';
+import type { Prompts, Resolved, SelectionContext } from './selection/sources';
 import type { SuppliedSelection } from './selection/supplied';
 
 /** what an existing workstation's setup run reads before reaching the workstation */
@@ -36,6 +37,10 @@ interface SetupSelectionContext extends SelectionContext {
 export interface SelectionResolution {
   /** selection to validate against the catalog */
   candidate: ProfileCandidate;
+  /** environment values that could not be read */
+  problems: readonly string[];
+  /** whether the caller supplied the idle timeout rather than taking the default */
+  isIdleTimeoutRequested: boolean;
 }
 
 /** every field a new workstation's selection reads */
@@ -44,13 +49,15 @@ const CREATE_FIELDS: readonly SelectionField[] = [
   'agent',
   'harnesses',
   'network',
+  'idleTimeoutMinutes',
+  'holdMaxMinutes',
 ];
 
 /** the fields each setup section reads and saves; every other field keeps its recorded value */
 const SECTION_FIELDS: Readonly<
   Partial<Record<SetupSection, readonly SelectionField[]>>
 > = {
-  all: ['harnesses', 'network'],
+  all: ['harnesses', 'network', 'idleTimeoutMinutes', 'holdMaxMinutes'],
   network: ['network'],
 };
 
@@ -97,31 +104,35 @@ async function resolveCreateNetwork(
  * reads the values a create run supplies
  * @param dependencies the registered drivers, which declare the selection inputs
  * @param context flags and sources
- * @returns the supplied values
+ * @returns the supplied values and every unreadable environment value
  */
 function readCreateSelection(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: Omit<SelectionContext, 'interaction'>,
-): SuppliedSelection {
+): Resolved<SuppliedSelection> {
   return readSelection(dependencies, context, CREATE_FIELDS);
 }
 
 /**
  * resolves a new workstation's selection in dependency order: provider, ACP
- * agent, harnesses the agent supports, then network; each step takes the flag,
- * the environment, the selected credential file, a prompt, then the default,
- * and a step with one choice is skipped; every supplied value is read before
- * the first prompt
+ * agent, harnesses the agent supports, network, then the options the selected
+ * drivers support; each step takes the flag, the environment, the selected
+ * credential file, a prompt, then the default, and a step with one choice is skipped;
+ * every supplied value is read before the first prompt, and an unreadable one
+ * suppresses prompting so it is reported at once
  * @param dependencies the registered drivers, the profile defaults
  * @param context flags, sources and optional prompts
- * @returns the candidate profile to validate
+ * @returns the selection and every unreadable environment value
  */
 export async function resolveCreateSelection(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
   context: SelectionContext,
 ): Promise<SelectionResolution> {
-  const supplied = readCreateSelection(dependencies, context);
-  const prompts = activePrompts(context);
+  const { value: supplied, problems } = readCreateSelection(
+    dependencies,
+    context,
+  );
+  const prompts = problems.length === 0 ? activePrompts(context) : undefined;
   const provider =
     supplied.provider ??
     (await prompts?.choose('Provider', providerChoices(dependencies))) ??
@@ -148,7 +159,16 @@ export async function resolveCreateSelection(
       agent,
       harnesses,
       network,
+      options: await resolveOptions(dependencies, {
+        selected: { provider, agent },
+        supplied: supplied.options,
+        fields: CREATE_FIELDS,
+        prompts,
+        base: dependencies.defaults.options,
+      }),
     },
+    problems,
+    isIdleTimeoutRequested: supplied.options.idleTimeoutMinutes !== undefined,
   };
 }
 
@@ -158,12 +178,12 @@ export async function resolveCreateSelection(
  * other field only when the targeted section owns it
  * @param dependencies the registered drivers, which declare the selection inputs
  * @param context flags, sources and targeted section
- * @returns the supplied values
+ * @returns the supplied values and every unreadable environment value
  */
 export function readSetupSelection(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: SetupReadContext,
-): SuppliedSelection {
+): Resolved<SuppliedSelection> {
   return readSelection(dependencies, context, sectionFields(context.section));
 }
 
@@ -196,7 +216,19 @@ export async function resolveSetupSelection(
       agent: supplied.agent ?? recorded.agent,
       harnesses,
       network,
+      options: await resolveOptions(dependencies, {
+        selected: {
+          provider: recorded.provider,
+          agent: recorded.agent,
+        },
+        supplied: supplied.options,
+        fields: sectionFields(section),
+        prompts,
+        base: recorded.options,
+      }),
     },
+    problems: [],
+    isIdleTimeoutRequested: supplied.options.idleTimeoutMinutes !== undefined,
   };
 }
 

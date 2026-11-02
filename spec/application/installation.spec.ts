@@ -141,6 +141,7 @@ describe('fn:installWorkstation', () => {
     };
 
     const result = await installWorkstation(boundary.mechanics, {
+      provider: dependencies.registry.providers.sprite,
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
       previous,
@@ -153,6 +154,7 @@ describe('fn:installWorkstation', () => {
     expect(boundary.lend.mock.calls).toEqual([[42]]);
     expect(boundary.assemble).toHaveBeenCalledWith(
       expect.objectContaining({
+        provider: dependencies.registry.providers.sprite,
         profile: DISABLED_NETWORK_PROFILE,
         release: boundary.connection.release,
         version: OPEN_AGENT_VERSION,
@@ -186,6 +188,7 @@ describe('fn:installWorkstation', () => {
     boundary.needsBottleProbe.mockReturnValue(true);
 
     const result = await installWorkstation(boundary.mechanics, {
+      provider: dependencies.registry.providers.sprite,
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
     });
@@ -210,6 +213,7 @@ describe('fn:installWorkstation', () => {
     });
 
     await installWorkstation(boundary.mechanics, {
+      provider: dependencies.registry.providers.sprite,
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
     });
@@ -260,6 +264,7 @@ describe('fn:installWorkstation', () => {
     });
 
     await installWorkstation(boundary.mechanics, {
+      provider: dependencies.registry.providers.sprite,
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
     });
@@ -307,6 +312,7 @@ describe('fn:installWorkstation', () => {
     });
 
     await installWorkstation(boundary.mechanics, {
+      provider: dependencies.registry.providers.sprite,
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
     });
@@ -334,6 +340,7 @@ describe('fn:installWorkstation', () => {
 
     await expect(
       installWorkstation(boundary.mechanics, {
+        provider: dependencies.registry.providers.sprite,
         connection: boundary.connection,
         profile: DISABLED_NETWORK_PROFILE,
       }),
@@ -360,11 +367,13 @@ describe('fn:installWorkstation', () => {
     });
 
     const result = await installWorkstation(boundary.mechanics, {
+      provider: dependencies.registry.providers.sprite,
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
     });
 
     const base = {
+      provider: dependencies.registry.providers.sprite,
       profile: DISABLED_NETWORK_PROFILE,
       release: boundary.connection.release,
       version: OPEN_AGENT_VERSION,
@@ -421,6 +430,7 @@ describe('fn:installWorkstation', () => {
 
       await expect(
         installWorkstation(boundary.mechanics, {
+          provider: dependencies.registry.providers.sprite,
           connection: boundary.connection,
           profile: DISABLED_NETWORK_PROFILE,
         }),

@@ -16,6 +16,7 @@ import type { AgentEnvironments } from '#domain/observations/agent';
 import type {
   HarnessInspection,
   HarnessEvidence,
+  NativeHarnessInspection,
 } from '#domain/observations/harness';
 import type {
   NetworkStatus,
@@ -146,6 +147,25 @@ export interface ProviderDriver<
   awaitGuestReady(workstation: WorkstationRecord): Promise<void>;
 }
 
+/** command the idle-governor hooks call on the guest */
+export interface AwakeHookCommand {
+  /**
+   * command-line prefix of the awake command; the harness appends the awake
+   * action, its own identifier as the source and `--session -`
+   */
+  program: string;
+}
+
+/** installs idle-governor heartbeats and turn holds into native hooks */
+export interface HarnessHookInstaller {
+  /**
+   * merges owned hooks while preserving unrelated native hooks
+   * @param guest guest channel
+   * @param command awake command the hooks invoke
+   */
+  install(guest: GuestChannel, command: AwakeHookCommand): Promise<void>;
+}
+
 /** a coding CLI the user works through */
 export interface HarnessDriver<
   Name extends string = string,
@@ -153,6 +173,8 @@ export interface HarnessDriver<
 > extends HarnessDeclaration<Name> {
   /** the tools the harness installs, its own CLI first */
   tools: readonly ToolSpec[];
+  /** idle-governor hook installer */
+  hooks: HarnessHookInstaller;
   /**
    * merges native configuration, preserving unrelated user settings
    * @param guest guest channel
@@ -164,6 +186,14 @@ export interface HarnessDriver<
    * @returns configuration and probe evidence
    */
   inspect(guest: GuestChannel): Promise<HarnessInspection<Evidence>>;
+  /**
+   * derives readiness findings from already gathered native evidence
+   * @param inspection configuration evidence, absent when inspection failed
+   * @returns readiness findings in reporting order
+   */
+  readiness(
+    inspection: NativeHarnessInspection | undefined,
+  ): ReadinessFinding[];
 }
 
 /** facts the agent's readiness checks compare */

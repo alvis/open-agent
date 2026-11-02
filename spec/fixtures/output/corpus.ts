@@ -9,6 +9,7 @@ import type { CurrentReadiness } from '#application/data';
 import type { MachineSummary } from '#application/machine';
 import type { ReadinessAssessment } from '#application/readiness';
 import type { CommandResult } from '#application/result';
+import type { GovernorState } from '#domain/observations/governor';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { CommandErrorCode } from '#kernel/faults';
 
@@ -82,6 +83,19 @@ const FAILING_READINESS: ReadinessAssessment = {
   probeFailures: [{ probe: 'network', reason: 'network status timed out' }],
 };
 
+const RECORDED_GOVERNOR: GovernorState = {
+  version: 1,
+  updatedAt: '2026-10-09T00:10:00.000Z',
+  keepAwakeMode: 'native-deadline',
+  idleTimeoutMinutes: 5,
+  holdMaxMinutes: 60,
+  lastHeartbeat: '2026-10-09T00:10:00.000Z',
+  holds: [],
+  openHolds: 0,
+  deadline: '2026-10-09T00:15:00.000Z',
+  diagnostics: [],
+};
+
 const INSPECTION: GuestInspection = {
   services: [],
   network: {
@@ -91,6 +105,7 @@ const INSPECTION: GuestInspection = {
   },
   native: {
     claude: {
+      awakeHooksInstalled: false,
       authentication: 'not-configured',
     },
     harnesses: {
@@ -101,6 +116,7 @@ const INSPECTION: GuestInspection = {
   },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
+  governor: { recorded: true, state: RECORDED_GOVERNOR },
 };
 
 const INSTALLED_TOOLS: GuestInspection['environment']['tools'] = [
@@ -482,6 +498,55 @@ export const CORPUS: readonly CorpusCase[] = [
       },
     },
   }),
+  corpusCase('show-inspection-awake-hooks', {
+    command: 'show',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      inspection: {
+        ...INSPECTION,
+        native: {
+          ...INSPECTION.native!,
+          claude: { ...INSPECTION.native!.claude!, awakeHooksInstalled: true },
+        },
+      },
+    },
+  }),
+  corpusCase('show-governor-not-recorded', {
+    command: 'show',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      inspection: {
+        ...INSPECTION,
+        governor: {
+          recorded: false,
+          reason: 'no awake event has been recorded yet',
+        },
+      },
+    },
+  }),
+  corpusCase('show-governor-adapter-failure', {
+    command: 'show',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      inspection: {
+        ...INSPECTION,
+        governor: governed({
+          lastHeartbeat: undefined,
+          deadline: undefined,
+          keepAwakeMode: undefined,
+          openHolds: 1,
+          adapter: {
+            at: '2026-10-09T00:10:00.000Z',
+            action: 'apply-deadline',
+            failure: 'deadline refused',
+          },
+        }),
+      },
+    },
+  }),
   corpusCase('show-guest-control-characters', {
     command: 'show',
     ok: true,
@@ -489,6 +554,13 @@ export const CORPUS: readonly CorpusCase[] = [
       machine: MACHINE,
       inspection: {
         ...INSPECTION,
+        governor: governed({
+          adapter: {
+            at: '2026-10-09T00:10:00.000Z',
+            action: 'apply-deadline',
+            failure: 'deadline\u001b[2J refused\u009b31m',
+          },
+        }),
         network: {
           ...INSPECTION.network,
           reason: 'guest said\u0007 \u001b[1mbold\u001b[0m',
@@ -546,6 +618,43 @@ export const CORPUS: readonly CorpusCase[] = [
       machine: MACHINE,
       currentReadiness: currentReadiness({
         services: [{ name: 't3-code', state: 'running' }],
+      }),
+    },
+  }),
+  corpusCase('doctor-keep-awake-native-deadline-passed', {
+    command: 'doctor',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      currentReadiness: currentReadiness({
+        governor: governed({ deadline: '2026-10-08T00:00:00.000Z' }),
+      }),
+    },
+  }),
+  corpusCase('doctor-keep-awake-native-deadline-released', {
+    command: 'doctor',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      currentReadiness: currentReadiness({
+        governor: governed({
+          deadline: undefined,
+          adapter: {
+            at: '2026-10-09T00:10:00.000Z',
+            action: 'apply-deadline',
+            result: 'released',
+          },
+        }),
+      }),
+    },
+  }),
+  corpusCase('doctor-keep-awake-none', {
+    command: 'doctor',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      currentReadiness: currentReadiness({
+        governor: governed({ keepAwakeMode: 'none', deadline: undefined }),
       }),
     },
   }),
@@ -619,7 +728,7 @@ export const CORPUS: readonly CorpusCase[] = [
   corpusCase('parser-failure-input', {
     command: null,
     ok: false,
-    error: { code: 'INPUT', message: 'Invalid value for --network' },
+    error: { code: 'INPUT', message: 'Invalid value for --idle-minutes' },
   }),
   ...ERROR_CODES.map((code) =>
     corpusCase(`error-code-${code.toLowerCase()}`, {
@@ -706,6 +815,15 @@ function sdkObservation<T>(value: unknown): T {
 }
 
 /**
+ * builds a recorded governor report that differs from the default
+ * @param state fields replacing the default recorded state
+ * @returns the report
+ */
+function governed(state: Partial<GovernorState>): GuestInspection['governor'] {
+  return { recorded: true, state: { ...RECORDED_GOVERNOR, ...state } };
+}
+
+/**
  * builds doctor readiness evidence that differs from a healthy default
  * @param overrides fields replacing the healthy default
  * @returns the readiness evidence
@@ -719,6 +837,7 @@ function currentReadiness(
     native: INSPECTION.native,
     services: [],
     environment: INSPECTION.environment,
+    governor: INSPECTION.governor,
     ...overrides,
   };
 }

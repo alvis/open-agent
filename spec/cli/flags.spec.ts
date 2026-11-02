@@ -82,6 +82,24 @@ describe('cmd:setup', () => {
     );
   });
 
+  it('should parse a signed whole-number flag and reject fractional flag text', async () => {
+    const accepted = await parseFlags(['--idle-minutes', ' -2 ']);
+    const rejected = await parseFlags(['--idle-minutes', '1.5']);
+
+    expect(accepted).toMatchObject({
+      options: [expect.objectContaining({ idleMinutes: -2 })],
+      diagnostics: [],
+      exitCode: 0,
+    });
+    expect(rejected).toMatchObject({
+      options: [],
+      diagnostics: expect.arrayContaining([
+        expect.stringContaining('whole number'),
+      ]),
+    });
+    expect(rejected.exitCode).not.toBe(0);
+  });
+
   it('should reject unknown section values before a command handler runs', async () => {
     const parsed = await parseFlags(['--section', 'unsupported']);
 

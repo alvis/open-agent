@@ -1,3 +1,4 @@
+import type { IdleForm, KeepAwakeMode, WakeMode } from '#domain/declarations';
 import type { OsFamilyId } from '#domain/guest';
 import type { GuestAccount, GuestCommand } from '#domain/guest-command';
 import type { WorkstationProfile } from '#domain/profile';
@@ -32,6 +33,28 @@ export interface SkippedTool {
   name: string;
   /** why no source is usable */
   reason: string;
+}
+
+/** the provider's facts the idle governor and its awake adapter read */
+export interface EnvironmentProvider {
+  /** provider identifier */
+  id: string;
+  /** who decides when the workstation sleeps */
+  keepAwakeMode: KeepAwakeMode;
+  /** idle forms in preference order */
+  idleForms: readonly IdleForm[];
+  /** how a sleeping workstation is woken */
+  wakeMode: WakeMode;
+  /** a cli-restore provider opts in to governor-initiated sleep */
+  supportsCliWakeSleep: boolean;
+  /** furthest ahead, in minutes, one deadline keeps the workstation awake; null when unlimited */
+  maxAwakeDeadlineMinutes: number | null;
+  /** minutes without heartbeat or hold before sleep, capped at the deadline limit; 0 never sleeps */
+  idleTimeoutMinutes: number;
+  /** minutes a turn hold lasts after its last refresh, capped at the deadline limit */
+  holdMaxMinutes: number;
+  /** where the provider's awake adapter is installed; null when it deploys none */
+  awakeAdapter: string | null;
 }
 
 /** a command recorded for a guest program to run */
@@ -96,6 +119,8 @@ export interface GuestEnvironment {
   profile: WorkstationProfile;
   /** the installed tools */
   tools: readonly EnvironmentTool[];
+  /** the provider's facts */
+  provider: EnvironmentProvider;
   /** the agent's launch facts */
   agent: EnvironmentAgent;
   /** the services the provider runs, the agent's included */

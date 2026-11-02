@@ -128,6 +128,21 @@ describe('fn:parseEnvironment', () => {
       /tools is malformed/u,
     );
   });
+
+  it('should accept a provider with an awake deadline and adapter path', () => {
+    const candidate = {
+      ...RECORDED,
+      provider: {
+        ...RECORDED.provider,
+        maxAwakeDeadlineMinutes: 30,
+        awakeAdapter: '/usr/local/bin/awake-adapter',
+      },
+    };
+
+    expect(parseEnvironment(registry, JSON.stringify(candidate))).toEqual(
+      candidate,
+    );
+  });
 });
 
 describe('fn:environmentProblem', () => {

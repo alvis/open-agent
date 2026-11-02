@@ -1,6 +1,6 @@
 import { AGENT_HOME } from '#adapters/guest/platform/layout';
 
-/** Claude Code user settings, including environment */
+/** Claude Code user settings, including environment and hooks */
 export const CLAUDE_SETTINGS = `${AGENT_HOME}/.claude/settings.json`;
 
 /** Claude Code configuration directory */

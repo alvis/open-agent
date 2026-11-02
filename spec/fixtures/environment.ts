@@ -24,6 +24,17 @@ export function environmentOf(
     os: { family: 'debian' },
     profile,
     tools: [],
+    provider: {
+      id: profile.provider,
+      keepAwakeMode: 'none',
+      idleForms: ['provider-managed'],
+      wakeMode: 'url-traffic',
+      supportsCliWakeSleep: false,
+      maxAwakeDeadlineMinutes: null,
+      idleTimeoutMinutes: profile.options.idleTimeoutMinutes,
+      holdMaxMinutes: profile.options.holdMaxMinutes,
+      awakeAdapter: null,
+    },
     agent: {
       id: profile.agent,
       service: registry.agents[profile.agent].service.name,

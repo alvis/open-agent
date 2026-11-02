@@ -1,3 +1,4 @@
+import { sessionAwakeHold } from '#adapters/guest/governor';
 import { OS_FAMILIES } from '#adapters/guest/os/families';
 import { sessionGuest } from '#adapters/guest/platform/session/channel';
 import { openWorkstationSession } from '#adapters/guest/platform/session/open';
@@ -61,6 +62,7 @@ export class SetupConnection implements SetupSession {
       provider: this.#provider,
       workstation: this.#workstation,
       family: OS_FAMILIES[this.#provider.images[0].family],
+      awakeHold: sessionAwakeHold,
       supersedes,
     });
 

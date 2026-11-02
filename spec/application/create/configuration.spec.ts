@@ -12,7 +12,11 @@ import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
 
 import { dependencies } from '../../mocks/dependencies';
 import { standInSession } from '../../mocks/session';
-import { createFilesystemSprite, guestOf } from '../../mocks/sprites';
+import {
+  createFilesystemSprite,
+  guestOf,
+  providerOf,
+} from '../../mocks/sprites';
 
 import type { Sprite } from '@fly/sprites';
 
@@ -109,6 +113,7 @@ describe('fn:configureNewWorkstation', () => {
       });
 
     const guest = await configureNewWorkstation(labelStubbedDependencies(), {
+      provider: providerOf(sprite.client),
       connection,
       configuration: {
         hostname: 'box',
@@ -146,8 +151,14 @@ describe('fn:configureNewWorkstation', () => {
         calls.push('harness configured');
       },
     );
+    vi.spyOn(registry.harnesses.claude.hooks, 'install').mockImplementation(
+      async () => {
+        calls.push('hook installed');
+      },
+    );
 
     const guest = await configureNewWorkstation(wired, {
+      provider: providerOf(sprite.client),
       connection,
       configuration: {
         hostname: 'box',
@@ -157,7 +168,7 @@ describe('fn:configureNewWorkstation', () => {
 
     expect({ guest, calls }).toEqual({
       guest: await connection.guest(),
-      calls: ['harness configured'],
+      calls: ['harness configured', 'hook installed'],
     });
   });
 });

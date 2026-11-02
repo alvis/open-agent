@@ -46,4 +46,21 @@ describe('fn:humanResultDetails', () => {
       'Skipped tools': { optional: 'no bottle' },
     });
   });
+
+  it.each([
+    { governor: { recorded: false }, expected: /not recorded.*unavailable/u },
+    {
+      governor: { recorded: true, state: {} },
+      expected: /no heartbeat.*0 open holds/u,
+    },
+  ])(
+    'should describe incomplete governor observations ($expected)',
+    ({ governor, expected }) => {
+      expect(
+        humanResultDetails({ inspection: { governor } }).inspection,
+      ).toMatchObject({
+        'Idle governor': expect.stringMatching(expected),
+      });
+    },
+  );
 });

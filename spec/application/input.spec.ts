@@ -20,18 +20,26 @@ describe('fn:requireValidProfile', () => {
     expect(
       requireValidProfile(
         dependencies,
-        { candidate: DISABLED_NETWORK_PROFILE },
+        {
+          candidate: DISABLED_NETWORK_PROFILE,
+          problems: [],
+          isIdleTimeoutRequested: false,
+        },
         {},
       ),
     ).toEqual(DISABLED_NETWORK_PROFILE);
   });
 
-  it('should report capability violations', () => {
+  it('should report unreadable selection input and capability violations together', () => {
     let failure: unknown;
     try {
       requireValidProfile(
         dependencies,
-        { candidate: { ...DISABLED_NETWORK_PROFILE, harnesses: [] } },
+        {
+          candidate: { ...DISABLED_NETWORK_PROFILE, harnesses: [] },
+          problems: ['OPEN_AGENT_IDLE_MINUTES must be a whole number'],
+          isIdleTimeoutRequested: true,
+        },
         {},
       );
     } catch (error) {
@@ -40,7 +48,32 @@ describe('fn:requireValidProfile', () => {
 
     expect(commandError(failure)).toMatchObject({
       code: 'INPUT',
-      details: [expect.stringContaining('harness')],
+      details: [
+        'OPEN_AGENT_IDLE_MINUTES must be a whole number',
+        expect.stringContaining('harness'),
+      ],
+    });
+  });
+
+  it('should report an unreadable input even when the resolved profile is valid', () => {
+    let failure: unknown;
+    try {
+      requireValidProfile(
+        dependencies,
+        {
+          candidate: DISABLED_NETWORK_PROFILE,
+          problems: ['OPEN_AGENT_IDLE_MINUTES must be a whole number'],
+          isIdleTimeoutRequested: false,
+        },
+        {},
+      );
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(commandError(failure)).toMatchObject({
+      code: 'INPUT',
+      details: ['OPEN_AGENT_IDLE_MINUTES must be a whole number'],
     });
   });
 });
@@ -48,16 +81,23 @@ describe('fn:requireValidProfile', () => {
 describe('fn:requireValidSuppliedSelection', () => {
   it('should accept a compatible supplied selection', () => {
     expect(() =>
-      requireValidSuppliedSelection(dependencies, { provider: 'sprite' }, {}),
+      requireValidSuppliedSelection(
+        dependencies,
+        { value: { provider: 'sprite', options: {} }, problems: [] },
+        {},
+      ),
     ).not.toThrow();
   });
 
-  it('should report an unknown driver before workstation lookup', () => {
+  it('should aggregate unreadable values and an unknown driver before workstation lookup', () => {
     let failure: unknown;
     try {
       requireValidSuppliedSelection(
         dependencies,
-        { agent: 'unregistered-agent' },
+        {
+          value: { agent: 'unregistered-agent', options: {} },
+          problems: ['OPEN_AGENT_IDLE_MINUTES must be a whole number'],
+        },
         {},
       );
     } catch (error) {
@@ -66,7 +106,10 @@ describe('fn:requireValidSuppliedSelection', () => {
 
     expect(commandError(failure)).toMatchObject({
       code: 'INPUT',
-      details: [expect.stringContaining('unregistered-agent')],
+      details: [
+        'OPEN_AGENT_IDLE_MINUTES must be a whole number',
+        expect.stringContaining('unregistered-agent'),
+      ],
     });
   });
 });

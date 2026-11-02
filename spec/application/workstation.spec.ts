@@ -254,6 +254,7 @@ describe('fn:runCommand', () => {
       network: { online: false, skipped: true },
       environment: environmentOf(DISABLED_NETWORK_PROFILE),
       probeFailures: [],
+      governor: { recorded: false, reason: 'no awake event has been recorded' },
     } satisfies GuestInspection;
     const inspect = vi.fn<GuestMechanics['inspection']['inspect']>(
       async () => observation,

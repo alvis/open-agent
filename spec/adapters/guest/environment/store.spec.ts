@@ -35,12 +35,36 @@ describe('environment access on a guest', () => {
     const guest = guestOf(createFilesystemSprite({ root: directory.path }));
     const invalid = {
       ...RECORDED,
-      profile: { ...RECORDED.profile, harnesses: [] },
+      profile: {
+        ...RECORDED.profile,
+        options: { ...RECORDED.profile.options, holdMaxMinutes: 0 },
+      },
     };
 
     await expect(access.write(guest, invalid)).rejects.toMatchObject({
       code: 'INPUT',
     });
     await expect(access.find(guest)).resolves.toBeUndefined();
+  });
+
+  it('should record profile changes', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-environment-'),
+    );
+    const guest = guestOf(createFilesystemSprite({ root: directory.path }));
+    const updated = {
+      ...DISABLED_NETWORK_PROFILE,
+      options: {
+        ...DISABLED_NETWORK_PROFILE.options,
+        holdMaxMinutes: 30,
+      },
+    };
+    await access.write(guest, RECORDED);
+
+    await access.writeProfile(guest, updated);
+
+    await expect(access.read(guest)).resolves.toMatchObject({
+      profile: updated,
+    });
   });
 });

@@ -79,26 +79,35 @@ function providerFor(
   };
 }
 
+const AWAKE_HOLD: WorkstationSessionParams['awakeHold'] = {
+  open: (pid) => ({ argv: ['awake', 'open', String(pid)], timeoutMs: 1_000 }),
+  close: (pid) => ({ argv: ['awake', 'close', String(pid)], timeoutMs: 1_000 }),
+};
+
 async function openWith(shell: ReplyingShell) {
   return openWorkstationSession({
     provider: providerFor(shell),
     workstation: WORKSTATION,
     family: debianFamily,
+    awakeHold: AWAKE_HOLD,
   });
 }
 
 describe('fn:openWorkstationSession', () => {
-  it('should probe the guest, open its session, and run a command', async () => {
+  it('should probe the guest, open its session, run a command, and release the awake hold', async () => {
     const shell = new ReplyingShell([
       { stdout: OS_REPORT, status: 0 },
       { stdout: 'pid:51', status: 0 },
+      { stdout: '', status: 0 },
       { stdout: 'ran', status: 0 },
+      { stdout: '', status: 0 },
     ]);
     const provider = providerFor(shell);
     const session = await openWorkstationSession({
       provider,
       workstation: WORKSTATION,
       family: debianFamily,
+      awakeHold: AWAKE_HOLD,
     });
 
     expect({ release: session.release, pid: session.pid }).toEqual({

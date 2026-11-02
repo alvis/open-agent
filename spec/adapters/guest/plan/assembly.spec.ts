@@ -41,6 +41,7 @@ async function runToolStep(
   tool: string,
 ): Promise<{ statuses: Array<StepOutcome['status']>; scripts: string[] }> {
   const assembly = await assemblePlan(registry, {
+    provider: registry.providers.sprite,
     profile: DISABLED_NETWORK_PROFILE,
     release: RELEASE,
     version: OPEN_AGENT_VERSION,
@@ -103,6 +104,7 @@ describe('fn:assemblePlan', () => {
     } satisfies DriverRegistry;
 
     const assembly = await assemblePlan(selectedRegistry, {
+      provider: registry.providers.sprite,
       profile: DISABLED_NETWORK_PROFILE,
       release: RELEASE,
       version: OPEN_AGENT_VERSION,
@@ -163,6 +165,7 @@ describe('fn:assemblePlan', () => {
     } satisfies DriverRegistry;
 
     const assembly = await assemblePlan(selectedRegistry, {
+      provider: registry.providers.sprite,
       profile: DISABLED_NETWORK_PROFILE,
       release: RELEASE,
       version: OPEN_AGENT_VERSION,
@@ -209,6 +212,7 @@ describe('fn:assemblePlan', () => {
     } satisfies DriverRegistry;
 
     const assembly = await assemblePlan(selectedRegistry, {
+      provider: registry.providers.sprite,
       profile: DISABLED_NETWORK_PROFILE,
       release: RELEASE,
       version: OPEN_AGENT_VERSION,

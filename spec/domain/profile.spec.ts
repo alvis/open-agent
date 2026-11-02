@@ -27,11 +27,21 @@ vi.mock('#composition/registry', async (importOriginal) => {
     displayName: 'Sprite',
     capabilities: {
       guestChannel: 'provider-exec',
+      keepAwakeMode: 'native-deadline',
+      idleForms: ['provider-managed'],
+      wakeMode: 'url-traffic',
+      supportsCliWakeSleep: false,
+      maxAwakeDeadlineMinutes: 60,
       persistence: 'provider-disk',
       exposure: 'provider-url',
       discovery: 'provider-metadata',
     },
-    incompatibilities: [],
+    incompatibilities: [
+      {
+        reason: 'Fixture provider cannot host a one-minute idle timeout',
+        appliesTo: ({ options }) => options.idleTimeoutMinutes === 1,
+      },
+    ],
     prerequisites: {
       tools: [],
       credential: {
@@ -136,27 +146,12 @@ const BARE = {
   harnesses: { claude: bareClaude },
 };
 
-// the fixture catalog with a provider that declares every profile incompatible
-const INCOMPATIBLE = {
-  ...registry,
-  providers: {
-    sprite: {
-      ...registry.providers.sprite,
-      incompatibilities: [
-        {
-          reason: 'Fixture provider refuses every profile',
-          appliesTo: () => true,
-        },
-      ],
-    },
-  },
-};
-
 const valid: ProfileCandidate = {
   provider: 'sprite',
   agent: 't3',
   harnesses: ['claude'],
   network: 'none',
+  options: { ...defaults.options },
 };
 
 /**
@@ -185,6 +180,10 @@ describe('fn:defaultProfile', () => {
       agent: 't3',
       harnesses: ['claude'],
       network: 'none',
+      options: {
+        idleTimeoutMinutes: 5,
+        holdMaxMinutes: 60,
+      },
     });
   });
 });
@@ -253,8 +252,11 @@ describe('fn:registeredSummary', () => {
 });
 
 describe('fn:validateProfile', () => {
-  it('should accept the default profile', () => {
+  it('should accept the default profile and an idle timeout of 0', () => {
     expect(violationCodes({})).toEqual([]);
+    expect(
+      violationCodes({ options: { ...valid.options, idleTimeoutMinutes: 0 } }),
+    ).toEqual([]);
   });
 
   it.each([
@@ -267,17 +269,28 @@ describe('fn:validateProfile', () => {
       { harnesses: ['claude', 'claude'] },
       ['duplicate-harness'],
     ],
+    [
+      'a negative idle timeout',
+      { options: { ...valid.options, idleTimeoutMinutes: -1 } },
+      ['invalid-option'],
+    ],
+    [
+      'a turn-hold maximum of 0',
+      { options: { ...valid.options, holdMaxMinutes: 0 } },
+      ['invalid-option'],
+    ],
+    [
+      'fractional minutes',
+      { options: { ...valid.options, idleTimeoutMinutes: 1.5 } },
+      ['invalid-option'],
+    ],
+    [
+      'a profile the provider declares incompatible',
+      { options: { ...valid.options, idleTimeoutMinutes: 1 } },
+      ['incompatible'],
+    ],
   ])('should reject %s', (_, candidate, expected) => {
     expect(violationCodes(candidate)).toEqual(expected);
-  });
-
-  it('should reject a profile the provider declares incompatible', () => {
-    expect(
-      validateProfile({ declarations: INCOMPATIBLE, candidate: valid }),
-    ).toMatchObject({
-      isValid: false,
-      violations: [{ code: 'incompatible' }],
-    });
   });
 
   it('should reject an acp-adapter agent with a harness lacking an adapter', () => {
@@ -291,6 +304,38 @@ describe('fn:validateProfile', () => {
       violations: [{ code: 'missing-acp-adapter' }],
     });
   });
+
+  it.each([
+    ['idleTimeoutMinutes', 60, 61],
+    ['holdMaxMinutes', 60, 61],
+  ] as const)(
+    'should accept %s at the provider cap of %i and refuse it above, naming the option, the provider and the cap',
+    (key, cap, above) => {
+      const options = (minutes: number): ProfileCandidate['options'] => ({
+        ...valid.options,
+        [key]: minutes,
+      });
+
+      expect(violationCodes({ options: options(cap) })).toEqual([]);
+      expect(
+        validateProfile({
+          declarations: registry,
+          candidate: { ...valid, options: options(above) },
+        }),
+      ).toMatchObject({
+        isValid: false,
+        violations: [
+          {
+            code: 'undeclared-capability',
+            fields: ['provider', key],
+            message: expect.stringMatching(
+              new RegExp(`${above} minutes.*"sprite".*at most ${cap} minutes`),
+            ),
+          },
+        ],
+      });
+    },
+  );
 
   it('should accept an acp-adapter agent when every harness provides an adapter', () => {
     expect(violationCodes({ agent: 'relay', harnesses: ['claude'] })).toEqual(
@@ -308,10 +353,15 @@ describe('fn:validateProfile', () => {
   it('should aggregate every violation instead of stopping at the first', () => {
     expect(
       violationCodes({
-        agent: 'unregistered-agent',
+        network: 'none',
         harnesses: [],
+        options: {
+          ...valid.options,
+          idleTimeoutMinutes: -1,
+          holdMaxMinutes: 0,
+        },
       }),
-    ).toEqual(['unknown-driver', 'no-harness']);
+    ).toEqual(['no-harness', 'invalid-option', 'invalid-option']);
   });
 });
 
@@ -338,6 +388,13 @@ describe('fn:parseProfile', () => {
     { field: 'harness list', value: { ...valid, harnesses: 'claude' } },
     { field: 'harness entry', value: { ...valid, harnesses: ['claude', 7] } },
     { field: 'network', value: { ...valid, network: false } },
+    {
+      field: 'numeric option',
+      value: {
+        ...valid,
+        options: { ...valid.options, idleTimeoutMinutes: 'many' },
+      },
+    },
   ])('should reject a stored profile with malformed $field', ({ value }) => {
     expect(parseProfile({ declarations: registry, value })).toMatchObject({
       isValid: false,

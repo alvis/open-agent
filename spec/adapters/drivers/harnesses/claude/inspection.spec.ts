@@ -21,6 +21,7 @@ describe('fn:inspectClaude', () => {
       settings: undefined,
       authenticated: false,
       configuration: {
+        awakeHooksInstalled: false,
         authentication: 'not-configured',
       },
     },
@@ -29,6 +30,7 @@ describe('fn:inspectClaude', () => {
       settings: { env: {} },
       authenticated: true,
       configuration: {
+        awakeHooksInstalled: false,
         authentication: 'native',
       },
     },

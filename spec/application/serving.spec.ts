@@ -17,6 +17,7 @@ const FULL_INSPECTION = {
   },
   native: {
     claude: {
+      awakeHooksInstalled: false,
       authentication: 'not-configured',
     },
     harnesses: {
@@ -27,6 +28,7 @@ const FULL_INSPECTION = {
   },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
+  governor: { recorded: false, reason: 'no awake event has been recorded yet' },
 } satisfies GuestInspection;
 
 /**

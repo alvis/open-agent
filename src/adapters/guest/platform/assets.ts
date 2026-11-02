@@ -22,6 +22,7 @@ import type { GuestAsset } from '#domain/guest';
 
 /** the guest layout every guest program receives, as the variables its header assigns */
 const LAYOUT_VARIABLES: Readonly<Record<string, string>> = {
+  OA_GUEST_ROOT: GUEST_ROOT,
   OA_ENVIRONMENT_PATH: ENVIRONMENT_PATH,
   OA_AGENT_HOME: AGENT_HOME,
   OA_AGENT_BIN: AGENT_BIN,

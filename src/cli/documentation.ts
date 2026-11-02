@@ -9,14 +9,14 @@ export const createDocumentation = {
   brief: 'create one new coding workstation',
   customUsage: ['[--name NAME] [options]'],
   fullDescription: `Creates a private workstation, verifies readiness, then exposes its agent URL.
-Interactive runs ask for the provider, ACP agent, harnesses, then network; a
-step with one choice is skipped. Flags and
+Interactive runs ask for the provider, ACP agent, harnesses, network, then the
+options those drivers support; a step with one choice is skipped. Flags and
 OPEN_AGENT_* environment variables answer the same questions. --with-pair-code
 alone requests a new five-minute pairing code.
 
 EXAMPLES
   open-agent create --name devbox
-  open-agent create --name devbox --network none
+  open-agent create --name devbox --network none --idle-minutes 30
   open-agent create --name devbox --with-pair-code --json --non-interactive`,
 } as const;
 
@@ -25,8 +25,8 @@ export const setupDocumentation = {
   brief: 'configure an existing workstation',
   customUsage: ['[<workstation>] [--section SECTION] [options]'],
   fullDescription: `Changes only the selected setup section. Without a workstation name,
-interactive mode offers a selection. --section all can change the harnesses
-and network; the provider and ACP agent are fixed at creation.
+interactive mode offers a selection. --section all can change the harnesses,
+network and options; the provider and ACP agent are fixed at creation.
 --with-pair-code selects the agent section when --section is omitted; it also
 works with --section all.
 

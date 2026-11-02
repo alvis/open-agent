@@ -4,6 +4,8 @@ import { harnessIds } from '#domain/harnesses';
 import { AGENT_IDS, PROVIDER_IDS } from '#domain/ids';
 import { networkIds } from '#domain/networks';
 
+import { parseWholeNumber } from './whole-number';
+
 /** local provider credential selection shared by every operation */
 export const providerCredentialFlags = {
   credentialFile: {
@@ -85,7 +87,7 @@ export const providerFlags = {
   },
 } as const;
 
-/** driver selection, in the order interactive setup asks for it */
+/** driver and option selection, in the order interactive setup asks for it */
 export const selectionFlags = {
   ...providerFlags,
   agent: {
@@ -109,6 +111,20 @@ export const selectionFlags = {
     optional: true,
     placeholder: 'NETWORK',
     brief: `NETWORK · ${networkIds().join(', ')}`,
+  },
+  idleMinutes: {
+    kind: 'parsed',
+    parse: parseWholeNumber,
+    optional: true,
+    placeholder: 'MINUTES',
+    brief: 'MINUTES · suspend after idle; 0 never suspends (default 5)',
+  },
+  holdMaxMinutes: {
+    kind: 'parsed',
+    parse: parseWholeNumber,
+    optional: true,
+    placeholder: 'MINUTES',
+    brief: 'MINUTES · turn-hold lifetime after its last refresh (default 60)',
   },
 } as const;
 

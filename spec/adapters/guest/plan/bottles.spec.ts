@@ -12,6 +12,7 @@ import type { GuestSession } from '#application/ports/session';
 describe('fn:probeBottles', () => {
   it('should return no refusals without running a probe when no formula is resolved', async () => {
     const assembly = await assemblePlan(registry, {
+      provider: registry.providers.sprite,
       profile: DISABLED_NETWORK_PROFILE,
       release: {
         family: 'debian',
@@ -42,6 +43,7 @@ describe('fn:probeBottles', () => {
 
   it('should turn an unbottled formula reported by Homebrew into a refused source', async () => {
     const assembly = await assemblePlan(registry, {
+      provider: registry.providers.sprite,
       profile: DISABLED_NETWORK_PROFILE,
       release: {
         family: 'debian',
@@ -79,6 +81,7 @@ describe('fn:probeBottles', () => {
     'should report a failed bottle probe with bounded error evidence: %j',
     async ({ stderr, details }) => {
       const assembly = await assemblePlan(registry, {
+        provider: registry.providers.sprite,
         profile: DISABLED_NETWORK_PROFILE,
         release: {
           family: 'debian',

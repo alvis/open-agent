@@ -1,6 +1,7 @@
 import { projectEnvironment } from './environment';
 import { each, projectFields, same } from './fields';
 import {
+  projectGovernor,
   projectNative,
   projectNetworkStatus,
   projectServiceSummary,
@@ -12,6 +13,7 @@ import type { CurrentReadiness, DoctorData } from '#application/data';
 
 import type { EnvironmentOutput } from './environment';
 import type {
+  GovernorOutput,
   NativeOutput,
   NetworkOutput,
   ServiceSummaryOutput,
@@ -29,6 +31,7 @@ export interface CurrentReadinessOutput {
   native?: NativeOutput;
   services: ServiceSummaryOutput[];
   environment: EnvironmentOutput;
+  governor: GovernorOutput;
 }
 
 /** the bounded doctor inspection */
@@ -54,6 +57,7 @@ function projectCurrentReadiness(
     native: projectNative,
     services: each(projectServiceSummary),
     environment: projectEnvironment,
+    governor: projectGovernor,
   });
 }
 

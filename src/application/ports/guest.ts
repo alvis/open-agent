@@ -20,12 +20,15 @@ import type { SetupConnectionParams, SetupSession } from './session';
 
 /** the fixed places and commands the guest programs are reached at */
 export interface GuestFacts {
+  /** the idle governor's command, run by hooks and holds */
+  awakeCommand: string;
   /** where setup records environment.json */
   environmentPath: string;
 }
 
 /** one thing an inspection reads, named without its commands */
-export type InspectionProbe = 'inspection' | 'services' | 'network' | 'native';
+export type InspectionProbe =
+  'inspection' | 'services' | 'network' | 'native' | 'governor';
 
 /** the lifecycle of one probe an inspection runs */
 export type ProbeEvent =

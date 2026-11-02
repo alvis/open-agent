@@ -1,6 +1,7 @@
 import { projectEnvironment } from './environment';
 import { each, projectFields, same } from './fields';
 import {
+  projectGovernor,
   projectGuestService,
   projectNative,
   projectNetworkStatus,
@@ -45,6 +46,7 @@ function projectShownInspection(
     native: projectNative,
     environment: projectEnvironment,
     probeFailures: each(projectProbeFailure),
+    governor: projectGovernor,
     readiness: projectReadiness,
   });
 }

@@ -118,6 +118,7 @@ const OBSERVED = {
   },
   native: {
     claude: {
+      awakeHooksInstalled: true,
       authentication: 'not-configured',
     },
     agentEnvironment: {
@@ -133,6 +134,7 @@ const OBSERVED = {
   },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
+  governor: { recorded: false, reason: 'no awake event has been recorded yet' },
 } satisfies GuestInspection;
 
 const services = ['t3-code'].map((name) => ({
@@ -150,6 +152,7 @@ const observed = {
   },
   native: {
     claude: {
+      awakeHooksInstalled: true,
       authentication: 'not-configured',
     },
     agentEnvironment: {
@@ -165,6 +168,7 @@ const observed = {
   },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
+  governor: { recorded: false, reason: 'no awake event has been recorded yet' },
 } satisfies GuestInspection;
 
 /**

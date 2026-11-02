@@ -5,6 +5,7 @@ import { createNativeInspection } from './native/inspection';
 import { assertImageTools, assemblePlan } from './plan/assembly';
 import { needsBottleProbe, probeBottles } from './plan/bottles';
 import { runPlan } from './plan/execution';
+import { AWAKE_COMMAND } from './platform/awake';
 import { ENVIRONMENT_PATH } from './platform/layout';
 import { assertSupportedRelease, newerMetadataRelease } from './release-guard';
 import { installProviderServices } from './services/provider';
@@ -36,6 +37,7 @@ export function createGuestMechanics(
 
   return {
     facts: {
+      awakeCommand: AWAKE_COMMAND,
       environmentPath: ENVIRONMENT_PATH,
     },
     session: {

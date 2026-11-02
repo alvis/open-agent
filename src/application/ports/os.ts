@@ -43,3 +43,11 @@ export interface OsFamily {
   /** the family's helper library, sourced by setup */
   library: GuestAsset;
 }
+
+/** what a service setup step is built with */
+export interface ServiceStepContext {
+  /** the guest's OS family, whose shell every step runs */
+  family: Pick<OsFamily, 'shell'>;
+  /** ids of the steps that must succeed first, such as the one writing environment.json */
+  needs: readonly string[];
+}

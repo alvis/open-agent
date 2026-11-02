@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   activePrompts,
@@ -21,11 +21,14 @@ describe('fn:environmentReader', () => {
 });
 
 describe('fn:activePrompts', () => {
-  it('should skip a single-choice prompt', async () => {
+  it('should skip a single-choice prompt and validate a whole-number answer', async () => {
+    const validation: Array<string | undefined> = [];
     const interaction = {
-      input: async () => {
-        throw new Error('Unexpected input prompt');
-      },
+      input: vi.fn<Interaction['input']>(async (prompt) => {
+        validation.push(prompt.validate?.('1.5'), prompt.validate?.('4'));
+
+        return '4';
+      }),
       secret: async () => '',
       select: async <V extends string>(): Promise<V> => {
         throw new Error('Unexpected selection prompt');
@@ -48,5 +51,12 @@ describe('fn:activePrompts', () => {
         { label: 'Claude', value: 'claude' },
       ]),
     ).toBeUndefined();
+    expect(
+      await prompts?.number('Suspend after idle (minutes, 0 = never)', 5),
+    ).toBe(4);
+    expect(validation).toEqual([
+      expect.stringContaining('whole number'),
+      undefined,
+    ]);
   });
 });

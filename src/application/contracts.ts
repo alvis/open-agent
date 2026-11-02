@@ -22,6 +22,10 @@ export interface CommandOptions {
   harness?: HarnessId[];
   /** selected network */
   network?: NetworkId;
+  /** minutes without activity before the workstation may sleep; 0 never */
+  idleMinutes?: number;
+  /** minutes a turn hold lasts after its last refresh */
+  holdMaxMinutes?: number;
   /** disables every prompt */
   nonInteractive?: boolean;
   /** prints one JSON result instead of human output */

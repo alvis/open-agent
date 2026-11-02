@@ -1,3 +1,4 @@
+import { awakeHookCommand } from '#application/catalog/awake';
 import {
   configureHarnesses,
   harnessDrivers,
@@ -8,6 +9,7 @@ import { markInstallationReady } from '#application/installation/readiness';
 import { traceStage } from '#kernel/operation';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { ProviderDriver } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { Interaction } from '#application/ports/interaction';
 import type { SetupSession } from '#application/ports/session';
@@ -22,6 +24,8 @@ interface NewWorkstationConfiguration {
 
 /** the named inputs of configure new workstation */
 export interface ConfigureNewWorkstationParams {
+  /** the provider the workstation runs on */
+  provider: ProviderDriver;
   /** the root setup session */
   connection: SetupSession;
   /** optional progress boundary */
@@ -35,14 +39,14 @@ export interface ConfigureNewWorkstationParams {
  * writing the native harness configuration before the services
  * start, then records the installation as ready
  * @param dependencies the registered drivers, the guest mechanics
- * @param params the call's inputs: connection, interaction, configuration
+ * @param params the call's inputs: provider, connection, interaction, configuration
  * @returns the guest channel the configuration ran over
  */
 export async function configureNewWorkstation(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'guest'>,
   params: ConfigureNewWorkstationParams,
 ): Promise<GuestChannel> {
-  const { configuration } = params;
+  const { provider, configuration } = params;
   const { connection, interaction } = params;
   const { profile } = configuration;
   interaction?.progress({
@@ -53,6 +57,7 @@ export async function configureNewWorkstation(
     stage: 'create.tools',
     action: async () =>
       installWorkstation(dependencies.guest, {
+        provider,
         connection,
         profile,
         interaction,
@@ -107,6 +112,7 @@ async function enrolAndConfigure(
     action: async () =>
       configureHarnesses(guest, {
         drivers: harnessDrivers(dependencies.registry, profile.harnesses),
+        awakeHook: awakeHookCommand(dependencies.guest.facts),
       }),
   });
 }

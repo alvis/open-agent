@@ -28,6 +28,7 @@ describe('fn:createGuestMechanics', () => {
     const mechanics = createGuestMechanics({ registry, defaults });
 
     const assembly = await mechanics.plan.assemble({
+      provider: registry.providers.sprite,
       profile: DISABLED_NETWORK_PROFILE,
       release: RELEASE,
       version: OPEN_AGENT_VERSION,

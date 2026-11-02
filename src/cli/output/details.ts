@@ -6,6 +6,9 @@ import { harnessIds } from '#domain/harnesses';
 
 import type { JsonObject, JsonValue } from '#cli/serialization';
 
+/** every C0 and C1 control character */
+const CONTROL_CHARACTERS = /\p{Cc}/gu;
+
 /**
  * prepares concise human inspection groups without altering structured results
  * @param data redacted command data
@@ -103,6 +106,10 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
         : environmentDetails(environment),
     'Installed tools': installedTools(recorded.tools),
     'Skipped tools': skippedTools(asRecord(recorded.setup).skipped),
+    'Idle governor':
+      inspection.governor === undefined
+        ? undefined
+        : governorLine(asRecord(inspection.governor)),
   };
 }
 
@@ -142,6 +149,79 @@ function skippedTools(value: JsonValue | undefined): JsonObject | undefined {
           return typeof name === 'string' ? [[name, reason]] : [];
         }),
       );
+}
+
+/**
+ * condenses the idle governor's recorded state into one line: the last
+ * heartbeat, the open holds, then what the provider's keep-awake mode makes of
+ * the awake deadline, then the last adapter failure or task release when there
+ * is one. A `native-deadline` provider keeps the workstation awake until the
+ * deadline and then follows its own idle rules; a provider with no keep-awake
+ * mode is not governed. A deadline already past is marked as passed. Every
+ * string the guest supplied is shown
+ * without control characters, so a recorded value cannot move the cursor or
+ * rewrite the terminal
+ * @param report the governor report from the inspection
+ * @returns the governor-state line
+ */
+function governorLine(report: JsonObject): string {
+  if (report.recorded !== true) {
+    return `not recorded (${typeof report.reason === 'string' ? printable(report.reason) : 'unavailable'})`;
+  }
+  const state = asRecord(report.state);
+  const adapter = asRecord(state.adapter);
+  const holds = typeof state.openHolds === 'number' ? state.openHolds : 0;
+
+  return [
+    typeof state.lastHeartbeat === 'string'
+      ? `last heartbeat ${printable(state.lastHeartbeat)}`
+      : 'no heartbeat yet',
+    `${holds} open ${holds === 1 ? 'hold' : 'holds'}`,
+    ...keepAwakeParts(state),
+    ...(typeof adapter.failure === 'string'
+      ? [`adapter failed: ${printable(adapter.failure)}`]
+      : adapter.action === 'apply-deadline' && adapter.result === 'released'
+        ? ['awake task released']
+        : []),
+  ].join('; ');
+}
+
+/**
+ * words the awake deadline the way the provider's keep-awake mode treats it
+ * @param state the recorded governor state
+ * @returns the deadline and sleep parts of the governor line
+ */
+function keepAwakeParts(state: JsonObject): string[] {
+  const deadline =
+    typeof state.deadline === 'string' ? state.deadline : undefined;
+  const isPassed = deadline !== undefined && Date.parse(deadline) <= Date.now();
+  switch (state.keepAwakeMode) {
+    case 'none':
+      return ['not governed'];
+    case 'native-deadline':
+      return [
+        deadline === undefined
+          ? "nothing keeps it awake, the provider's idle rules apply"
+          : isPassed
+            ? `awake deadline ${printable(deadline)} passed, the provider's idle rules apply`
+            : `awake until ${printable(deadline)}, then the provider's idle rules apply`,
+      ];
+    default:
+      return [
+        deadline === undefined
+          ? 'nothing keeps it awake'
+          : `awake until ${printable(deadline)}${isPassed ? ' (passed)' : ''}`,
+      ];
+  }
+}
+
+/**
+ * removes every C0 and C1 control character from guest-supplied text
+ * @param text text read from the guest
+ * @returns the text without control characters
+ */
+function printable(text: string): string {
+  return text.replace(CONTROL_CHARACTERS, '');
 }
 
 /**

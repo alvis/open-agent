@@ -6,12 +6,17 @@ import { PassThrough } from 'node:stream';
 import { SpritesClient } from '@fly/sprites';
 import { describe, expect, it, vi } from 'vitest';
 
+import { CLAUDE_WORK_HOOKS } from '#adapters/drivers/harnesses/claude/hooks';
+import { CLAUDE_SETTINGS } from '#adapters/drivers/harnesses/claude/paths';
+import { mergeWorkHooks } from '#adapters/drivers/harnesses/shared/hooks';
 import {
   MANAGED_LABEL,
   SCHEMA_LABEL,
   mergeMetadataLabels,
 } from '#adapters/drivers/providers/sprite/labels';
+import { AWAKE_COMMAND } from '#adapters/guest/platform/awake';
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
+import { awakeHookCommand } from '#application/catalog/awake';
 import { doctorWorkstation, showWorkstation } from '#application/inspection';
 import { runCommand } from '#application/workstation';
 import { chooseWorkstationAction } from '#application/workstation/actions';
@@ -42,6 +47,8 @@ import {
 import type { Sprite } from '@fly/sprites';
 
 import type { Mock } from 'vitest';
+
+import type { WorkHooks } from '#adapters/drivers/harnesses/shared/hooks';
 
 import type { GuestExecute } from '../mocks/sprites';
 
@@ -256,7 +263,19 @@ describe('cmd:show', () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-doctor-ready-'),
     );
-    const { client } = await installedSprite(directory.path, true);
+    const { client, sprite } = await installedSprite(directory.path, true);
+    const hooks = (owned: WorkHooks): Record<string, unknown> =>
+      mergeWorkHooks(
+        {},
+        { owned, command: awakeHookCommand({ awakeCommand: AWAKE_COMMAND }) },
+      );
+    await sprite.filesystem().mkdir('/home/agent/.claude', { recursive: true });
+    await sprite
+      .filesystem()
+      .writeFile(
+        CLAUDE_SETTINGS,
+        JSON.stringify({ hooks: hooks(CLAUDE_WORK_HOOKS) }),
+      );
 
     const result = await doctorWorkstation(dependencies, {
       provider: providerOf(client),

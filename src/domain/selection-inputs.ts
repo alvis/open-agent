@@ -6,12 +6,21 @@ interface SelectionInput {
   environment: string;
 }
 
-/** the flags and environment variables that select drivers */
+/** the flags and environment variables that select drivers and options */
 const SELECTION_INPUTS = {
   provider: { flag: '--provider', environment: 'OPEN_AGENT_PROVIDER' },
   agent: { flag: '--agent', environment: 'OPEN_AGENT_AGENT' },
   harnesses: { flag: '--harness', environment: 'OPEN_AGENT_HARNESSES' },
   network: { flag: '--network', environment: 'OPEN_AGENT_NETWORK' },
+
+  idleTimeoutMinutes: {
+    flag: '--idle-minutes',
+    environment: 'OPEN_AGENT_IDLE_MINUTES',
+  },
+  holdMaxMinutes: {
+    flag: '--hold-max-minutes',
+    environment: 'OPEN_AGENT_HOLD_MAX_MINUTES',
+  },
 } as const satisfies Record<string, SelectionInput>;
 
 /** a profile field a caller can select */

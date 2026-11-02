@@ -1,13 +1,17 @@
-import type { DriverRegistry } from '#application/ports/drivers';
+import type {
+  AwakeHookCommand,
+  DriverRegistry,
+} from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { HarnessId } from '#domain/ids';
 
 /** every registered harness driver */
 export type AnyHarnessDriver = DriverRegistry['harnesses'][HarnessId];
 
-/** harnesses to configure */
+/** harnesses and guest facilities needed to configure them */
 interface ConfigureHarnessesParams {
   drivers: readonly AnyHarnessDriver[];
+  awakeHook: AwakeHookCommand;
 }
 
 /**
@@ -24,10 +28,12 @@ export function harnessDrivers(
 }
 
 /**
- * merges native configuration for each selected harness in turn
+ * merges native configuration and installs work hooks for each selected
+ * harness in turn
  * @param guest guest channel
- * @param params selected harness drivers
+ * @param params selected harness drivers and the command their hooks invoke
  * @param params.drivers selected harness drivers
+ * @param params.awakeHook the idle-governor command the work hooks invoke
  */
 export async function configureHarnesses(
   guest: GuestChannel,
@@ -35,5 +41,6 @@ export async function configureHarnesses(
 ): Promise<void> {
   for (const driver of params.drivers) {
     await driver.configure(guest);
+    await driver.hooks.install(guest, params.awakeHook);
   }
 }

@@ -1,8 +1,12 @@
 import { projectFields, same } from './fields';
 
-import type { WorkstationProfile, ProfileSummary } from '#domain/profile';
+import type {
+  ProfileOptions,
+  WorkstationProfile,
+  ProfileSummary,
+} from '#domain/profile';
 
-/** the driver selection a workstation recorded */
+/** the driver selection a workstation recorded, without its options */
 export interface ProfileSummaryOutput {
   provider: string;
   agent: string;
@@ -10,8 +14,16 @@ export interface ProfileSummaryOutput {
   network: string;
 }
 
-/** driver selection a workstation recorded */
-export type ProfileOutput = ProfileSummaryOutput;
+/** numeric and boolean options a workstation recorded */
+export interface ProfileOptionsOutput {
+  idleTimeoutMinutes: number;
+  holdMaxMinutes: number;
+}
+
+/** driver selection and options a workstation recorded */
+export interface ProfileOutput extends ProfileSummaryOutput {
+  options: ProfileOptionsOutput;
+}
 
 /**
  * projects the driver selection
@@ -30,7 +42,7 @@ export function projectProfileSummary(
 }
 
 /**
- * projects a recorded profile
+ * projects a recorded profile with its options
  * @param profile internal profile
  * @returns output profile
  */
@@ -40,5 +52,20 @@ export function projectProfile(profile: WorkstationProfile): ProfileOutput {
     agent: same,
     harnesses: same,
     network: same,
+    options: projectProfileOptions,
+  });
+}
+
+/**
+ * projects recorded profile options
+ * @param options internal options
+ * @returns output options
+ */
+export function projectProfileOptions(
+  options: ProfileOptions,
+): ProfileOptionsOutput {
+  return projectFields<ProfileOptions, ProfileOptionsOutput>(options, {
+    idleTimeoutMinutes: same,
+    holdMaxMinutes: same,
   });
 }
