@@ -1,8 +1,10 @@
 import { pairAgent } from '#application/catalog/services';
 import { markInstallationReady } from '#application/installation/readiness';
+import { CommandFault } from '#kernel/faults';
 import { PairingSecret } from '#kernel/pairing-secret';
 
 import { installSetupPlan } from './installation';
+import { exposeWhenServing } from './serving';
 
 import type { AgentSetupData } from '#application/data';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
@@ -11,7 +13,8 @@ import type { GuestChannel } from '#application/ports/guest-channel';
 import type { SetupContext } from './context';
 
 /**
- * installs persistent agent services, or mints a requested native pairing
+ * installs persistent agent services, moves the agent to the release channel
+ * this run selected, or mints a requested native pairing
  * @param dependencies the registered drivers, the guest mechanics
  * @param guest guest channel of the managed workstation
  * @param context pairing options, status reporter, and mutation state
@@ -23,10 +26,13 @@ export async function setupAgent(
   context: SetupContext,
 ): Promise<AgentSetupData> {
   const { options, interaction, profile } = context;
-  if (!options.withPairCode) {
+  if (context.isReleaseChanged) {
+    await switchAgentRelease(dependencies, guest, context);
+  } else if (!options.withPairCode) {
     await installSetupPlan(dependencies, context);
     await markInstallationReady(dependencies.guest, guest);
-
+  }
+  if (!options.withPairCode) {
     return { service: 'configured', pairing: { status: 'not requested' } };
   }
   const pairing = await pairAgent(dependencies.registry, guest, profile.agent);
@@ -42,4 +48,57 @@ export async function setupAgent(
       token: new PairingSecret({ token: pairing.token }),
     },
   };
+}
+
+/**
+ * installs the release the selected channel currently publishes, which is a
+ * downgrade when the channel is older: the agent keeps serving while the plan
+ * installs it and is stopped only before the plan's service step, which starts
+ * it on that release, so a failed install leaves it running; then the agent is
+ * waited for to serve and exposed
+ * @param dependencies the registered drivers, the guest mechanics
+ * @param guest guest channel of the managed workstation
+ * @param context selection already stored with the selected channel, prompts and mutation state
+ */
+async function switchAgentRelease(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'guest'>,
+  guest: GuestChannel,
+  context: SetupContext,
+): Promise<void> {
+  const { interaction, mutation, profile } = context;
+  const { displayName, service } = dependencies.registry.agents[profile.agent];
+  interaction?.progress({
+    stage: 'agent',
+    message: `Installing the ${profile.options.agentRelease} release of ${displayName}; this may take several minutes`,
+  });
+  mutation.started = true;
+  await installSetupPlan(dependencies, context, async () =>
+    stopService(guest, service.name),
+  );
+  await markInstallationReady(dependencies.guest, guest);
+  await exposeWhenServing(dependencies, guest, context);
+}
+
+/**
+ * stops a service when it runs
+ * @param guest guest channel of the managed workstation
+ * @param name service name as the backend lists it
+ * @throws {CommandFault} when the service reports a stop failure
+ */
+export async function stopService(
+  guest: GuestChannel,
+  name: string,
+): Promise<void> {
+  const services = await guest.services.list();
+  if (
+    services.some(
+      (entry) => entry.name === name && entry.status === 'running',
+    ) &&
+    !(await guest.services.stop(name))
+  ) {
+    throw new CommandFault({
+      code: 'PROVIDER',
+      message: `The ${name} service reported a stop failure`,
+    });
+  }
 }

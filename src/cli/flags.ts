@@ -1,7 +1,8 @@
 import { buildChoiceParser } from '@stricli/core';
 
+import { registry } from '#composition/registry';
 import { harnessIds } from '#domain/harnesses';
-import { AGENT_IDS, PROVIDER_IDS } from '#domain/ids';
+import { AGENT_IDS, PROVIDER_IDS, releaseChannelIds } from '#domain/ids';
 import { networkIds } from '#domain/networks';
 
 import { parseWholeNumber } from './whole-number';
@@ -96,6 +97,13 @@ export const selectionFlags = {
     optional: true,
     placeholder: 'AGENT',
     brief: `AGENT · ACP agent: ${AGENT_IDS.join(', ')}`,
+  },
+  release: {
+    kind: 'parsed',
+    parse: buildChoiceParser(releaseChannelIds(registry)),
+    optional: true,
+    placeholder: 'CHANNEL',
+    brief: `CHANNEL · ACP agent release channel: ${releaseChannelIds(registry).join(', ')}; the agent's default when omitted`,
   },
   harness: {
     kind: 'parsed',

@@ -23,6 +23,12 @@ const RELEASE: OsRelease = {
   libc: 'glibc',
 };
 
+/** a workstation following T3 Code's nightly channel */
+const NIGHTLY_PROFILE = {
+  ...DISABLED_NETWORK_PROFILE,
+  options: { ...DISABLED_NETWORK_PROFILE.options, agentRelease: 'nightly' },
+};
+
 const AGENT_CLI = registry.agents.t3.tools[0];
 const CLAUDE_TOOL = registry.harnesses.claude.tools[0];
 if (!AGENT_CLI || !CLAUDE_TOOL) {
@@ -32,8 +38,9 @@ if (!AGENT_CLI || !CLAUDE_TOOL) {
 }
 
 /**
- * runs one tool's step of a workstation's plan on a guest where the tool's
- * executable runs
+ * runs one tool's step of a nightly workstation's plan on a guest where the
+ * tool's executable runs, and the installed T3 Code is not the version the
+ * nightly dist-tag names now
  * @param tool the tool whose step runs, without the steps it needs
  * @returns the step's status and the shell scripts the guest ran
  */
@@ -42,7 +49,7 @@ async function runToolStep(
 ): Promise<{ statuses: Array<StepOutcome['status']>; scripts: string[] }> {
   const assembly = await assemblePlan(registry, {
     provider: registry.providers.sprite,
-    profile: DISABLED_NETWORK_PROFILE,
+    profile: NIGHTLY_PROFILE,
     release: RELEASE,
     version: OPEN_AGENT_VERSION,
     setupAt: '2026-10-25T00:00:00Z',
@@ -60,7 +67,7 @@ async function runToolStep(
       scripts.push(script);
 
       return {
-        exitCode: 0,
+        exitCode: script.includes('oa_npm_current') ? 1 : 0,
         stdout: '',
         stderr: '',
       };
@@ -119,7 +126,23 @@ describe('fn:assemblePlan', () => {
     );
   });
 
-  it('should leave an installed npm tool to its version probe', async () => {
+  it('should install the channel release over an installed T3 Code whose version probe passes', async () => {
+    const { statuses, scripts } = await runToolStep('t3');
+
+    expect(statuses).toEqual(['applied']);
+    expect(
+      scripts.some((script) =>
+        script.includes("'oa_npm_current' 't3' 'nightly'"),
+      ),
+    ).toBe(true);
+    expect(
+      scripts.some((script) =>
+        script.includes("'oa_npm_install' 't3' 'nightly'"),
+      ),
+    ).toBe(true);
+  });
+
+  it('should leave an npm tool that follows no channel to its version probe', async () => {
     const { statuses, scripts } = await runToolStep('bun');
 
     expect(statuses).toEqual(['satisfied']);

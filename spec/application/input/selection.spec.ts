@@ -103,7 +103,10 @@ describe('fn:resolveCreateSelection', () => {
       interaction,
     });
 
-    expect(asked).toEqual(['Suspend after idle (minutes, 0 = never)']);
+    expect(asked).toEqual([
+      'Release channel',
+      'Suspend after idle (minutes, 0 = never)',
+    ]);
     expect(candidate).toMatchObject({
       provider: 'sprite',
       agent: 't3',
@@ -118,6 +121,7 @@ describe('fn:resolveCreateSelection', () => {
     const { candidate } = await resolveCreateSelection(dependencies, {
       options: {
         provider: 'sprite',
+        release: 'stable',
         harness: ['claude'],
         network: 'none',
         idleMinutes: 0,
@@ -330,6 +334,18 @@ describe('fn:resolveSetupSelection update intervals', () => {
 });
 
 describe('fn:suppliedSelectionViolations', () => {
+  it('should validate an agent release with the sole registered agent when none is named', () => {
+    const violations = suppliedSelectionViolations(
+      dependencies,
+      { options: { agentRelease: 'unregistered-release' } },
+      { isPairingRequested: false },
+    );
+
+    expect(violations).toMatchObject([
+      { code: 'invalid-option', fields: ['agent', 'agentRelease'] },
+    ]);
+  });
+
   it('should defer a provider capability check until a provider is named', () => {
     const supplied = { options: { holdMaxMinutes: 61 } };
     const deferred = suppliedSelectionViolations(dependencies, supplied, {

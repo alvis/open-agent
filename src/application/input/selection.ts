@@ -5,7 +5,7 @@ import {
   networkChoices,
   providerChoices,
 } from './selection/choices';
-import { resolveOptions } from './selection/options';
+import { resolveOptions, resolveRelease } from './selection/options';
 import { activePrompts } from './selection/sources';
 import { readSelection } from './selection/supplied';
 
@@ -47,6 +47,7 @@ export interface SelectionResolution {
 const CREATE_FIELDS: readonly SelectionField[] = [
   'provider',
   'agent',
+  'agentRelease',
   'harnesses',
   'network',
   'idleTimeoutMinutes',
@@ -59,12 +60,14 @@ const SECTION_FIELDS: Readonly<
   Partial<Record<SetupSection, readonly SelectionField[]>>
 > = {
   all: [
+    'agentRelease',
     'harnesses',
     'network',
     'idleTimeoutMinutes',
     'holdMaxMinutes',
     'updateDueIntervalDays',
   ],
+  agent: ['agentRelease'],
   network: ['network'],
   tools: ['updateDueIntervalDays'],
 };
@@ -141,6 +144,11 @@ export async function resolveCreateSelection(
     context,
   );
   const prompts = problems.length === 0 ? activePrompts(context) : undefined;
+  const asked = {
+    supplied: supplied.options,
+    prompts,
+    base: dependencies.defaults.options,
+  };
   const provider =
     supplied.provider ??
     (await prompts?.choose('Provider', providerChoices(dependencies))) ??
@@ -149,6 +157,8 @@ export async function resolveCreateSelection(
     supplied.agent ??
     (await prompts?.choose('ACP agent', agentChoices(dependencies))) ??
     dependencies.defaults.selection.agent;
+  // the channel is asked right after the agent, so a later step cannot reorder it
+  const agentRelease = await resolveRelease(dependencies, { agent, ...asked });
   const harnesses =
     supplied.harnesses ??
     (await prompts?.chooseMany(
@@ -169,7 +179,10 @@ export async function resolveCreateSelection(
       network,
       options: await resolveOptions(dependencies, {
         selected: { provider, agent },
-        supplied: supplied.options,
+        supplied: {
+          ...supplied.options,
+          ...(agentRelease !== undefined && { agentRelease }),
+        },
         fields: CREATE_FIELDS,
         prompts,
         base: dependencies.defaults.options,

@@ -10,6 +10,7 @@ interface SelectionInput {
 const SELECTION_INPUTS = {
   provider: { flag: '--provider', environment: 'OPEN_AGENT_PROVIDER' },
   agent: { flag: '--agent', environment: 'OPEN_AGENT_AGENT' },
+  agentRelease: { flag: '--release', environment: 'OPEN_AGENT_RELEASE' },
   harnesses: { flag: '--harness', environment: 'OPEN_AGENT_HARNESSES' },
   network: { flag: '--network', environment: 'OPEN_AGENT_NETWORK' },
 

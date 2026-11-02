@@ -19,6 +19,7 @@ export interface ProfileOptionsOutput {
   idleTimeoutMinutes: number;
   holdMaxMinutes: number;
   updateDueIntervalDays: number;
+  agentRelease?: string;
 }
 
 /** driver selection and options a workstation recorded */
@@ -69,5 +70,6 @@ export function projectProfileOptions(
     idleTimeoutMinutes: same,
     holdMaxMinutes: same,
     updateDueIntervalDays: same,
+    agentRelease: same,
   });
 }

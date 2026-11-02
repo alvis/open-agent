@@ -322,7 +322,7 @@ oa_update_run() {
 .tools[]? | select(.source.kind == $kind)
 | [.name, (.required | tostring),
    (.source | .packages[0] // .formula // .package // .toolchain // ""),
-   "latest"]
+   (.source.distTag // "latest")]
 | @tsv
 EOF
   cat >"$oa_updater_work/status.jq" <<'EOF'

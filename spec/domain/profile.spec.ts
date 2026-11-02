@@ -388,10 +388,15 @@ describe('fn:validateProfile', () => {
 });
 
 describe('fn:parseProfile', () => {
-  it('should accept a complete decoded profile', () => {
-    expect(parseProfile({ declarations: registry, value: valid })).toEqual({
+  it('should accept a complete decoded profile with an optional release channel', () => {
+    const value = {
+      ...valid,
+      options: { ...valid.options, agentRelease: 'stable' },
+    };
+
+    expect(parseProfile({ declarations: registry, value })).toEqual({
       isValid: true,
-      profile: valid,
+      profile: value,
     });
   });
 
@@ -416,6 +421,10 @@ describe('fn:parseProfile', () => {
         ...valid,
         options: { ...valid.options, idleTimeoutMinutes: 'many' },
       },
+    },
+    {
+      field: 'optional release channel',
+      value: { ...valid, options: { ...valid.options, agentRelease: 7 } },
     },
   ])('should reject a stored profile with malformed $field', ({ value }) => {
     expect(parseProfile({ declarations: registry, value })).toMatchObject({

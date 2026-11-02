@@ -18,6 +18,7 @@ const request = {
   options: {
     name: 'saf07-generated',
     provider: 'sprite',
+    release: 'stable',
     localCredentials: false,
     harness: ['claude'],
     network: 'none',

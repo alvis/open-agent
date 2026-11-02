@@ -143,4 +143,9 @@ export function validateSetupIntegrationOptions(
       message: 'Harness and idle switches require --section all',
     });
   }
+  if (section !== 'agent' && options.release !== undefined) {
+    throw new CommandValidationError({
+      message: 'Release switches require --section agent or --section all',
+    });
+  }
 }

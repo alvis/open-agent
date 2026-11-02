@@ -38,7 +38,10 @@ export async function persistSetupProfile(
 /**
  * detects whether this setup invocation changes the persisted selection; the
  * tools section owns only the update due interval, so it changes the selection
- * only when the resolved interval differs from the recorded one
+ * only when the resolved interval differs from the recorded one, and the agent
+ * section owns only the release channel, so it changes the selection only when
+ * the resolved channel differs from the recorded one, whether a flag, the
+ * environment or a prompt supplied it
  * @param section selected setup area
  * @param profile validated selection this run applies
  * @param recorded selection recorded before this run
@@ -49,8 +52,25 @@ export function profileUpdateSelected(
   profile: WorkstationProfile,
   recorded: WorkstationProfile,
 ): boolean {
+  if (section === 'agent') {
+    return isReleaseChanged(profile, recorded);
+  }
+
   return section === 'tools'
     ? profile.options.updateDueIntervalDays !==
         recorded.options.updateDueIntervalDays
     : sectionFields(section).length > 0;
+}
+
+/**
+ * detects whether a selection moves the ACP agent to another release channel
+ * @param profile validated selection this run applies
+ * @param recorded selection recorded before this run
+ * @returns whether the channels differ
+ */
+export function isReleaseChanged(
+  profile: WorkstationProfile,
+  recorded: WorkstationProfile,
+): boolean {
+  return profile.options.agentRelease !== recorded.options.agentRelease;
 }

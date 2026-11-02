@@ -58,15 +58,19 @@ describe('input source resolution', () => {
           sources: { processEnv: {}, fileEnv: {} },
           interaction,
         }),
-      [{ waitFor: 'Suspend after idle', input: '\r' }],
+      [
+        { waitFor: 'Release channel', input: '\r' },
+        { waitFor: 'Suspend after idle', input: '\r' },
+      ],
     );
 
-    expect(observed.matchedSteps, observed.output).toBe(1);
+    expect(observed.matchedSteps, observed.output).toBe(2);
     expect(observed.result.candidate).toMatchObject({
       provider: 'sprite',
       harnesses: ['claude'],
       network: 'none',
       options: {
+        agentRelease: 'stable',
         idleTimeoutMinutes: 5,
       },
     });

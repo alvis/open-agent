@@ -37,6 +37,8 @@ export interface NpmToolSource {
   kind: 'npm';
   /** registry package name */
   package: string;
+  /** dist-tag installed and kept updated; `latest` when absent */
+  distTag?: string;
   /** the agent owns its npm tools */
   account: 'agent';
 }

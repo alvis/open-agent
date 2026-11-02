@@ -22,6 +22,13 @@ export interface AgentViolationsParams {
   options: ProfileValidationOptions;
 }
 
+/** release selection to check against an agent's declarations */
+export interface ReleaseViolationsParams {
+  declarations: ProductDeclarations;
+  agent: AgentId;
+  release: string | undefined;
+}
+
 /** one driver id a selection requests */
 interface RequestedDriver {
   /** catalog section the id belongs to */
@@ -168,4 +175,42 @@ export function agentViolations({
         ]
       : []),
   ];
+}
+
+/**
+ * checks the release channel against the channels the ACP agent declares
+ * @param params known ACP agent and requested release channel
+ * @param params.declarations the data every registered driver declares
+ * @param params.agent known ACP agent id
+ * @param params.release requested release channel, absent for the agent's default
+ * @returns a violation when the agent declares no channels or not this one
+ */
+export function releaseViolations({
+  declarations,
+  agent,
+  release,
+}: ReleaseViolationsParams): ProfileViolation[] {
+  if (release === undefined) {
+    return [];
+  }
+  const { releaseChannels } = declarations.agents[agent];
+  if (releaseChannels === undefined) {
+    return [
+      {
+        code: 'undeclared-capability',
+        message: `ACP agent "${agent}" declares no release channels (${selectionLabel('agentRelease')})`,
+        fields: ['agent', 'agentRelease'],
+      },
+    ];
+  }
+
+  return releaseChannels.channels.some(({ id }) => id === release)
+    ? []
+    : [
+        {
+          code: 'invalid-option',
+          message: `Unknown release channel "${release}" for ACP agent "${agent}"; available: ${releaseChannels.channels.map(({ id }) => id).join(', ')}`,
+          fields: ['agent', 'agentRelease'],
+        },
+      ];
 }

@@ -87,6 +87,7 @@ describe('scoped setup', () => {
         },
         profile: DISABLED_NETWORK_PROFILE,
         persistsProfile: false,
+        isReleaseChanged: false,
         mutation: { started: false },
       };
       const observed = await driveInk(

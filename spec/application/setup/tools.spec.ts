@@ -89,6 +89,7 @@ function toolsContext(
     },
     profile: DISABLED_NETWORK_PROFILE,
     persistsProfile: run.persists,
+    isReleaseChanged: false,
     mutation: { started: false },
   };
 }
@@ -217,6 +218,7 @@ describe('fn:setupTools --update', () => {
       },
       profile: DISABLED_NETWORK_PROFILE,
       persistsProfile: false,
+      isReleaseChanged: false,
       mutation: { started: false },
     };
 

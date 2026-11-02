@@ -50,6 +50,7 @@ describe('fn:recordSetupMetadata', () => {
         },
         profile: DISABLED_NETWORK_PROFILE,
         persistsProfile: false,
+        isReleaseChanged: false,
         mutation: { started: false },
       };
 

@@ -105,6 +105,8 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
       native.agentEnvironment === undefined
         ? undefined
         : environmentDetails(environment),
+    'Agent release channel': asRecord(asRecord(recorded.profile).options)
+      .agentRelease,
     'Installed tools': installedTools(recorded.tools, updates.tools),
     'Skipped tools': skippedTools(asRecord(recorded.setup).skipped),
     'Idle governor':

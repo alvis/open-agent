@@ -1,5 +1,7 @@
 import { isDriverId } from '#domain/profile';
 
+import { releaseChoices } from './choices';
+
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { ProfileOptions } from '#domain/profile';
 import type { SelectionField } from '#domain/selection-inputs';
@@ -23,6 +25,11 @@ interface OptionContext {
   base: ProfileOptions;
 }
 
+/** release inputs and the selected agent */
+type ReleaseContext = Pick<OptionContext, 'supplied' | 'prompts' | 'base'> & {
+  agent: string;
+};
+
 /**
  * resolves the capability-driven options the run owns: idle minutes only when the provider keeps workstations awake; hold-max
  * and the update due interval are never asked
@@ -36,8 +43,16 @@ export async function resolveOptions(
 ): Promise<ProfileOptions> {
   const { base, fields, supplied } = context;
 
+  const agentRelease = fields.includes('agentRelease')
+    ? await resolveRelease(dependencies, {
+        ...context,
+        agent: context.selected.agent,
+      })
+    : base.agentRelease;
+
   return {
     ...base,
+    ...(agentRelease !== undefined && { agentRelease }),
     idleTimeoutMinutes: fields.includes('idleTimeoutMinutes')
       ? await resolveIdleMinutes(dependencies, context)
       : base.idleTimeoutMinutes,
@@ -45,6 +60,41 @@ export async function resolveOptions(
     updateDueIntervalDays:
       supplied.updateDueIntervalDays ?? base.updateDueIntervalDays,
   };
+}
+
+/**
+ * resolves the release channel the ACP agent follows: the supplied one, else
+ * the one the base options record, else the agent's default; asked only when
+ * the agent declares more than one channel
+ * @param dependencies the registered drivers
+ * @param context agent, supplied values, prompts and base options
+ * @returns the channel, absent when the agent declares none and none was recorded
+ */
+export async function resolveRelease(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  context: ReleaseContext,
+): Promise<string | undefined> {
+  const { agent, supplied, prompts, base } = context;
+  if (supplied.agentRelease !== undefined) {
+    return supplied.agentRelease;
+  }
+  const channels = isDriverId(agent, {
+    declarations: dependencies.registry,
+    kind: 'agents',
+  })
+    ? dependencies.registry.agents[agent].releaseChannels
+    : undefined;
+  if (channels === undefined) {
+    return base.agentRelease;
+  }
+  const current = base.agentRelease ?? channels.defaultChannel;
+
+  return (
+    (await prompts?.choose(
+      'Release channel',
+      releaseChoices(channels, current),
+    )) ?? current
+  );
 }
 
 /**

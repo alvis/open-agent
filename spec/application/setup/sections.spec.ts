@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { setupAgent } from '#application/setup/sections';
+import { setupAgent, stopService } from '#application/setup/sections';
 
 import { PairingSecret } from '#kernel/pairing-secret';
 
@@ -89,6 +89,7 @@ describe('fn:setupAgent', () => {
       },
       profile: DISABLED_NETWORK_PROFILE,
       persistsProfile: false,
+      isReleaseChanged: false,
       mutation: { started: false },
     };
 
@@ -153,8 +154,36 @@ async function quietSetup(
     },
     profile: DISABLED_NETWORK_PROFILE,
     persistsProfile: false,
+    isReleaseChanged: false,
     mutation: { started: false },
   };
 
   return { context, guest: await context.connection.guest() };
 }
+
+describe('fn:stopService', () => {
+  it('should surface a provider stop failure while the service remains running', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-stop-refused-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    const services = holdServices(sprite);
+    services.set('agent-service', {
+      name: 'agent-service',
+      cmd: '/bin/true',
+      args: [],
+      needs: [],
+      state: { name: 'agent-service', status: 'running' },
+    });
+    const { connection } = workstationOf(sprite);
+    const guest = await connection.guest();
+    vi.spyOn(guest.services, 'stop').mockResolvedValue(false);
+
+    await expect(stopService(guest, 'agent-service')).rejects.toMatchObject({
+      code: 'PROVIDER',
+      message: expect.stringContaining('agent-service'),
+    });
+    expect(services.get('agent-service')?.state?.status).toBe('running');
+    await connection.close();
+  });
+});

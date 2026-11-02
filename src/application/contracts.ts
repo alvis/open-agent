@@ -18,6 +18,8 @@ export interface CommandOptions {
   provider?: ProviderId;
   /** selected ACP agent */
   agent?: AgentId;
+  /** release channel of the selected ACP agent */
+  release?: string;
   /** selected harnesses, from the repeatable --harness */
   harness?: HarnessId[];
   /** selected network */
