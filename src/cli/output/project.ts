@@ -1,4 +1,5 @@
 import { projectCreate, projectCreateFailure } from './create';
+import { projectDoctor } from './doctor';
 import { projectError } from './failure';
 import { projectList } from './list';
 import { projectShow } from './show';
@@ -43,6 +44,12 @@ function projectSuccess(result: CommandSuccess): SuccessOutput {
         ok: true,
         data: projectShow(result.data),
       };
+    case 'doctor':
+      return {
+        command: 'doctor',
+        ok: true,
+        data: projectDoctor(result.data),
+      };
     // no default
   }
 }
@@ -68,6 +75,13 @@ function projectFailure(result: Failed): FailureOutput {
       return { command: 'list', ok: false, error };
     case 'show':
       return { command: 'show', ok: false, error };
+    case 'doctor':
+      return {
+        command: 'doctor',
+        ok: false,
+        error,
+        data: optional(result.data, projectDoctor),
+      };
     // no default
   }
 }

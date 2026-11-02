@@ -3,7 +3,11 @@ import { bindProvider } from '#application/catalog/providers';
 import { createWorkstation } from '#application/create';
 import { commandError } from '#application/failures';
 import { resolveProviderCredential } from '#application/input/provider-credential';
-import { listWorkstations, showWorkstation } from '#application/inspection';
+import {
+  doctorWorkstation,
+  listWorkstations,
+  showWorkstation,
+} from '#application/inspection';
 import { validateCommandRequest } from '#application/validation';
 import { PROVIDER_IDS } from '#domain/ids';
 import { prerequisiteDetails } from '#domain/prerequisites';
@@ -258,6 +262,12 @@ async function dispatchAuthenticated(
   const actions = {
     show: async () =>
       showWorkstation(dependencies, { request, provider, interaction }),
+    doctor: async () =>
+      doctorWorkstation(dependencies, {
+        provider,
+        requestedName: request.machine,
+        interaction,
+      }),
   } satisfies Record<AuthenticatedCommand, () => Promise<CommandResult>>;
 
   return actions[request.command]();

@@ -40,10 +40,25 @@ export const showDocumentation = {
   brief: 'show a workstation from current control-plane state',
   customUsage: ['[<workstation>] [--inspect] [options]'],
   fullDescription: `Shows current provider details and the ordinary agent URL without
-waking the guest. --inspect checks live guest services and may wake it.
-${PROVIDER_SELECTION} Credentials precede output controls below.
+waking the guest. --inspect checks live guest services and may wake it; use
+doctor for a readiness-focused report. ${PROVIDER_SELECTION} Credentials precede
+output controls below.
 
 EXAMPLES
   open-agent show devbox
   open-agent show devbox --inspect`,
+} as const;
+
+/** readiness checks are separate from control-plane details */
+export const doctorDocumentation = {
+  brief: 'check current workstation readiness',
+  customUsage: ['[<workstation>] [options]'],
+  fullDescription: `Inspects current guest services, routing, and native setup;
+the check may wake the guest. Use show for provider details or show --inspect
+for details together with a live inspection. ${PROVIDER_SELECTION} Credentials
+precede output controls in the flag table.
+
+EXAMPLES
+  open-agent doctor devbox
+  open-agent doctor devbox --non-interactive`,
 } as const;

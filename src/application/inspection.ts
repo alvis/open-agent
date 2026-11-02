@@ -11,7 +11,11 @@ import { assessReadiness } from './readiness';
 
 import type { BoundProvider } from '#application/catalog/providers';
 import type { WorkstationCommandParams } from '#application/contracts';
-import type { ListData, UnavailableProvider } from '#application/data';
+import type {
+  DoctorData,
+  ListData,
+  UnavailableProvider,
+} from '#application/data';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { ProviderDriver } from '#application/ports/drivers';
 import type { ReleaseSource } from '#application/ports/guest';
@@ -229,4 +233,74 @@ export async function showWorkstation(
         : {}),
     },
   };
+}
+
+/** the named inputs of doctor workstation */
+export interface DoctorWorkstationParams {
+  /** authenticated provider driver */
+  provider: ProviderDriver;
+  /** exact machine name when supplied */
+  requestedName: string | undefined;
+  /** optional inline machine selector */
+  interaction?: Interaction;
+}
+
+/**
+ * performs one bounded current guest readiness inspection
+ * @param dependencies the registered drivers, the guest mechanics
+ * @param params the call's inputs: provider, requestedName, interaction
+ * @returns current guest readiness and non-secret configuration status
+ */
+export async function doctorWorkstation(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'guest'>,
+  params: DoctorWorkstationParams,
+): Promise<CommandResult> {
+  const { provider, requestedName, interaction } = params;
+  const workstation = await selectManagedMachine(dependencies, {
+    provider,
+    requestedName,
+    interaction,
+    release: 'guest',
+  });
+  const inspection = await dependencies.guest.inspection.inspect(
+    await provider.openGuest(workstation),
+    {
+      onProbe: probeProgress(interaction?.progress.bind(interaction)),
+    },
+  );
+  const { ready, failures, skipped, probeFailures } = assessReadiness(
+    dependencies,
+    inspection,
+  );
+
+  const data: DoctorData = {
+    machine: summarizeMachine(dependencies, workstation),
+    currentReadiness: {
+      ready,
+      failures,
+      skipped,
+      probeFailures,
+      network: inspection.network,
+      native: inspection.native,
+      services: inspection.services.map((service) => ({
+        name: service.name,
+        state: service.status,
+      })),
+      environment: inspection.environment,
+    },
+  };
+
+  return ready
+    ? { command: 'doctor', ok: true, data }
+    : {
+        command: 'doctor',
+        ok: false,
+        data,
+        error: {
+          code: 'PREFLIGHT',
+          message: 'Current workstation readiness check failed',
+          machine: workstation.name,
+          machineId: workstation.id,
+        },
+      };
 }
