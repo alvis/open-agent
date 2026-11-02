@@ -150,7 +150,7 @@ describe('fn:environmentProblem', () => {
     const candidate = {
       ...RECORDED,
       setup: { ...RECORDED.setup, state: 'unknown' },
-      tools: 'none',
+      schedule: { dueDays: 0 },
     };
 
     expect(environmentProblem(registry, RECORDED)).toBeUndefined();

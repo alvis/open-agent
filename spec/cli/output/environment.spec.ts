@@ -8,9 +8,9 @@ import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
 import type { GuestEnvironment } from '#domain/observations/environment';
 
 describe('fn:projectEnvironment', () => {
-  it('should retain a selected harness adapter', () => {
+  it('should retain a selected harness adapter and scheduled job', () => {
     const base = environmentOf(DISABLED_NETWORK_PROFILE);
-    const launchFacts: Pick<GuestEnvironment, 'agent'> = {
+    const launchFacts: Pick<GuestEnvironment, 'agent' | 'jobs'> = {
       agent: {
         ...base.agent,
         harnesses: [
@@ -29,6 +29,17 @@ describe('fn:projectEnvironment', () => {
           },
         ],
       },
+      jobs: [
+        {
+          name: 'update-gate',
+          everyMinutes: 60,
+          run: {
+            command: '/opt/open-agent/maintenance/update-gate.sh',
+            arguments: [],
+            account: 'root',
+          },
+        },
+      ],
     };
     const environment = environmentOf(DISABLED_NETWORK_PROFILE, launchFacts);
 

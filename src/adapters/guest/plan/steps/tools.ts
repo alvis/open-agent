@@ -242,18 +242,22 @@ function npmActions(source: NpmToolSource): SourceActions {
 }
 
 /**
- * decides the calls of a system package step: install the packages; it is in
- * place once every package is installed
+ * decides the calls of a system package step: mask the vendor services, then
+ * install the packages; it is in place once every package is installed
  * @param source the packages
  * @returns the libraries, calls and limit of the step
  */
 function systemActions(source: SystemToolSource): SourceActions {
-  const { packages } = source;
+  const { packages, vendorServices = [] } = source;
+  const prepare: LibraryCall[] = [];
+  if (vendorServices.length > 0) {
+    prepare.push(['oa_mask_service', ...vendorServices]);
+  }
 
   return {
     libraries: [],
     check: [['oa_pkg_installed', ...packages]],
-    apply: [['oa_pkg_install', ...packages]],
+    apply: [...prepare, ['oa_pkg_install', ...packages]],
     timeoutMs: SYSTEM_LIMIT_MS,
   };
 }

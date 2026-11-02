@@ -6,10 +6,11 @@ import { assertImageTools, assemblePlan } from './plan/assembly';
 import { needsBottleProbe, probeBottles } from './plan/bottles';
 import { runPlan } from './plan/execution';
 import { AWAKE_COMMAND } from './platform/awake';
-import { ENVIRONMENT_PATH } from './platform/layout';
+import { ENVIRONMENT_PATH, UPDATE_LOG } from './platform/layout';
 import { assertSupportedRelease, newerMetadataRelease } from './release-guard';
 import { installProviderServices } from './services/provider';
 import { SetupConnection } from './session/connection';
+import { UPDATE_GATE_ASSET } from './updates';
 
 import type { DriverRegistry } from '#application/ports/drivers';
 import type { GuestMechanics } from '#application/ports/guest';
@@ -38,6 +39,8 @@ export function createGuestMechanics(
   return {
     facts: {
       awakeCommand: AWAKE_COMMAND,
+      updateGateCommand: UPDATE_GATE_ASSET.installAs,
+      updateLog: UPDATE_LOG,
       environmentPath: ENVIRONMENT_PATH,
     },
     session: {

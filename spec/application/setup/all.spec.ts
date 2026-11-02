@@ -14,7 +14,7 @@ import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
 import { setupAll } from '#application/setup/all';
 import { registry } from '#composition/registry';
 import { summarizeProfile } from '#domain/recorded';
-import { agentService } from '#domain/services';
+import { agentService, CRON_SERVICE_NAME } from '#domain/services';
 import { OPEN_AGENT_VERSION } from '#kernel/version';
 
 import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
@@ -87,9 +87,10 @@ describe('fn:setupAll', () => {
         },
         inspection: {
           inspect: async () => ({
-            services: [registry.agents[profile.agent].service.name].map(
-              (name) => ({ name, needs: [], status: 'running' as const }),
-            ),
+            services: [
+              registry.agents[profile.agent].service.name,
+              CRON_SERVICE_NAME,
+            ].map((name) => ({ name, needs: [], status: 'running' as const })),
             network: {
               online: false,
               skipped: true,
@@ -122,7 +123,7 @@ describe('fn:setupAll', () => {
           context,
         ),
       ).resolves.toMatchObject({
-        network: { status: 'disabled', readiness: 'skipped' },
+        tools: 'updated',
         ...(withPairCode ? { pairing: { status: 'created' } } : {}),
       });
 

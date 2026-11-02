@@ -4,7 +4,7 @@ import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 import type { CommandName } from '#kernel/commands';
 
 /** targetable setup areas */
-export type SetupSection = 'all' | 'agent' | 'network';
+export type SetupSection = 'all' | 'agent' | 'network' | 'tools';
 
 /** values parsed from CLI flags; secret-bearing fields contain references, never raw credentials */
 export interface CommandOptions {
@@ -26,6 +26,8 @@ export interface CommandOptions {
   idleMinutes?: number;
   /** minutes a turn hold lasts after its last refresh */
   holdMaxMinutes?: number;
+  /** days after the last successful update before another is due */
+  updateDueDays?: number;
   /** disables every prompt */
   nonInteractive?: boolean;
   /** prints one JSON result instead of human output */
@@ -44,6 +46,8 @@ export interface CommandOptions {
   withPairCode?: boolean;
   /** adds a live guest inspection to show */
   inspect?: boolean;
+  /** installs the latest managed tools in place, without restarting a service */
+  update?: boolean;
   /** source reference of the provider management credential */
   providerTokenSource?: string;
 }

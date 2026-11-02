@@ -6,7 +6,9 @@ import type {
   ManagementCredentialName,
 } from '#domain/credentials';
 import type { ProviderId } from '#domain/ids';
+import type { GuestEnvironment } from '#domain/observations/environment';
 import type { GuestInspection } from '#domain/observations/inspection';
+import type { UpdateStatus } from '#domain/observations/updates';
 import type { WorkstationProfile } from '#domain/profile';
 import type { CommandErrorCode } from '#kernel/faults';
 import type { PairingSecret } from '#kernel/pairing-secret';
@@ -79,6 +81,7 @@ export interface CurrentReadiness extends ReadinessAssessment {
   native: GuestInspection['native'];
   services: ServiceSummary[];
   environment: GuestInspection['environment'];
+  updates?: UpdateStatus;
   governor: GuestInspection['governor'];
 }
 
@@ -105,15 +108,45 @@ export interface NetworkSetupData {
   network: { status: 'disabled'; readiness: 'skipped' };
 }
 
+/** how many tools an update left current, did not run for, and failed */
+export interface ComponentCounts {
+  /** tools current after the update */
+  installed: number;
+  /** tools the update did not run for */
+  skipped: number;
+  /** tools whose update failed */
+  failed: number;
+}
+
+/** tool mutation, an update schedule change, or recorded installation facts */
+export interface ToolsSetupData {
+  /** what the update did to the managed tools, when it recorded it */
+  components?: ComponentCounts;
+  tools:
+    | 'updated'
+    | 'scheduled'
+    | 'unchanged'
+    | {
+        status: 'recorded versions';
+        /** the installed tools environment.json records */
+        tools: GuestEnvironment['tools'];
+        /** the optional tools setup skipped */
+        skipped: GuestEnvironment['setup']['skipped'];
+        /** what the last update recorded, when one ran */
+        lastUpdate?: UpdateStatus;
+      };
+}
+
 /** all-section recovery retains each independently selected outcome */
 export interface AllSetupData
-  extends Partial<AgentSetupData>, NetworkSetupData {}
+  extends Partial<AgentSetupData>, NetworkSetupData, ToolsSetupData {}
 
 /** concrete outcomes keyed by the executed guest setup section */
 interface SetupSectionData {
   all: AllSetupData;
   agent: AgentSetupData;
   network: NetworkSetupData;
+  tools: ToolsSetupData;
 }
 
 /** section identity stays correlated with its concrete result */

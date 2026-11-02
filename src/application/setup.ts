@@ -15,6 +15,7 @@ import { setupNetwork } from './setup/network';
 import { prepareGuestSection } from './setup/preparation';
 import { setupAgent } from './setup/sections';
 import { selectSetupSection } from './setup/selection';
+import { setupTools } from './setup/tools';
 
 import type {
   CommandOptions,
@@ -283,6 +284,10 @@ async function applySection(
     }),
     network: async (): Promise<AppliedSetupSection> =>
       Promise.resolve({ section: 'network', ...setupNetwork() }),
+    tools: async (): Promise<AppliedSetupSection> => ({
+      section: 'tools',
+      ...(await setupTools(dependencies, guest, context)),
+    }),
     all: async (): Promise<AppliedSetupSection> => ({
       section: 'all',
       ...(await setupAll(dependencies, guest, context)),

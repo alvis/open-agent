@@ -37,6 +37,7 @@ const step = (id: string): SetupStep => ({
 
 const foundation = step('foundation');
 const tool = step('tool');
+const service = step('service');
 const environment = environmentOf(DISABLED_NETWORK_PROFILE);
 const recordedService =
   dependencies.registry.agents[DISABLED_NETWORK_PROFILE.agent].service;
@@ -47,6 +48,7 @@ const assembly: SetupAssembly = {
   environment,
   foundation: [foundation],
   steps: [tool],
+  services: [service],
 };
 
 async function installationBoundary() {
@@ -151,7 +153,7 @@ describe('fn:installWorkstation', () => {
 
     expect(result).toEqual(environment);
     expect(boundary.open).toHaveBeenCalledOnce();
-    expect(boundary.lend.mock.calls).toEqual([[42]]);
+    expect(boundary.lend.mock.calls).toEqual([[42], [42]]);
     expect(boundary.assemble).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: dependencies.registry.providers.sprite,
@@ -170,6 +172,13 @@ describe('fn:installWorkstation', () => {
           phase: 'start',
         },
       ],
+      [
+        {
+          stage: 'tools',
+          message: expect.stringContaining('service'),
+          phase: 'start',
+        },
+      ],
     ]);
     expect(boundary.installProvider).toHaveBeenCalledWith({
       control: boundary.guest.services,
@@ -179,6 +188,7 @@ describe('fn:installWorkstation', () => {
     expect(events).toEqual([
       'plan:foundation,tool',
       'before-services',
+      'plan:service',
       'provider-services',
     ]);
   });
@@ -197,6 +207,7 @@ describe('fn:installWorkstation', () => {
     expect(boundary.run.mock.calls.map(([{ steps }]) => steps)).toEqual([
       [foundation],
       [foundation, tool],
+      [service],
     ]);
     expect(boundary.probeBottles.mock.calls).toEqual([
       [boundary.connection, assembly],
@@ -226,6 +237,7 @@ describe('fn:installWorkstation', () => {
     ).toEqual([
       { steps: [foundation], settled: [] },
       { steps: [tool], settled: ['foundation'] },
+      { steps: [service], settled: [] },
     ]);
   });
 
@@ -277,6 +289,7 @@ describe('fn:installWorkstation', () => {
     ).toEqual([
       { steps: ['assets', 'homebrew', 'sysctl', 'optional'], settled: [] },
       { steps: ['homebrew', 'sysctl', 'optional', 'tap'], settled: ['assets'] },
+      { steps: ['service'], settled: [] },
     ]);
   });
 
@@ -325,6 +338,7 @@ describe('fn:installWorkstation', () => {
     ).toEqual([
       { steps: ['credential'], settled: [] },
       { steps: ['credential', 'tool'], settled: [] },
+      { steps: ['service'], settled: [] },
     ]);
   });
 
@@ -386,6 +400,7 @@ describe('fn:installWorkstation', () => {
     expect(boundary.run.mock.calls.map(([{ steps }]) => steps)).toEqual([
       [foundation],
       [foundation, step('alternative-source')],
+      [service],
     ]);
   });
 
@@ -396,7 +411,7 @@ describe('fn:installWorkstation', () => {
         isComplete: false,
         steps: [
           { step: tool, status: 'failed', attempts: 1, reason: 'disk full' },
-          { step: step('service'), status: 'skipped', attempts: 0 },
+          { step: service, status: 'skipped', attempts: 0 },
         ],
       },
       details: ['tool: disk full'],

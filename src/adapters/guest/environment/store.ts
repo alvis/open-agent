@@ -3,7 +3,11 @@ import {
   readGuestFile,
   writeGuestFile,
 } from '#adapters/guest/platform/files';
-import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
+import {
+  ENVIRONMENT_PATH,
+  UPDATE_STATUS_PATH,
+} from '#adapters/guest/platform/layout';
+import { parseUpdateStatus } from '#domain/observations/updates';
 import { validateProfile } from '#domain/profile';
 import { CommandFault } from '#kernel/faults';
 
@@ -17,6 +21,7 @@ import type { GuestEnvironmentAccess } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { ProductDeclarations } from '#domain/declarations';
 import type { GuestEnvironment } from '#domain/observations/environment';
+import type { UpdateStatus } from '#domain/observations/updates';
 import type { WorkstationProfile } from '#domain/profile';
 
 /**
@@ -43,6 +48,7 @@ export function createEnvironmentAccess(
     write,
     writeProfile: async (guest, profile) =>
       writeGuestProfile(declarations, guest, profile),
+    readUpdateStatus,
   };
 }
 
@@ -92,7 +98,8 @@ async function writeGuestEnvironment(
 }
 
 /**
- * records a profile whose change no tool or service follows
+ * records a profile whose change no tool, service or job follows, such as
+ * the update due interval
  * @param declarations the data every registered driver declares
  * @param guest target guest
  * @param profile the profile to record
@@ -106,5 +113,21 @@ async function writeGuestProfile(
   await writeGuestEnvironment(declarations, guest, {
     ...environment,
     profile,
+    schedule: { dueDays: profile.options.updateDueIntervalDays },
   });
+}
+
+/**
+ * reads what the updater recorded about its last run
+ * @param guest target guest
+ * @returns the record, or nothing when no update ran or it cannot be read
+ */
+async function readUpdateStatus(
+  guest: GuestChannel,
+): Promise<UpdateStatus | undefined> {
+  if (!(await guestFileExists(guest, UPDATE_STATUS_PATH))) {
+    return undefined;
+  }
+
+  return parseUpdateStatus(await readGuestFile(guest, UPDATE_STATUS_PATH));
 }

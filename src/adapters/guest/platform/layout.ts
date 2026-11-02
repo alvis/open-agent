@@ -91,10 +91,13 @@ export const LOGIN_PROFILE = [
   '',
 ].join('\n');
 
-/** root-only directory of the session lock and the process-group record */
+/**
+ * root-only directory of the session lock, which the hourly update gate also
+ * takes, and the process-group record
+ */
 export const SESSION_DIRECTORY = '/run/open-agent-session';
 
-/** the lock a setup session holds while it runs */
+/** the lock a setup session holds while it runs, which the update gate tests */
 export const SESSION_LOCK = `${SESSION_DIRECTORY}/session.lock`;
 
 /** the memory-backed directory setup delivers its secrets in */
@@ -111,6 +114,12 @@ export const MACHINE_INFO_LABEL_KEY = 'PRETTY_HOSTNAME';
 
 /** root-owned record of the workstation name on the persistent guest root, from which a provider that rebuilds its root filesystem on boot restores the machine information file */
 export const WORKSTATION_NAME_PATH = `${GUEST_ROOT}/workstation-name`;
+
+/** where the updater records its last run, which every account reads */
+export const UPDATE_STATUS_PATH = `${GUEST_ROOT}/update-status.json`;
+
+/** where the update gate keeps every run's output */
+export const UPDATE_LOG = `${GUEST_ROOT}/update.log`;
 
 /** the group range that lets every account open an unprivileged ping socket */
 export const PING_GROUP_RANGE = '0 2147483647';

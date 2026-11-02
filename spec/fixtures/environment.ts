@@ -8,7 +8,7 @@ import type { WorkstationProfile } from '#domain/profile';
 
 /**
  * builds the environment.json a finished setup of a profile records, with no
- * tools and only the agent's service
+ * tools or jobs and only the agent's service
  * @param profile the recorded profile
  * @param overrides fields that differ from a ready setup
  * @returns a complete environment record
@@ -24,6 +24,7 @@ export function environmentOf(
     os: { family: 'debian' },
     profile,
     tools: [],
+    schedule: { dueDays: 7 },
     provider: {
       id: profile.provider,
       keepAwakeMode: 'none',
@@ -43,6 +44,7 @@ export function environmentOf(
       harnesses: [],
     },
     services: [registry.agents[profile.agent].service],
+    jobs: [],
     ...overrides,
   };
 }

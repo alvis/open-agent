@@ -5,6 +5,7 @@ import {
   projectGuestService,
   projectNative,
   projectNetworkStatus,
+  projectUpdates,
 } from './inspection';
 import { projectMachine } from './machine';
 import { projectPairing } from './pairing';
@@ -45,6 +46,7 @@ function projectShownInspection(
     network: projectNetworkStatus,
     native: projectNative,
     environment: projectEnvironment,
+    updates: projectUpdates,
     probeFailures: each(projectProbeFailure),
     governor: projectGovernor,
     readiness: projectReadiness,

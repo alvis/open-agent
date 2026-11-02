@@ -10,8 +10,12 @@ import {
   SCHEMA_LABEL,
   mergeMetadataLabels,
 } from '#adapters/drivers/providers/sprite/labels';
-import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
+import {
+  ENVIRONMENT_PATH,
+  UPDATE_STATUS_PATH,
+} from '#adapters/guest/platform/layout';
 import { setupWorkstation } from '#application/setup';
+import { setupTools } from '#application/setup/tools';
 import { summarizeProfile } from '#domain/recorded';
 
 import { OPEN_AGENT_VERSION } from '#kernel/version';
@@ -22,11 +26,15 @@ import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
 import { dependencies } from '../../mocks/dependencies';
 import {
   createFilesystemSprite,
+  guestOf,
   providerOf,
+  workstationOf,
   writtenPaths,
 } from '../../mocks/sprites';
 
 import type { Sprite } from '@fly/sprites';
+
+import type { SetupContext } from '#application/setup/context';
 
 // setup's root session is a framed guest shell only the live specs open
 vi.mock(
@@ -48,7 +56,79 @@ async function recordEnvironment(sprite: Sprite): Promise<void> {
 }
 
 describe('scoped setup', () => {
-  it('should return from workstation selection to sections, then sets up the network', async () => {
+  it('should view recorded tool versions and declines an update without guest mutation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'open-agent-setup-'));
+    try {
+      const sprite = createFilesystemSprite({ root });
+      await recordEnvironment(sprite);
+      await sprite.filesystem().writeFile(
+        UPDATE_STATUS_PATH,
+        JSON.stringify({
+          finishedAt: '2026-10-01T00:00:00Z',
+          lastSuccess: '2026-10-01T00:00:00Z',
+          tools: [
+            {
+              name: 'node',
+              manager: 'brew',
+              required: true,
+              outcome: 'installed',
+              to: '24.9.0',
+            },
+          ],
+        }),
+      );
+      const context: SetupContext = {
+        ...workstationOf(sprite),
+        options: { localCredentials: false },
+        input: {
+          profile: DISABLED_NETWORK_PROFILE,
+          sources: {},
+          missing: [],
+        },
+        profile: DISABLED_NETWORK_PROFILE,
+        persistsProfile: false,
+        mutation: { started: false },
+      };
+      const observed = await driveInk(
+        async (interaction) => {
+          context.interaction = interaction;
+          const versions = await setupTools(
+            dependencies,
+            guestOf(sprite),
+            context,
+          );
+          const declined = await setupTools(
+            dependencies,
+            guestOf(sprite),
+            context,
+          );
+
+          return { versions, declined };
+        },
+        [
+          { waitFor: 'Managed tools', input: '\r' },
+          { waitFor: 'Managed tools', input: 'Update tools now' },
+          { waitFor: 'Search: Update tools now', input: '\r' },
+          { waitFor: 'Install latest stable tools now', input: '\r' },
+        ],
+      );
+
+      expect(observed.matchedSteps, observed.output).toBe(4);
+      expect(observed.result.versions).toMatchObject({
+        tools: {
+          status: 'recorded versions',
+          lastUpdate: { tools: [{ name: 'node', to: '24.9.0' }] },
+        },
+      });
+      expect(observed.result.declined).toEqual({ tools: 'unchanged' });
+      expect(writtenPaths(sprite)).toEqual([]);
+      expect(context.mutation.started).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it('should return from tools to sections, then views recorded tool versions without mutation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'open-agent-setup-'));
     vi.stubEnv('HOME', root);
     try {
@@ -63,7 +143,6 @@ describe('scoped setup', () => {
         }),
       });
       const client = new SpritesClient('test-token');
-      vi.spyOn(client, 'listAllSprites').mockResolvedValue([sprite]);
       vi.spyOn(client, 'getSprite').mockResolvedValue(sprite);
       await recordEnvironment(sprite);
       const observed = await driveInk(
@@ -71,8 +150,9 @@ describe('scoped setup', () => {
           setupWorkstation(dependencies, {
             request: {
               command: 'setup',
+              machine: 'temporary',
               options: {
-                section: 'network',
+                section: 'tools',
                 localCredentials: false,
               },
             },
@@ -80,19 +160,19 @@ describe('scoped setup', () => {
             interaction,
           }),
         [
-          { waitFor: 'Select a workstation', input: '\x1b' },
-          { waitFor: 'Choose setup section', input: 'Network' },
-          { waitFor: 'Search: Network', input: '\r' },
-          { waitFor: 'Select a workstation', input: '\r' },
+          { waitFor: 'Managed tools', input: '\x1b' },
+          { waitFor: 'Choose setup section', input: 'Managed tools' },
+          { waitFor: 'Search: Managed tools', input: '\r' },
+          { waitFor: 'View recorded installed versions', input: '\r' },
         ],
       );
 
       expect(observed.matchedSteps, observed.output).toBe(4);
       expect(observed.result).toMatchObject({
         ok: true,
-        data: { section: 'network', network: { status: 'disabled' } },
+        data: { section: 'tools', tools: { status: 'recorded versions' } },
       });
-      expect(writtenPaths(sprite)).toEqual([ENVIRONMENT_PATH]);
+      expect(writtenPaths(sprite)).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

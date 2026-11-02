@@ -1,9 +1,13 @@
+import { CRON_SERVICE_NAME } from '#domain/services';
 import { CommandFault } from '#kernel/faults';
 
 import type { DriverRegistry } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { AgentPairing } from '#domain/declarations';
 import type { AgentId } from '#domain/ids';
+
+/** how human output names the maintenance service */
+const MAINTENANCE_LABEL = 'Maintenance scheduler';
 
 /**
  * issues a pairing code through the agent
@@ -37,10 +41,13 @@ export async function pairAgent(
 export function serviceLabels(
   registry: Pick<DriverRegistry, 'agents'>,
 ): Record<string, string> {
-  return Object.fromEntries(
-    Object.values(registry.agents).map(({ service, displayName }) => [
-      service.name,
-      displayName,
-    ]),
-  );
+  return {
+    ...Object.fromEntries(
+      Object.values(registry.agents).map(({ service, displayName }) => [
+        service.name,
+        displayName,
+      ]),
+    ),
+    [CRON_SERVICE_NAME]: MAINTENANCE_LABEL,
+  };
 }

@@ -1,10 +1,11 @@
-import { mkdtempDisposable } from 'node:fs/promises';
+import { mkdir, mkdtempDisposable, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { createEnvironmentAccess } from '#adapters/guest/environment/store';
+import { UPDATE_STATUS_PATH } from '#adapters/guest/platform/layout';
 import { registry } from '#composition/registry';
 
 import { environmentOf } from '../../../fixtures/environment';
@@ -37,7 +38,7 @@ describe('environment access on a guest', () => {
       ...RECORDED,
       profile: {
         ...RECORDED.profile,
-        options: { ...RECORDED.profile.options, holdMaxMinutes: 0 },
+        options: { ...RECORDED.profile.options, updateDueIntervalDays: 0 },
       },
     };
 
@@ -56,7 +57,7 @@ describe('environment access on a guest', () => {
       ...DISABLED_NETWORK_PROFILE,
       options: {
         ...DISABLED_NETWORK_PROFILE.options,
-        holdMaxMinutes: 30,
+        updateDueIntervalDays: 14,
       },
     };
     await access.write(guest, RECORDED);
@@ -65,6 +66,27 @@ describe('environment access on a guest', () => {
 
     await expect(access.read(guest)).resolves.toMatchObject({
       profile: updated,
+      schedule: { dueDays: 14 },
+    });
+  });
+
+  it('should return the updater record when it exists', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-environment-'),
+    );
+    const guest = guestOf(createFilesystemSprite({ root: directory.path }));
+    await expect(access.readUpdateStatus(guest)).resolves.toBeUndefined();
+    await mkdir(join(directory.path, dirname(UPDATE_STATUS_PATH)), {
+      recursive: true,
+    });
+    await writeFile(
+      join(directory.path, UPDATE_STATUS_PATH),
+      JSON.stringify({ startedAt: '2026-10-26T00:00:00Z', tools: [] }),
+    );
+
+    await expect(access.readUpdateStatus(guest)).resolves.toEqual({
+      startedAt: '2026-10-26T00:00:00Z',
+      tools: [],
     });
   });
 });

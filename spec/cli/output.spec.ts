@@ -21,6 +21,7 @@ import type { MachineSummary } from '#application/machine';
 import type { CommandResult } from '#application/result';
 import type { GovernorState } from '#domain/observations/governor';
 import type { GuestInspection } from '#domain/observations/inspection';
+import type { UpdateToolOutcome } from '#domain/observations/updates';
 
 const machine: MachineSummary & { provider: 'sprite' } = {
   provider: 'sprite',
@@ -66,6 +67,16 @@ const inspection: GuestInspection = {
   probeFailures: [],
   governor: { recorded: true, state: RECORDED_GOVERNOR },
 };
+
+/**
+ * an optional tool the last update failed to upgrade
+ * @param name tool name
+ * @param reason why the upgrade failed
+ * @returns the recorded outcome
+ */
+function failedUpdate(name: string, reason: string): UpdateToolOutcome {
+  return { name, manager: 'brew', required: false, outcome: 'failed', reason };
+}
 
 /**
  * captures writes to the real output stream seam
@@ -423,6 +434,58 @@ describe('fn:prepareResult', () => {
     );
   });
 
+  it('should show no failed updates when optional native inspection is absent', () => {
+    const { native: _native, ...withoutNative } = inspection;
+    const output = captureResult(
+      {
+        command: 'show',
+        ok: true,
+        data: {
+          machine,
+          inspection: {
+            ...withoutNative,
+            updates: { tools: [] },
+          },
+        },
+      },
+      {},
+    );
+
+    expect(output.stdout).not.toContain('Failed tools:');
+    expect(output.stdout).not.toContain('Unsuccessful steps:');
+  });
+
+  it('should name the tools the last update failed in the maintenance details', () => {
+    const output = captureResult(
+      {
+        command: 'show',
+        ok: true,
+        data: {
+          machine,
+          inspection: {
+            ...inspection,
+            updates: {
+              startedAt: '2026-10-09T00:00:00.000Z',
+              finishedAt: '2026-10-09T00:01:00.000Z',
+              tools: [
+                failedUpdate('ripgrep-failure-fixture', 'no bottle'),
+                {
+                  name: 'gh',
+                  manager: 'brew',
+                  required: false,
+                  outcome: 'installed',
+                },
+              ],
+            },
+          },
+        },
+      },
+      {},
+    );
+
+    expect(output.stdout).toContain('ripgrep-failure-fixture');
+  });
+
   describe('idle governor line by keep-awake mode', () => {
     const NOW = Date.parse('2026-10-09T00:12:00.000Z');
     const { deadline: _deadline, ...NO_DEADLINE_GOVERNOR } = RECORDED_GOVERNOR;
@@ -664,7 +727,7 @@ describe('fn:prepareResult', () => {
         },
         inspection: {
           ...inspection,
-          network: { ...inspection.network, reason: 'hidden-reason-secret' },
+          updates: { tools: [failedUpdate('gh', 'hidden-reason-secret')] },
         },
         pairing: { status: 'created', token: pairing },
       },
@@ -698,7 +761,7 @@ describe('fn:prepareResult', () => {
         agentUrl: 'https://primary.sprites.app/#token=requested-pairing-token',
       },
       pairing: { token: 'requested-pairing-token' },
-      inspection: { network: { reason: '[REDACTED]' } },
+      inspection: { updates: { tools: [{ reason: '[REDACTED]' }] } },
     });
     expect(disclosed.stdout).not.toContain('hidden-reason-secret');
     expect(disclosedHuman.stdout).toContain(
@@ -724,6 +787,11 @@ describe('fn:prepareResult', () => {
           network: {
             ...inspection.network,
             reason: `the network rejected ${secret} twice: ${secret}`,
+          },
+          updates: {
+            tools: [
+              failedUpdate('gh', `updater rejected ${secret} twice: ${secret}`),
+            ],
           },
         },
       },

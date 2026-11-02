@@ -3,11 +3,13 @@
 # link, unless the system provides a command of that name, which the agent
 # finds in Homebrew's own directories on its PATH instead. A link is only
 # made where none is, or replaced where it points elsewhere into the prefix;
-# anything else there, and every system or agent tool, is left alone
+# anything else there, and every system or agent tool, is left alone. Root
+# reads environment.json with the system's jq alone
 
 # the links go in $OA_TOOL_LINKS and point into $OA_HOMEBREW_PREFIX, and no
 # link shadows a command in $OA_SYSTEM_DIRECTORIES, the system's command
 # directories separated by blanks, all from the header
+OA_LINK_JQ=/usr/bin/jq
 
 # refuses a formula, keg directory or executable a link could escape with
 # arguments: formula, keg directories separated by blanks, executables separated by blanks
@@ -98,4 +100,27 @@ oa_link_tool() {
       mv -fT "$oa_link_path.open-agent-new" "$oa_link_path" || return 1
   done
   return 0
+}
+
+# restores the links of every Homebrew tool environment.json records, such as
+# on a rebuilt root filesystem
+# arguments: path of environment.json
+oa_links_restore() {
+  if ! test -x "$OA_LINK_JQ"; then
+    echo "Restoring links needs $OA_LINK_JQ to read $1" >&2
+    return 1
+  fi
+  oa_restore_tools=$("$OA_LINK_JQ" -r '.tools[]?
+    | select(.source.kind == "brew")
+    | [.source.formula, ((.source.binDirs // ["bin"]) | join(" ")), (.executables | join(" "))]
+    | @tsv' "$1") || return 1
+  oa_restore_status=0
+  while IFS="$(printf '\t')" read -r oa_restore_formula oa_restore_directories oa_restore_executables; do
+    test -n "$oa_restore_formula" || continue
+    oa_link_tool apply "$oa_restore_formula" "$oa_restore_directories" "$oa_restore_executables" ||
+      oa_restore_status=1
+  done <<EOF
+$oa_restore_tools
+EOF
+  return "$oa_restore_status"
 }

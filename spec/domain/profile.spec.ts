@@ -7,6 +7,7 @@ import {
   parseProfile,
   registeredSummary,
   validateProfile,
+  MAX_UPDATE_DUE_DAYS,
 } from '#domain/profile';
 
 import type {
@@ -183,6 +184,7 @@ describe('fn:defaultProfile', () => {
       options: {
         idleTimeoutMinutes: 5,
         holdMaxMinutes: 60,
+        updateDueIntervalDays: 1,
       },
     });
   });
@@ -277,6 +279,26 @@ describe('fn:validateProfile', () => {
     [
       'a turn-hold maximum of 0',
       { options: { ...valid.options, holdMaxMinutes: 0 } },
+      ['invalid-option'],
+    ],
+    [
+      'a fractional due interval',
+      { options: { ...valid.options, updateDueIntervalDays: 1.5 } },
+      ['invalid-option'],
+    ],
+    [
+      'a due interval beyond a year',
+      {
+        options: {
+          ...valid.options,
+          updateDueIntervalDays: MAX_UPDATE_DUE_DAYS + 1,
+        },
+      },
+      ['invalid-option'],
+    ],
+    [
+      'a due interval of 0 days',
+      { options: { ...valid.options, updateDueIntervalDays: 0 } },
       ['invalid-option'],
     ],
     [

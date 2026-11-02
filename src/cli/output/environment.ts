@@ -8,7 +8,7 @@ import type {
   GuestEnvironment,
   SkippedTool,
 } from '#domain/observations/environment';
-import type { ServiceDefinition } from '#domain/services';
+import type { PeriodicJob, ServiceDefinition } from '#domain/services';
 
 import type { ProfileOutput } from './profile';
 
@@ -78,6 +78,13 @@ export interface ServiceDefinitionOutput {
   machineLog?: boolean;
 }
 
+/** a periodic job the guest runs */
+export interface PeriodicJobOutput {
+  name: string;
+  everyMinutes: number;
+  run: { command: string; arguments: readonly string[]; account: string };
+}
+
 /** the environment record the guest wrote at setup */
 export interface EnvironmentOutput {
   schema: number;
@@ -86,9 +93,11 @@ export interface EnvironmentOutput {
   os: { family: string };
   profile: ProfileOutput;
   tools: EnvironmentToolOutput[];
+  schedule: { dueDays: number };
   provider: EnvironmentProviderOutput;
   agent: EnvironmentAgentOutput;
   services: ServiceDefinitionOutput[];
+  jobs: PeriodicJobOutput[];
 }
 
 type EnvironmentAgent = GuestEnvironment['agent'];
@@ -121,9 +130,14 @@ export function projectEnvironment(
       projectFields<typeof os, EnvironmentOutput['os']>(os, { family: same }),
     profile: projectProfile,
     tools: each(projectTool),
+    schedule: (schedule) =>
+      projectFields<typeof schedule, EnvironmentOutput['schedule']>(schedule, {
+        dueDays: same,
+      }),
     provider: projectProvider,
     agent: projectAgent,
     services: each(projectServiceDefinition),
+    jobs: each(projectJob),
   });
 }
 
@@ -178,7 +192,7 @@ function projectAgent(agent: EnvironmentAgent): EnvironmentAgentOutput {
  * @param tool internal tool
  * @returns output tool
  */
-function projectTool(tool: EnvironmentTool): EnvironmentToolOutput {
+export function projectTool(tool: EnvironmentTool): EnvironmentToolOutput {
   return projectFields<EnvironmentTool, EnvironmentToolOutput>(tool, {
     name: same,
     required: same,
@@ -194,7 +208,7 @@ function projectTool(tool: EnvironmentTool): EnvironmentToolOutput {
  * @param tool internal skipped tool
  * @returns output skipped tool
  */
-function projectSkippedTool(tool: SkippedTool): SkippedToolOutput {
+export function projectSkippedTool(tool: SkippedTool): SkippedToolOutput {
   return projectFields<SkippedTool, SkippedToolOutput>(tool, {
     name: same,
     reason: same,
@@ -241,5 +255,23 @@ function projectServiceDefinition(
     needs: same,
     httpPort: same,
     machineLog: same,
+  });
+}
+
+/**
+ * projects a periodic job
+ * @param job internal job
+ * @returns output job
+ */
+function projectJob(job: PeriodicJob): PeriodicJobOutput {
+  return projectFields<PeriodicJob, PeriodicJobOutput>(job, {
+    name: same,
+    everyMinutes: same,
+    run: (run) =>
+      projectFields<typeof run, PeriodicJobOutput['run']>(run, {
+        command: same,
+        arguments: same,
+        account: same,
+      }),
   });
 }

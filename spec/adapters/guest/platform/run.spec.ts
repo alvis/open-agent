@@ -39,7 +39,7 @@ describe('fn:runGuest', () => {
       guestOf(sprite),
       ['/opt/private-executable', argvSecret],
       {
-        step: 'tools verification',
+        step: 'updater verification',
         env: { PRIVATE: envSecret },
         input: inputSecret,
       },
@@ -47,7 +47,9 @@ describe('fn:runGuest', () => {
 
     expect(failure).toMatchObject({ code: 'PROVIDER' });
     const message = String((failure as Error).message);
-    expect(message).toContain('Guest tools verification exited with status 23');
+    expect(message).toContain(
+      'Guest updater verification exited with status 23',
+    );
     expect(message).toContain('[REDACTED]');
     expect(message).toContain('final-marker');
     expect(message).not.toContain('old-diagnostic');

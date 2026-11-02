@@ -21,7 +21,7 @@ import type { SetupContext } from './context';
  * reconciles every managed guest section: the setup plan installs the tools,
  * then the guest is named after its workstation and the network and
  * harnesses are configured before the plan
- * installs and starts the services, the
+ * installs and starts the services and jobs, the
  * agent is verified to serve and exposed, and only then is the installation
  * recorded ready
  * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
@@ -39,7 +39,7 @@ export async function setupAll(
     stage: 'tools',
     message: 'Installing the guest environment and managed developer tools',
   });
-  const configured = Promise.withResolvers<AllSetupData>();
+  const configured = Promise.withResolvers<Omit<AllSetupData, 'tools'>>();
   await installSetupPlan(dependencies, context, async () => {
     // a workstation whose create stopped short has no name recorded yet
     await dependencies.guest.label.write(guest, context.workstation.name);
@@ -56,7 +56,7 @@ export async function setupAll(
     ? await setupAgent(dependencies, guest, context)
     : undefined;
 
-  return { ...(await configured.promise), ...agent };
+  return { tools: 'updated', ...(await configured.promise), ...agent };
 }
 
 /**
@@ -70,7 +70,7 @@ async function configureSections(
   dependencies: ApplicationDependencies,
   guest: GuestChannel,
   context: SetupContext,
-): Promise<AllSetupData> {
+): Promise<Omit<AllSetupData, 'tools'>> {
   const network = setupNetwork();
   await configureHarnesses(guest, {
     drivers: harnessDrivers(dependencies.registry, context.profile.harnesses),

@@ -18,12 +18,12 @@ const DIAGNOSTIC_LIMIT = 512;
 
 /**
  * turns operational probe failures into current-state evidence without losing siblings
- * @param recorded the environment setup recorded
+ * @param recorded the environment setup recorded and the updater's last run
  * @param results independently settled probe outcomes
  * @returns current inspection with explicit unavailable-probe evidence
  */
 export function settleInspectionResults(
-  recorded: Pick<GuestInspection, 'environment'>,
+  recorded: Pick<GuestInspection, 'environment' | 'updates'>,
   results: InspectionResults,
 ): Omit<GuestInspection, 'governor'> {
   checkOperation();

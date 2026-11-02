@@ -51,14 +51,22 @@ const CREATE_FIELDS: readonly SelectionField[] = [
   'network',
   'idleTimeoutMinutes',
   'holdMaxMinutes',
+  'updateDueIntervalDays',
 ];
 
 /** the fields each setup section reads and saves; every other field keeps its recorded value */
 const SECTION_FIELDS: Readonly<
   Partial<Record<SetupSection, readonly SelectionField[]>>
 > = {
-  all: ['harnesses', 'network', 'idleTimeoutMinutes', 'holdMaxMinutes'],
+  all: [
+    'harnesses',
+    'network',
+    'idleTimeoutMinutes',
+    'holdMaxMinutes',
+    'updateDueIntervalDays',
+  ],
   network: ['network'],
+  tools: ['updateDueIntervalDays'],
 };
 
 /**

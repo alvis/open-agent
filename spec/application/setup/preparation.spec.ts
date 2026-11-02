@@ -35,7 +35,7 @@ describe('fn:prepareGuestSection', () => {
       ...target,
       supplied: { options: {} },
       sources: { processEnv: {}, fileEnv: {} },
-      section: 'agent',
+      section: 'tools',
       options: { nonInteractive: true },
       mutation,
     });
@@ -124,10 +124,10 @@ describe('fn:prepareGuestSection', () => {
     await expect(
       prepareGuestSection(wired, {
         ...target,
-        supplied: { options: {} },
+        supplied: { options: { updateDueIntervalDays: 2 } },
         sources: { processEnv: {}, fileEnv: {} },
-        section: 'network',
-        options: { nonInteractive: true, yes: true },
+        section: 'tools',
+        options: { updateDueDays: 2, nonInteractive: true, yes: true },
         mutation,
       }),
     ).rejects.toBe(failure);

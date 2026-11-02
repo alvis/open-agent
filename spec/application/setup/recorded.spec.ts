@@ -58,7 +58,7 @@ describe('fn:readSetupEnvironment', () => {
     } satisfies typeof dependencies;
 
     await expect(
-      readSetupEnvironment(wired, guest, 'network'),
+      readSetupEnvironment(wired, guest, 'tools'),
     ).rejects.toMatchObject({ code: 'PREFLIGHT' });
     await expect(
       readSetupEnvironment(wired, guest, 'all'),

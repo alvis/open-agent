@@ -12,6 +12,10 @@ import type {
   NativeConfigurationInspection,
 } from '#domain/observations/native';
 import type { NetworkStatus } from '#domain/observations/network';
+import type {
+  UpdateStatus,
+  UpdateToolOutcome,
+} from '#domain/observations/updates';
 import type { GuestServiceState } from '#domain/services';
 
 import type { EnvironmentOutput } from './environment';
@@ -67,6 +71,22 @@ export interface NativeOutput {
   harnesses: Record<string, HarnessStateOutput>;
 }
 
+/** the last update run */
+export interface UpdateStatusOutput {
+  startedAt?: string;
+  finishedAt?: string;
+  lastSuccess?: string;
+  tools: Array<{
+    name: string;
+    manager: string;
+    required: boolean;
+    outcome: string;
+    from?: string;
+    to?: string;
+    reason?: string;
+  }>;
+}
+
 /** the keep-awake governor state, when the guest recorded one */
 export type GovernorOutput =
   | { recorded: true; state: Record<string, unknown> }
@@ -78,6 +98,7 @@ export interface InspectionOutput {
   network: NetworkOutput;
   native?: NativeOutput;
   environment: EnvironmentOutput;
+  updates?: UpdateStatusOutput;
   probeFailures: ProbeFailureOutput[];
   governor: GovernorOutput;
 }
@@ -186,6 +207,33 @@ export function projectNative(
     claude: projectNativeHarness,
     agentEnvironment: projectAgentEnvironment,
     harnesses: mapValues(projectHarnessState),
+  });
+}
+
+/**
+ * projects the last update run
+ * @param updates internal status
+ * @returns output status
+ */
+export function projectUpdates(updates: UpdateStatus): UpdateStatusOutput {
+  return projectFields<UpdateStatus, UpdateStatusOutput>(updates, {
+    startedAt: same,
+    finishedAt: same,
+    lastSuccess: same,
+    tools: each((tool) =>
+      projectFields<UpdateToolOutcome, UpdateStatusOutput['tools'][number]>(
+        tool,
+        {
+          name: same,
+          manager: same,
+          required: same,
+          outcome: same,
+          from: same,
+          to: same,
+          reason: same,
+        },
+      ),
+    ),
   });
 }
 

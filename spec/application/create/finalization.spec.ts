@@ -110,7 +110,10 @@ const CHANNEL = {
 } satisfies Partial<GuestChannel> as Partial<GuestChannel> as GuestChannel;
 
 const OBSERVED = {
-  services: [{ name: 't3-code', needs: [], status: 'running' }],
+  services: [
+    { name: 't3-code', needs: [], status: 'running' },
+    { name: 'open-agent-cron', needs: [], status: 'running' },
+  ],
   network: {
     online: false,
     skipped: true,
@@ -137,7 +140,7 @@ const OBSERVED = {
   governor: { recorded: false, reason: 'no awake event has been recorded yet' },
 } satisfies GuestInspection;
 
-const services = ['t3-code'].map((name) => ({
+const services = ['t3-code', 'open-agent-cron'].map((name) => ({
   name,
   needs: [],
   status: 'running' as const,

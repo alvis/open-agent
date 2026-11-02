@@ -32,13 +32,14 @@ export function createInspection(context: {
      * fetches current service, route, and installation state on explicit inspection
      * @param guest target guest
      * @param options probe observer
-     * @returns current service, network, native and environment status
+     * @returns current service, network, native, environment and update status
      */
     inspect: async (guest, options = {}) => {
       const { onProbe } = options;
-      const environment = await inspectStage(
+      const [environment, updates] = await inspectStage(
         'inspection',
-        async () => access.read(guest),
+        async () =>
+          Promise.all([access.read(guest), access.readUpdateStatus(guest)]),
         onProbe,
       );
       const { profile } = environment;
@@ -63,7 +64,7 @@ export function createInspection(context: {
         ]);
 
       return {
-        ...settleInspectionResults({ environment }, [
+        ...settleInspectionResults({ environment, updates }, [
           serviceProbe,
           networkProbe,
           nativeProbe,

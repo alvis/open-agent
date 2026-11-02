@@ -8,7 +8,7 @@ import type { ServiceDefinition } from '#domain/services';
  * the provider's control replaces a definition that changed and leaves one
  * that matches
  * @param control the provider's service control
- * @param services the services this setup records
+ * @param services the services this setup records, cron's included
  * @param previous names of the services the previous setup recorded
  */
 export async function installProviderServices(

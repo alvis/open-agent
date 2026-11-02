@@ -38,7 +38,7 @@ describe('fn:validateCommandRequest', () => {
     expect(() =>
       validateCommandRequest({
         command: 'create',
-        options: { section: 'network' },
+        options: { section: 'tools' },
       }),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
@@ -50,7 +50,7 @@ describe('fn:validateCommandRequest', () => {
     expect(() =>
       validateCommandRequest({
         command: 'setup',
-        options: { section: 'network', withPairCode: true },
+        options: { section: 'tools', withPairCode: true },
       }),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
   });
@@ -73,10 +73,25 @@ describe('fn:validateSetupIntegrationOptions', () => {
       validateSetupIntegrationOptions({ network: 'none' }, 'network'),
     ).not.toThrow();
     expect(() =>
-      validateSetupIntegrationOptions({ network: 'none' }, 'agent'),
+      validateSetupIntegrationOptions({ network: 'none' }, 'tools'),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
       validateSetupIntegrationOptions({ idleMinutes: 30 }, 'network'),
+    ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+  });
+
+  it('should allow the update interval switch only in the tools section or the full setup', () => {
+    const options = { updateDueDays: 3 };
+
+    expect(() =>
+      validateSetupIntegrationOptions(options, 'tools'),
+    ).not.toThrow();
+    expect(() => validateSetupIntegrationOptions(options, 'all')).not.toThrow();
+    expect(() => validateSetupIntegrationOptions(options, 'agent')).toThrow(
+      expect.objectContaining({ code: 'USAGE' }),
+    );
+    expect(() =>
+      validateSetupIntegrationOptions({ updateDueDays: 3 }, 'network'),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
   });
 });

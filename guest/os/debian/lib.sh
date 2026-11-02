@@ -1,6 +1,6 @@
-# open-agent's debian family library: the package, account and kernel
-# helpers that setup sources as root. Every function is safe to rerun,
-# reports why it failed on stderr and returns non-zero;
+# open-agent's debian family library: the package, account, kernel and
+# service helpers that setup and the updater source as root. Every function
+# is safe to rerun, reports why it failed on stderr and returns non-zero;
 # none exits the shell or sets a trap in it, and each keeps its variables
 # under its own oa_ prefix since sh has no locals
 
@@ -11,6 +11,12 @@ OA_LISTS_MAX_MINUTES=1440
 # written whenever open-agent refreshed apt's lists; it sits in apt's periodic
 # directory because apt-get update deletes what it does not know in the lists
 OA_LISTS_STAMP=/var/lib/apt/periodic/open-agent-update-success-stamp
+# the services whose vendor units are masked, one init script name a line
+OA_MASKED_SERVICES=/etc/open-agent/masked-services
+OA_POLICY_RC=/usr/sbin/policy-rc.d
+# the second line of the policy-rc.d open-agent writes, after its shebang,
+# which tells it apart from another's
+OA_POLICY_MARK='# open-agent policy-rc.d'
 
 # runs a command as an account from its home, without a PAM session or a
 # sudo rule; root runs it directly
@@ -129,6 +135,23 @@ oa_pkg_install() {
   fi
   test -z "${oa_lists_fresh:-}" || return 1
   oa_lists_update && oa_apt install --no-install-recommends "$@"
+}
+
+# upgrades installed system packages, never installing a missing one
+# arguments: package names
+oa_pkg_upgrade() {
+  oa_pkg_names "$@" || return 1
+  oa_dpkg_repair || return 1
+  oa_lists_refresh || return 1
+  oa_apt install --only-upgrade --no-install-recommends "$@"
+}
+
+# prints the installed version of a system package
+# arguments: package name
+oa_pkg_version() {
+  oa_pkg_names "$1" || return 1
+  oa_pkg_installed "$1" || return 1
+  dpkg-query -W -f="\${Version}\n" "$1"
 }
 
 # creates an account with the given ids unless it exists; an existing one
@@ -278,4 +301,70 @@ oa_sysctl() {
     { printf '%s = %s\n' "$1" "$2" >"/etc/sysctl.d/90-open-agent-$1.conf"; } 2>/dev/null || :
   fi
   return 0
+}
+
+# keeps a package's own service from ever starting, since open-agent runs its
+# daemon itself: masks the vendor units and, through a policy-rc.d that
+# refuses them alone, keeps a postinst from starting them where systemd is
+# not running. A policy-rc.d another tool wrote is left as it is
+# arguments: service units, such as cron.service
+oa_mask_service() {
+  for oa_mask_unit; do
+    case $oa_mask_unit in
+      *.service) ;;
+      *)
+        echo "Refusing the service unit $oa_mask_unit: it is not a .service" >&2
+        return 1
+        ;;
+    esac
+    case ${oa_mask_unit%.service} in
+      '' | [!A-Za-z0-9]* | *[!A-Za-z0-9@._-]*)
+        echo "Refusing the service unit $oa_mask_unit" >&2
+        return 1
+        ;;
+    esac
+  done
+  install -d -m 0755 /etc/systemd/system "${OA_MASKED_SERVICES%/*}" || return 1
+  test -f "$OA_MASKED_SERVICES" || : >"$OA_MASKED_SERVICES" || return 1
+  for oa_mask_unit; do
+    ln -sfn /dev/null "/etc/systemd/system/$oa_mask_unit" || return 1
+    if ! grep -qxF -- "${oa_mask_unit%.service}" "$OA_MASKED_SERVICES"; then
+      printf '%s\n' "${oa_mask_unit%.service}" >>"$OA_MASKED_SERVICES" || return 1
+    fi
+  done
+  oa_policy_rc_install || return 1
+  if test -d /run/systemd/system; then
+    systemctl daemon-reload || return 1
+    for oa_mask_unit; do
+      systemctl stop "$oa_mask_unit" 2>/dev/null || :
+    done
+  fi
+}
+
+# prints the policy-rc.d that refuses the masked services and allows the
+# rest, and refuses every one while the updater holds them, which it tells
+# through OA_POLICY_HOLD in the environment apt passes on
+oa_policy_rc() {
+  cat <<EOF
+#!/bin/sh
+$OA_POLICY_MARK
+if test "\${OA_POLICY_HOLD-}" = 1; then
+  exit 101
+fi
+if grep -qxF -- "\$1" $OA_MASKED_SERVICES 2>/dev/null; then
+  exit 101
+fi
+exit 0
+EOF
+}
+
+# writes open-agent's policy-rc.d, or rewrites it; a policy-rc.d another tool
+# wrote is left as it is
+oa_policy_rc_install() {
+  if ! test -e "$OA_POLICY_RC" || test "$(sed -n 2p "$OA_POLICY_RC")" = "$OA_POLICY_MARK"; then
+    oa_policy_rc >"$OA_POLICY_RC.new" && chmod 0755 "$OA_POLICY_RC.new" &&
+      mv -f "$OA_POLICY_RC.new" "$OA_POLICY_RC" || return 1
+  else
+    echo "Keeping the policy-rc.d another tool wrote" >&2
+  fi
 }

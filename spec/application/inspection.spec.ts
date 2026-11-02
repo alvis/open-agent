@@ -111,6 +111,13 @@ async function installedSprite(
               needs: [],
               state: { name: 't3-code', status: 'running' },
             },
+            {
+              name: 'open-agent-cron',
+              cmd: '/opt/open-agent/update-schedule',
+              args: [],
+              needs: [],
+              state: { name: 'open-agent-cron', status: 'running' },
+            },
           ]
         : [],
     ),
@@ -236,8 +243,8 @@ describe('cmd:show', () => {
           { waitFor: `Search: ${label}`, input: '\r' },
           ...(command === 'setup'
             ? [
-                { waitFor: 'Choose setup section', input: 'Network' },
-                { waitFor: 'Search: Network', input: '\r' },
+                { waitFor: 'Choose setup section', input: 'Managed tools' },
+                { waitFor: 'Search: Managed tools', input: '\r' },
               ]
             : []),
         ],
@@ -291,6 +298,7 @@ describe('cmd:show', () => {
           failures: [],
           services: expect.arrayContaining([
             { name: 't3-code', state: 'running' },
+            { name: 'open-agent-cron', state: 'running' },
           ]),
           native: {
             agentEnvironment: {
@@ -536,7 +544,7 @@ describe('cmd:show', () => {
     expect(execute).not.toHaveBeenCalled();
   }, 15_000);
 
-  it('should not carry show consent into setup, and still navigates real sections', async () => {
+  it('should not carry show consent into setup tools, and still navigates real sections', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-show-setup-'),
     );
@@ -560,18 +568,25 @@ describe('cmd:show', () => {
         { waitFor: 'Select a workstation', input: '\r' },
         { waitFor: 'Workstation action', input: 'Configure a section' },
         { waitFor: 'Search: Configure a section', input: '\r' },
-        { waitFor: 'Choose setup section', input: 'Network' },
-        { waitFor: 'Search: Network', input: '\r' },
+        { waitFor: 'Choose setup section', input: 'Managed tools' },
+        { waitFor: 'Search: Managed tools', input: '\r' },
+        { waitFor: 'Managed tools', input: 'Update tools now' },
+        { waitFor: 'Search: Update tools now', input: '\r' },
+        {
+          waitFor:
+            'Install latest stable tools now? Running services are not restarted.',
+          input: '\r',
+        },
       ],
     );
 
-    expect(observed.matchedSteps, observed.output).toBe(5);
+    expect(observed.matchedSteps, observed.output).toBe(8);
     expect(observed.result).toMatchObject({
       command: 'setup',
       ok: true,
-      data: { section: 'network', network: { status: 'disabled' } },
+      data: { section: 'tools', tools: 'unchanged' },
     });
-    expect(writtenPaths(sprite)).toEqual([ENVIRONMENT_PATH]);
+    expect(writtenPaths(sprite)).toEqual([]);
     expect(execute).not.toHaveBeenCalled();
     expect(sprite.listServices).not.toHaveBeenCalled();
     expect(client.deleteSprite).not.toHaveBeenCalled();

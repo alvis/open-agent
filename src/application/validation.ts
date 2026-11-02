@@ -123,6 +123,12 @@ export function validateSetupIntegrationOptions(
   if (!section || section === 'all') {
     return;
   }
+  if (section !== 'tools' && options.updateDueDays !== undefined) {
+    throw new CommandValidationError({
+      message:
+        'The update interval switch requires --section tools or --section all',
+    });
+  }
   if (section !== 'network' && options.network !== undefined) {
     throw new CommandValidationError({
       message: 'Network switches require --section network or --section all',
