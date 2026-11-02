@@ -246,11 +246,8 @@ const success: CommandResult = {
 };
 const request: CommandRequest = {
   command: 'list',
-  options: { nonInteractive: true },
+  options: { json: true, nonInteractive: true },
 };
-
-/** the human list output when no workstation exists: one empty table line */
-const EMPTY_LIST_OUTPUT = '\n';
 
 /** stderr that carries only the stage progress lines non-interactive output writes */
 const STAGE_LINES_ONLY = expect.stringMatching(
@@ -309,16 +306,21 @@ async function captureExecution({
 }
 
 describe('fn:execute', () => {
-  it('should validate, run and emit one non-interactive result', async () => {
+  it('should validate, run and emit one structured non-interactive result', async () => {
     const captured = await captureExecution({ request });
 
     expect({
-      stdout: captured.stdout,
+      result: JSON.parse(captured.stdout),
       stderr: captured.stderr,
       exitCode: captured.exitCode,
       state: captured.state,
     }).toEqual({
-      stdout: EMPTY_LIST_OUTPUT,
+      result: {
+        schemaVersion: 1,
+        command: 'list',
+        ok: true,
+        data: { machines: [], unavailable: [] },
+      },
       stderr: STAGE_LINES_ONLY,
       exitCode: 0,
       state: { command: 'list', emitted: true, errors: [] },
@@ -342,11 +344,16 @@ describe('fn:execute', () => {
     const captured = await captureExecution({ request: selected });
 
     expect({
-      stdout: captured.stdout,
+      result: JSON.parse(captured.stdout),
       stderr: captured.stderr,
       exitCode: captured.exitCode,
     }).toEqual({
-      stdout: EMPTY_LIST_OUTPUT,
+      result: {
+        schemaVersion: 1,
+        command: 'list',
+        ok: true,
+        data: { machines: [], unavailable: [] },
+      },
       stderr: STAGE_LINES_ONLY,
       exitCode: 0,
     });
@@ -365,15 +372,23 @@ describe('fn:execute', () => {
     const captured = await captureExecution({ request: selected });
 
     expect({
-      stdout: captured.stdout,
+      result: JSON.parse(captured.stdout),
       stderr: captured.stderr,
       exitCode: captured.exitCode,
-    }).toEqual({
-      stdout: '',
-      stderr: expect.stringContaining('readable regular file'),
+    }).toMatchObject({
+      result: {
+        schemaVersion: 1,
+        command: 'list',
+        ok: false,
+        error: {
+          code: 'INPUT',
+          message: expect.stringContaining('readable regular file'),
+        },
+      },
+      stderr: STAGE_LINES_ONLY,
       exitCode: 1,
     });
-    expect(captured.stderr).not.toContain('private file path');
+    expect(captured.stdout).not.toContain('private file path');
     expect(run.mock.calls).toEqual([]);
   });
 
@@ -390,12 +405,20 @@ describe('fn:execute', () => {
     const captured = await captureExecution({ request: selected });
 
     expect({
-      stdout: captured.stdout,
+      result: JSON.parse(captured.stdout),
       stderr: captured.stderr,
       exitCode: captured.exitCode,
-    }).toEqual({
-      stdout: '',
-      stderr: expect.stringContaining('Setup-only options'),
+    }).toMatchObject({
+      result: {
+        schemaVersion: 1,
+        command: 'list',
+        ok: false,
+        error: {
+          code: 'USAGE',
+          message: expect.stringContaining('Setup-only options'),
+        },
+      },
+      stderr: STAGE_LINES_ONLY,
       exitCode: 2,
     });
     expect(readInputFile.mock.calls).toEqual([]);
@@ -408,12 +431,17 @@ describe('fn:execute', () => {
     const captured = await captureExecution({ request });
 
     expect({
-      stdout: captured.stdout,
+      result: JSON.parse(captured.stdout),
       stderr: captured.stderr,
       exitCode: captured.exitCode,
-    }).toEqual({
-      stdout: '',
-      stderr: expect.stringContaining('workflow failed\n'),
+    }).toMatchObject({
+      result: {
+        schemaVersion: 1,
+        command: 'list',
+        ok: false,
+        error: { code: 'UNEXPECTED', message: 'workflow failed' },
+      },
+      stderr: STAGE_LINES_ONLY,
       exitCode: 1,
     });
   });
@@ -461,12 +489,20 @@ describe('fn:execute', () => {
     const captured = await captureExecution({ request });
 
     expect({
-      stdout: captured.stdout,
+      result: JSON.parse(captured.stdout),
       stderr: captured.stderr,
       exitCode: captured.exitCode,
-    }).toEqual({
-      stdout: '',
-      stderr: expect.stringContaining('Cancelled by user'),
+    }).toMatchObject({
+      result: {
+        schemaVersion: 1,
+        command: 'list',
+        ok: false,
+        error: {
+          code: 'CANCELLED',
+          message: expect.stringContaining('Cancelled by user'),
+        },
+      },
+      stderr: STAGE_LINES_ONLY,
       exitCode: 130,
     });
   });
@@ -496,13 +532,23 @@ describe('fn:execute', () => {
     const captured = await captureExecution({ request });
 
     expect({
-      stdout: captured.stdout,
-      cancellations: captured.stderr.split('Forced interruption').length - 1,
+      outputLines: captured.stdout.split('\n').length,
+      result: JSON.parse(captured.stdout),
+      stderr: captured.stderr,
       exitCode: captured.exitCode,
       state: captured.state,
     }).toEqual({
-      stdout: '',
-      cancellations: 1,
+      outputLines: 2,
+      result: {
+        schemaVersion: 1,
+        command: 'list',
+        ok: false,
+        error: {
+          code: 'CANCELLED',
+          message: expect.stringContaining('Forced interruption'),
+        },
+      },
+      stderr: STAGE_LINES_ONLY,
       exitCode: 130,
       state: { command: 'list', emitted: true, errors: [] },
     });
@@ -543,14 +589,25 @@ describe('fn:execute', () => {
     const captured = await captureExecution({ request: selected });
 
     expect({
-      stdout: captured.stdout,
+      result: JSON.parse(captured.stdout),
       stderr: captured.stderr,
       exitCode: captured.exitCode,
-    }).toEqual({
-      stdout: '',
-      stderr: expect.stringContaining(
-        'Workstation: dev-box\n  Inspect provider state before retrying any mutation.\n  Inspect: open-agent show "dev-box" --inspect\n',
-      ),
+    }).toMatchObject({
+      result: {
+        schemaVersion: 1,
+        command: 'show',
+        ok: false,
+        error: {
+          code: 'CANCELLED',
+          machine: 'dev-box',
+          outcome: 'unknown',
+          details: [
+            'Inspect provider state before retrying any mutation.',
+            'Inspect: open-agent show "dev-box" --inspect',
+          ],
+        },
+      },
+      stderr: STAGE_LINES_ONLY,
       exitCode: 130,
     });
   });
@@ -617,7 +674,7 @@ describe('fn:execute', () => {
     });
 
     stdoutWrite.mockImplementation((chunk) => {
-      if (chunk !== '') {
+      if (chunk.startsWith('{')) {
         force();
       }
     });
@@ -629,7 +686,12 @@ describe('fn:execute', () => {
       exitCode: captured.exitCode,
       state: captured.state,
     }).toEqual({
-      stdout: EMPTY_LIST_OUTPUT,
+      stdout: `${JSON.stringify({
+        schemaVersion: 1,
+        command: 'list',
+        ok: true,
+        data: { machines: [], unavailable: [] },
+      })}\n`,
       stderr: STAGE_LINES_ONLY,
       exitCode: 0,
       state: { command: 'list', emitted: true, errors: [] },

@@ -14,15 +14,17 @@ export interface JsonObject {
   [key: string]: JsonValue | undefined;
 }
 
-/** printable result */
+/** versioned printable result */
 export type SerializedResult =
   | {
+      schemaVersion: 1;
       command: CommandName;
       ok: true;
       data: JsonObject;
       error?: never;
     }
   | {
+      schemaVersion: 1;
       command: CommandName | null;
       ok: false;
       error: ErrorOutput;
@@ -30,13 +32,14 @@ export type SerializedResult =
     };
 
 /**
- * projects one typed outcome into its redacted printable form
+ * projects one typed outcome into the public versioned output contract
  * @param result completed domain or parser result
  * @returns printable payload with no internal output controls
  */
 export function serializeResult(result: ResultOutput): SerializedResult {
   if (result.ok) {
     return {
+      schemaVersion: 1,
       command: result.command,
       ok: true,
       data: serializeObject(result.data),
@@ -45,6 +48,7 @@ export function serializeResult(result: ResultOutput): SerializedResult {
   const { error } = result;
 
   return {
+    schemaVersion: 1,
     command: result.command,
     ok: false,
     error: {

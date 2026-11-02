@@ -168,28 +168,40 @@ describe('mt:SpriteServiceControl.list private cause boundary', () => {
       ok: false,
       error: { ...commandError(nested), machine: 'temporary' },
     };
-    const stdout = new PassThrough();
-    const stderr = new PassThrough();
-    let out = '';
-    let errorOutput = '';
-    stdout.on('data', (chunk: Buffer) => {
-      out += chunk.toString();
-    });
-    stderr.on('data', (chunk: Buffer) => {
-      errorOutput += chunk.toString();
-    });
-    try {
-      const streams = { stdout, stderr };
-      writePreparedResult(prepareResult({ result, streams }), streams);
-      expect(errorOutput).toContain(
-        'Service registry response could not be read',
-      );
-      expect(errorOutput).not.toContain('PRIVATE_PR');
-      expect(errorOutput).not.toContain(registry.token);
-      expect(out).toBe('');
-    } finally {
-      stdout.destroy();
-      stderr.destroy();
+    for (const json of [false, true]) {
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      let out = '';
+      let errorOutput = '';
+      stdout.on('data', (chunk: Buffer) => {
+        out += chunk.toString();
+      });
+      stderr.on('data', (chunk: Buffer) => {
+        errorOutput += chunk.toString();
+      });
+      try {
+        const streams = { stdout, stderr };
+        writePreparedResult(
+          prepareResult({ result, options: { json }, streams }),
+          streams,
+        );
+        const output = json ? out : errorOutput;
+        expect(output).toContain('Service registry response could not be read');
+        expect(output).not.toContain('PRIVATE_PR');
+        expect(output).not.toContain(registry.token);
+        if (json) {
+          expect(errorOutput).toBe('');
+          expect(JSON.parse(output)).toMatchObject({
+            error: { code: 'PROVIDER' },
+          });
+          expect(output.trim().split('\n')).toHaveLength(1);
+        } else {
+          expect(out).toBe('');
+        }
+      } finally {
+        stdout.destroy();
+        stderr.destroy();
+      }
     }
   });
 });

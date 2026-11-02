@@ -21,15 +21,17 @@ interface InteractionMode {
  * preserves automation precedence and identifies an implicit prompt blocker
  * @param options parsed mode flags
  * @param options.nonInteractive explicit automation flag
+ * @param options.json structured-output flag
  * @param facts effective environment and real terminal capabilities
  * @returns mode decision and a non-secret reason only for terminal limitations
  */
 export function resolveInteractionMode(
-  options: { nonInteractive?: boolean },
+  options: { nonInteractive?: boolean; json?: boolean },
   facts: TerminalFacts,
 ): InteractionMode {
   if (
     options.nonInteractive === true ||
+    options.json === true ||
     isTruthyEnvironmentValue(facts.env.NON_INTERACTIVE) ||
     isTruthyEnvironmentValue(facts.env.CI)
   ) {

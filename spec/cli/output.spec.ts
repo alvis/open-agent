@@ -13,6 +13,7 @@ import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
 
 import { dependencies } from '../mocks/dependencies';
 
+import type { CommandOptions } from '#application/contracts';
 import type { CurrentReadiness } from '#application/data';
 import type { MachineSummary } from '#application/machine';
 import type { CommandResult } from '#application/result';
@@ -52,12 +53,13 @@ const inspection: GuestInspection = {
 /**
  * captures writes to the real output stream seam
  * @param result completed command result
+ * @param options output controls
  * @returns text written to each channel
  */
-function captureResult(result: CommandResult): {
-  stdout: string;
-  stderr: string;
-} {
+function captureResult(
+  result: CommandResult,
+  options: CommandOptions,
+): { stdout: string; stderr: string } {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   let out = '';
@@ -70,7 +72,7 @@ function captureResult(result: CommandResult): {
   });
   try {
     const streams = { stdout, stderr };
-    writePreparedResult(prepareResult({ result, streams }), streams);
+    writePreparedResult(prepareResult({ result, options, streams }), streams);
   } finally {
     stdout.destroy();
     stderr.destroy();
@@ -80,17 +82,33 @@ function captureResult(result: CommandResult): {
 }
 
 describe('fn:prepareResult', () => {
+  it('should omit command data from a parser failure JSON envelope', () => {
+    const result: CommandResult = {
+      command: null,
+      ok: false,
+      error: { code: 'USAGE', message: 'unknown-command-observation' },
+    };
+
+    const prepared = prepareResult({ result, options: { json: true } });
+
+    expect(JSON.parse(prepared.text)).toEqual({
+      schemaVersion: 1,
+      command: null,
+      ok: false,
+      error: result.error,
+    });
+  });
+
   it('should retain a null workstation observation as a TSV row and leave nullable optional cells blank', () => {
     const observed = { ...machine, name: 'observed' };
     Reflect.set(observed, 'createdAt', null);
     const machines = [observed, { ...machine }];
     Reflect.set(machines, 1, null);
 
-    const output = captureResult({
-      command: 'list',
-      ok: true,
-      data: { machines, unavailable: [] },
-    });
+    const output = captureResult(
+      { command: 'list', ok: true, data: { machines, unavailable: [] } },
+      {},
+    );
 
     expect(output).toEqual({
       stdout: `${[
@@ -123,7 +141,7 @@ describe('fn:prepareResult', () => {
       stderr: new PassThrough(),
     };
     try {
-      const prepared = prepareResult({ result, streams });
+      const prepared = prepareResult({ result, options: {}, streams });
 
       expect(prepared).toEqual({
         channel: 'stdout',
@@ -172,7 +190,7 @@ describe('fn:prepareResult', () => {
         ],
       },
     };
-    const prepared = prepareResult({ result, streams });
+    const prepared = prepareResult({ result, options: {}, streams });
     const expected =
       'alpha\tsprite-alpha\trunning\t2026-10-09T12:00:00.000Z\thttps://alpha.sprites.app/\tready\torg-one\tsprite\n' +
       'beta\tsprite-beta\tcold\t\t\tnot recorded\torg-two\tsprite\n';
@@ -189,14 +207,17 @@ describe('fn:prepareResult', () => {
 
   it('should name each unavailable provider on stderr beside piped TSV rows', () => {
     const reason = 'the token was revoked';
-    const output = captureResult({
-      command: 'list',
-      ok: true,
-      data: {
-        machines: [{ ...machine, name: 'alpha', id: 'sprite-alpha' }],
-        unavailable: [{ provider: 'sprite', code: 'AUTH', reason }],
+    const output = captureResult(
+      {
+        command: 'list',
+        ok: true,
+        data: {
+          machines: [{ ...machine, name: 'alpha', id: 'sprite-alpha' }],
+          unavailable: [{ provider: 'sprite', code: 'AUTH', reason }],
+        },
       },
-    });
+      {},
+    );
 
     expect(output).toEqual({
       stdout: 'alpha\tsprite-alpha\trunning\t\t\tready\texample\tsprite\n',
@@ -205,35 +226,66 @@ describe('fn:prepareResult', () => {
   });
 
   it('should emit no TSV row for an empty list', () => {
-    const output = captureResult({
-      command: 'list',
-      ok: true,
-      data: { machines: [], unavailable: [] },
-    });
+    const output = captureResult(
+      { command: 'list', ok: true, data: { machines: [], unavailable: [] } },
+      {},
+    );
 
     expect(output).toEqual({ stdout: '', stderr: '' });
+  });
+
+  it('should preserve null, undefined, and sparse service positions as JSON nulls', () => {
+    const services: GuestInspection['services'] = [
+      { name: 'first', needs: [] },
+      { name: 'undefined', needs: [] },
+      { name: 'null', needs: [] },
+      { name: 'hole', needs: [] },
+    ];
+    Reflect.set(services, 1, undefined);
+    Reflect.set(services, 2, null);
+    Reflect.deleteProperty(services, '3');
+
+    const output = captureResult(
+      {
+        command: 'show',
+        ok: true,
+        data: { machine, inspection: { ...inspection, services } },
+      },
+      { json: true },
+    );
+
+    expect(output.stderr).toBe('');
+    expect(JSON.parse(output.stdout).data.inspection.services).toEqual([
+      { name: 'first', needs: [] },
+      null,
+      null,
+      null,
+    ]);
   });
 
   it('should escape delimiters and terminal controls after redacting pipe TSV fields', () => {
     const secret = 'generated-list-secret';
     rememberSecret(secret);
-    const output = captureResult({
-      command: 'list',
-      ok: true,
-      data: {
-        unavailable: [],
-        machines: [
-          {
-            ...machine,
-            name: 'tab\tline\nslash\\tail',
-            id: 'sprite-\u001b[31m',
-            state: 'run\rring',
-            agentUrl: `https://primary.sprites.app/#token=${secret}`,
-            organization: 'org\u009b[0m',
-          },
-        ],
+    const output = captureResult(
+      {
+        command: 'list',
+        ok: true,
+        data: {
+          unavailable: [],
+          machines: [
+            {
+              ...machine,
+              name: 'tab\tline\nslash\\tail',
+              id: 'sprite-\u001b[31m',
+              state: 'run\rring',
+              agentUrl: `https://primary.sprites.app/#token=${secret}`,
+              organization: 'org\u009b[0m',
+            },
+          ],
+        },
       },
-    });
+      {},
+    );
     const rows = output.stdout.split('\n');
     const columns = rows[0]!.split('\t');
 
@@ -254,17 +306,36 @@ describe('fn:prepareResult', () => {
     expect(output.stdout).not.toContain('\u009b');
   });
 
-  it('should write a human list failure only to stderr', () => {
-    const failure = captureResult({
-      command: 'list',
-      ok: false,
-      error: { code: 'PROVIDER', message: 'List unavailable' },
-    });
+  it('should keep JSON ahead of pipe TSV and human failures on stderr', () => {
+    const json = captureResult(
+      {
+        command: 'list',
+        ok: true,
+        data: { machines: [machine], unavailable: [] },
+      },
+      { json: true },
+    );
+    const failure = captureResult(
+      {
+        command: 'list',
+        ok: false,
+        error: { code: 'PROVIDER', message: 'List unavailable' },
+      },
+      {},
+    );
 
+    expect(json.stderr).toBe('');
+    expect(json.stdout.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      schemaVersion: 1,
+      command: 'list',
+      ok: true,
+      data: { machines: [{ name: 'primary', id: 'sprite-primary' }] },
+    });
     expect(failure).toEqual({ stdout: '', stderr: 'List unavailable\n' });
   });
 
-  it('should render successful current readiness on stdout', () => {
+  it('should render successful current readiness on stdout with a versioned JSON alternative', () => {
     const result: CommandResult = {
       command: 'doctor',
       ok: true,
@@ -282,19 +353,26 @@ describe('fn:prepareResult', () => {
         },
       },
     };
-    const human = captureResult(result);
+    const human = captureResult(result, {});
+    const json = captureResult(result, { json: true });
 
     expect(human.stdout).toContain('Ready: Yes');
     expect(human.stdout).toContain('private network');
     expect(human.stderr).toBe('');
+    expect(json.stderr).toBe('');
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      schemaVersion: 1,
+      command: 'doctor',
+      ok: true,
+      data: { currentReadiness: { ready: true, failures: [] } },
+    });
   });
 
   it('should show disabled checks from a typed inspection on stdout', () => {
-    const output = captureResult({
-      command: 'show',
-      ok: true,
-      data: { machine, inspection },
-    });
+    const output = captureResult(
+      { command: 'show', ok: true, data: { machine, inspection } },
+      {},
+    );
 
     expect(output.stdout).toContain('No private network is selected');
     expect(output.stderr).toBe('');
@@ -311,12 +389,15 @@ describe('fn:prepareResult', () => {
       native: inspection.native,
       environment: inspection.environment,
     };
-    const output = captureResult({
-      command: 'doctor',
-      ok: false,
-      error: { code: 'PREFLIGHT', message: 'Readiness check failed' },
-      data: { machine: { ...machine, state: 'cold' }, currentReadiness },
-    });
+    const output = captureResult(
+      {
+        command: 'doctor',
+        ok: false,
+        error: { code: 'PREFLIGHT', message: 'Readiness check failed' },
+        data: { machine: { ...machine, state: 'cold' }, currentReadiness },
+      },
+      {},
+    );
 
     expect(output.stdout).toBe('');
     expect(output.stderr).toContain('Readiness check failed');
@@ -324,11 +405,14 @@ describe('fn:prepareResult', () => {
   });
 
   it('should write a human cancellation only to stderr', () => {
-    const output = captureResult({
-      command: 'terminate',
-      ok: false,
-      error: { code: 'CANCELLED', message: 'Typed name did not match' },
-    });
+    const output = captureResult(
+      {
+        command: 'terminate',
+        ok: false,
+        error: { code: 'CANCELLED', message: 'Typed name did not match' },
+      },
+      {},
+    );
 
     expect(output).toEqual({
       stdout: '',
@@ -336,7 +420,7 @@ describe('fn:prepareResult', () => {
     });
   });
 
-  it('should redact a resolved value in nested results and non-Error failures', async () => {
+  it('should redact a resolved value in nested results and non-Error failures in both output modes', async () => {
     const secret = await resolveSecret(
       dependencies,
       undefined,
@@ -365,15 +449,58 @@ describe('fn:prepareResult', () => {
       },
     };
 
-    const nested = captureResult(success);
-    const rejected = captureResult(failure);
-    const successText = `${nested.stdout}${nested.stderr}`;
-    const failureText = `${rejected.stdout}${rejected.stderr}`;
+    for (const options of [{}, { json: true }]) {
+      const nested = captureResult(success, options);
+      const rejected = captureResult(failure, options);
+      const successText = `${nested.stdout}${nested.stderr}`;
+      const failureText = `${rejected.stdout}${rejected.stderr}`;
 
-    expect(successText).toContain('[REDACTED]');
-    expect(successText).not.toContain(secret);
-    expect(failureText).toContain('[REDACTED]');
-    expect(failureText).not.toContain(secret);
-    expect(rejected.stderr).toContain('retry without [REDACTED]');
+      expect(successText).toContain('[REDACTED]');
+      expect(successText).not.toContain(secret);
+      expect(failureText).toContain('[REDACTED]');
+      expect(failureText).not.toContain(secret);
+      expect(options.json ? rejected.stdout : rejected.stderr).toContain(
+        'retry without [REDACTED]',
+      );
+    }
+  });
+
+  it('should write one versioned JSON failure with typed readiness to stdout', () => {
+    const output = captureResult(
+      {
+        command: 'doctor',
+        ok: false,
+        error: {
+          code: 'PREFLIGHT',
+          message: 'Readiness check failed',
+          machine: 'primary',
+          details: ['Inspect the T3 service'],
+        },
+        data: {
+          machine,
+          currentReadiness: {
+            ready: false,
+            failures: ['t3-service'],
+            skipped: [],
+            probeFailures: [],
+            network: inspection.network,
+            native: inspection.native,
+            services: [],
+            environment: inspection.environment,
+          },
+        },
+      },
+      { json: true },
+    );
+
+    expect(output.stderr).toBe('');
+    expect(output.stdout.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(output.stdout)).toMatchObject({
+      schemaVersion: 1,
+      command: 'doctor',
+      ok: false,
+      error: { code: 'PREFLIGHT', machine: 'primary' },
+      data: { currentReadiness: { ready: false, failures: ['t3-service'] } },
+    });
   });
 });

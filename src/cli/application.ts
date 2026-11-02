@@ -29,9 +29,15 @@ export async function cli(argv: string[]): Promise<void> {
   };
   process.exitCode = undefined;
   const dependencies = createDependencies();
+  const jsonRequested = argv.includes('--json');
   const helpRequested = argv.some((argument) =>
     ['--help', '-h', '--version', '-v'].includes(argument),
   );
+  if (jsonRequested && helpRequested) {
+    emitJsonWithHelpFailure(state);
+
+    return;
+  }
   try {
     await parseApplication({
       application: createApplication(state, dependencies.registry),
@@ -41,25 +47,31 @@ export async function cli(argv: string[]): Promise<void> {
     if (!state.emitted && state.errors.length > 0) {
       const first = state.errors[0]!;
       state.emitted = true;
-      emitResult({
-        command: state.command,
-        ok: false,
-        error: {
-          code: first.code,
-          message: state.errors.map((error) => error.message).join('\n'),
+      emitResult(
+        {
+          command: state.command,
+          ok: false,
+          error: {
+            code: first.code,
+            message: state.errors.map((error) => error.message).join('\n'),
+          },
         },
-      });
+        { json: jsonRequested },
+      );
     } else if (!state.emitted && !helpRequested && argv.length > 0) {
       state.emitted = true;
-      emitResult({
-        command: state.command,
-        ok: false,
-        error: { code: 'USAGE', message: 'A command is required.' },
-      });
+      emitResult(
+        {
+          command: state.command,
+          ok: false,
+          error: { code: 'USAGE', message: 'A command is required.' },
+        },
+        { json: jsonRequested },
+      );
     }
   } catch {
     if (!state.emitted) {
-      emitApplicationFailure(state);
+      emitApplicationFailure(state, jsonRequested);
     }
   }
 }
@@ -96,19 +108,45 @@ function createApplication(
 }
 
 /**
- * emits one generic failure when application setup or parsing throws
+ * refuses machine output combined with human-only help or version output
  * @param state invocation-local result ownership
  */
-function emitApplicationFailure(state: ExecutionState): void {
+function emitJsonWithHelpFailure(state: ExecutionState): void {
   state.emitted = true;
-  emitResult({
-    command: state.command,
-    ok: false,
-    error: {
-      code: 'UNEXPECTED',
-      message: 'The command could not complete safely.',
+  emitResult(
+    {
+      command: state.command,
+      ok: false,
+      error: {
+        code: 'USAGE',
+        message: '--json cannot be combined with help or version.',
+      },
     },
-  });
+    { json: true },
+  );
+}
+
+/**
+ * emits one generic failure when application setup or parsing throws
+ * @param state invocation-local result ownership
+ * @param jsonRequested selected output mode
+ */
+function emitApplicationFailure(
+  state: ExecutionState,
+  jsonRequested: boolean,
+): void {
+  state.emitted = true;
+  emitResult(
+    {
+      command: state.command,
+      ok: false,
+      error: {
+        code: 'UNEXPECTED',
+        message: 'The command could not complete safely.',
+      },
+    },
+    { json: jsonRequested },
+  );
 }
 
 /**

@@ -86,7 +86,7 @@ describe('fn:emitResult', () => {
     };
 
     const output = captureEmission(() => {
-      emitResult(result);
+      emitResult(result, {});
     });
 
     expect(output).toEqual({
@@ -96,16 +96,31 @@ describe('fn:emitResult', () => {
     });
   });
 
-  it('should render an empty list with zero exit code', () => {
+  it('should render a JSON list with zero exit code', () => {
     const result: CommandResult = {
       command: 'list',
       ok: true,
       data: { machines: [], unavailable: [] },
     };
 
-    const output = captureEmission(() => emitResult(result));
+    const output = captureEmission(() => emitResult(result, { json: true }));
 
-    expect(output).toEqual({ stdout: '', stderr: '', exitCode: 0 });
+    expect({
+      result: JSON.parse(output.stdout),
+      newline: output.stdout.endsWith('\n'),
+      stderr: output.stderr,
+      exitCode: output.exitCode,
+    }).toEqual({
+      result: {
+        schemaVersion: 1,
+        command: 'list',
+        ok: true,
+        data: { machines: [], unavailable: [] },
+      },
+      newline: true,
+      stderr: '',
+      exitCode: 0,
+    });
   });
 
   it('should write cancellation to stderr with exit code 130', () => {
@@ -115,12 +130,59 @@ describe('fn:emitResult', () => {
       error: { code: 'CANCELLED', message: 'Cancelled by user' },
     };
 
-    const output = captureEmission(() => emitResult(result));
+    const output = captureEmission(() => emitResult(result, {}));
 
     expect(output).toEqual({
       stdout: '',
       stderr: 'Cancelled by user\n',
       exitCode: 130,
+    });
+  });
+
+  it('should convert an unreadable error into one JSON recovery result', () => {
+    const result: CommandResult = {
+      command: 'show',
+      ok: false,
+      error: {
+        code: 'INPUT',
+        get message(): string {
+          throw new Error('private render failure');
+        },
+        machine: 'dev box',
+        machineId: 'machine-1',
+        setupIncomplete: true,
+        outcome: 'unknown',
+        details: ['Inspect provider state.'],
+      },
+    };
+
+    const output = captureEmission(() => {
+      emitResult(result, { json: true });
+    });
+
+    expect({
+      result: JSON.parse(output.stdout),
+      newline: output.stdout.endsWith('\n'),
+      stderr: output.stderr,
+      exitCode: output.exitCode,
+    }).toEqual({
+      result: {
+        schemaVersion: 1,
+        command: 'show',
+        ok: false,
+        error: {
+          code: 'UNEXPECTED',
+          message: expect.any(String),
+          machine: 'dev box',
+          machineId: 'machine-1',
+          setupIncomplete: true,
+          outcome: 'unknown',
+          details: ['Inspect provider state.'],
+        },
+      },
+      newline: true,
+      stderr: '',
+      exitCode: 1,
     });
   });
 
@@ -141,7 +203,7 @@ describe('fn:emitResult', () => {
       },
     };
 
-    const output = captureEmission(() => emitResult(result));
+    const output = captureEmission(() => emitResult(result, {}));
 
     expect(output).toEqual({
       stdout: '',
@@ -160,7 +222,13 @@ describe('fn:emitResult', () => {
         ok: true,
         data: { machine: machineWithUnreadableState('incomplete') },
       } satisfies CommandResult,
-      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete; run open-agent setup on this workstation.\n  Inspect: open-agent show "dev box" --inspect\n`,
+      recovery: {
+        machine: 'dev box',
+        machineId: 'machine-1',
+        setupIncomplete: true,
+        outcome: 'unknown',
+        details: ['Inspect: open-agent show "dev box" --inspect'],
+      },
     },
     {
       label: 'show ready',
@@ -169,7 +237,12 @@ describe('fn:emitResult', () => {
         ok: true,
         data: { machine: machineWithUnreadableState('ready') },
       } satisfies CommandResult,
-      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\n  Inspect: open-agent show "dev box" --inspect\n`,
+      recovery: {
+        machine: 'dev box',
+        machineId: 'machine-1',
+        outcome: 'unknown',
+        details: ['Inspect: open-agent show "dev box" --inspect'],
+      },
     },
     {
       label: 'terminate',
@@ -187,7 +260,13 @@ describe('fn:emitResult', () => {
           },
         },
       } satisfies CommandResult,
-      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete; run open-agent setup on this workstation.\n  Workstation deleted; do not retry the deletion.\n`,
+      recovery: {
+        machine: 'dev box',
+        machineId: 'machine-1',
+        setupIncomplete: true,
+        outcome: 'unknown',
+        details: ['Workstation deleted; do not retry the deletion.'],
+      },
     },
     {
       label: 'list',
@@ -207,7 +286,7 @@ describe('fn:emitResult', () => {
           unavailable: [],
         },
       } satisfies CommandResult,
-      stderr: 'The command result could not be rendered safely.\n',
+      recovery: {},
     },
     {
       label: 'setup workstation',
@@ -220,14 +299,39 @@ describe('fn:emitResult', () => {
           machine: machineWithUnreadableState('incomplete'),
         },
       } satisfies CommandResult,
-      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete; run open-agent setup on this workstation.\n  Inspect: open-agent show "dev box" --inspect\n`,
+      recovery: {
+        machine: 'dev box',
+        machineId: 'machine-1',
+        setupIncomplete: true,
+        outcome: 'unknown',
+        details: ['Inspect: open-agent show "dev box" --inspect'],
+      },
     },
   ])(
     'should retain $label recovery from success render failure',
-    ({ result, stderr }) => {
-      const output = captureEmission(() => emitResult(result));
+    ({ result, recovery }) => {
+      const output = captureEmission(() => emitResult(result, { json: true }));
 
-      expect(output).toEqual({ stdout: '', stderr, exitCode: 1 });
+      expect({
+        result: JSON.parse(output.stdout),
+        newline: output.stdout.endsWith('\n'),
+        stderr: output.stderr,
+        exitCode: output.exitCode,
+      }).toEqual({
+        result: {
+          schemaVersion: 1,
+          command: result.command,
+          ok: false,
+          error: {
+            code: 'UNEXPECTED',
+            message: expect.any(String),
+            ...recovery,
+          },
+        },
+        newline: true,
+        stderr: '',
+        exitCode: 1,
+      });
     },
   );
 });

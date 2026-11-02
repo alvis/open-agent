@@ -16,7 +16,7 @@ OPEN_AGENT_* environment variables answer the same questions.
 EXAMPLES
   open-agent create --name devbox
   open-agent create --name devbox --network none
-  open-agent create --name devbox --non-interactive`,
+  open-agent create --name devbox --json --non-interactive`,
 } as const;
 
 /** setup sections remain explicit */
@@ -41,10 +41,11 @@ is available, without waking their guests. A provider whose query fails is
 reported as unavailable. A workstation a newer open-agent set up is listed and
 marked, but no other command acts on it until open-agent is upgraded. --provider PROVIDER names the provider a
 --provider-token-source belongs to (sprite when omitted); every other provider
-is still listed.
+is still listed. --json emits one structured result.
 
 EXAMPLES
   open-agent list
+  open-agent list --json
   open-agent list --provider-token-source env:MY_TOKEN`,
 } as const;
 
@@ -60,7 +61,8 @@ output controls below.
 
 EXAMPLES
   open-agent show devbox
-  open-agent show devbox --inspect`,
+  open-agent show devbox --inspect
+  open-agent show devbox --inspect --json`,
 } as const;
 
 /** deletion consent is command-specific and exact-name scoped */
@@ -89,5 +91,6 @@ precede output controls in the flag table.
 
 EXAMPLES
   open-agent doctor devbox
+  open-agent doctor devbox --json
   open-agent doctor devbox --non-interactive`,
 } as const;

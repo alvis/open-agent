@@ -74,7 +74,7 @@ describe('fn:setupFailure', () => {
         expect.stringMatching(new RegExp(`^${VERSION_LABEL_PREFIX}`, 'u')),
       ]);
       expect(update).toHaveBeenCalledOnce();
-      expect(prepareResult({ result }).text).toContain(
+      expect(prepareResult({ result, options: {} }).text).toContain(
         'Incomplete label: confirmed',
       );
     },
@@ -162,11 +162,17 @@ describe('fn:setupFailure', () => {
       prior,
       labelFailure,
     ]);
-    const human = prepareResult({ result });
+    const human = prepareResult({ result, options: {} });
+    const json = prepareResult({ result, options: { json: true } });
     expect(human.channel).toBe('stderr');
     expect(human.text).toContain('Incomplete label: unconfirmed');
     expect(human.text).toContain('label write refused');
-    expect(human.text).toContain('Workstation ID: sprite-primary');
+    expect(json.channel).toBe('stdout');
+    expect(json.text.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(json.text)).toMatchObject({
+      error: { code: 'PREFLIGHT', machineId: 'sprite-primary' },
+      data: { recovery: { incompleteLabel: 'unconfirmed' } },
+    });
   });
 
   it('should redact actual setup failures without marking untouched guests incomplete', async () => {

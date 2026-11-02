@@ -150,7 +150,7 @@ async function managedSprite(
 }
 
 describe('cmd:show', () => {
-  it('should report a non-Error SDK rejection as one redacted failure', async () => {
+  it('should serialize a non-Error SDK rejection as one redacted JSON failure', async () => {
     const privateRejection = 'sdk-private-rejection';
     rememberSecret(privateRejection);
     vi.stubEnv('SPRITES_TOKEN', 'test-org/1/0abc/0def');
@@ -160,14 +160,14 @@ describe('cmd:show', () => {
     const result = await runCommand(dependencies, {
       command: 'show',
       machine: 'primary',
-      options: { nonInteractive: true },
+      options: { json: true, nonInteractive: true },
     });
     const stdout = new PassThrough();
     const stderr = new PassThrough();
-    let out = '';
+    let json = '';
     let diagnostic = '';
     stdout.on('data', (chunk: Buffer) => {
-      out += chunk.toString();
+      json += chunk.toString();
     });
     stderr.on('data', (chunk: Buffer) => {
       diagnostic += chunk.toString();
@@ -176,6 +176,7 @@ describe('cmd:show', () => {
       writePreparedResult(
         prepareResult({
           result,
+          options: { json: true },
           streams: { stdout, stderr },
         }),
         { stdout, stderr },
@@ -185,14 +186,16 @@ describe('cmd:show', () => {
       stderr.destroy();
     }
 
-    expect(result).toMatchObject({
+    expect(result).toMatchObject({ command: 'show', ok: false });
+    expect(json.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(json)).toMatchObject({
+      schemaVersion: 1,
       command: 'show',
       ok: false,
       error: { code: 'UNEXPECTED', machine: 'primary' },
     });
-    expect(out).toBe('');
-    expect(diagnostic).toContain('Workstation: primary');
-    expect(diagnostic).not.toContain('sdk-private-rejection');
+    expect(json).not.toContain('sdk-private-rejection');
+    expect(diagnostic).toBe('');
   });
 
   it('should report the executed menu action when its provider lookup fails', async () => {
@@ -275,6 +278,7 @@ describe('cmd:show', () => {
       },
     });
     expect(serializeResult(projectResult(result))).toMatchObject({
+      schemaVersion: 1,
       command: 'doctor',
       ok: true,
       data: { currentReadiness: { ready: true } },
@@ -310,13 +314,14 @@ describe('cmd:show', () => {
       },
     });
     expect(serializeResult(projectResult(result))).toMatchObject({
+      schemaVersion: 1,
       command: 'doctor',
       ok: false,
       data: { currentReadiness: { ready: false } },
     });
   });
 
-  it('should report a failed service probe with sibling evidence in doctor and its output', async () => {
+  it('should report a failed service probe with sibling evidence in doctor and both output modes', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-doctor-probe-failure-'),
     );
@@ -351,30 +356,46 @@ describe('cmd:show', () => {
       },
     });
 
-    const stdout = new PassThrough();
-    const stderr = new PassThrough();
-    let out = '';
-    let errorOutput = '';
-    stdout.on('data', (chunk: Buffer) => {
-      out += chunk.toString();
-    });
-    stderr.on('data', (chunk: Buffer) => {
-      errorOutput += chunk.toString();
-    });
-    writePreparedResult(
-      prepareResult({
-        result,
-        streams: { stdout, stderr },
-      }),
-      { stdout, stderr },
-    );
-    stdout.destroy();
-    stderr.destroy();
-    expect(out).toBe('');
-    expect(errorOutput).not.toContain(secret);
-    expect(errorOutput.replaceAll(/\s+/g, ' ')).toContain(
-      'Probe: services · Reason: Service registry response could not be read.',
-    );
+    for (const json of [false, true]) {
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      let out = '';
+      let errorOutput = '';
+      stdout.on('data', (chunk: Buffer) => {
+        out += chunk.toString();
+      });
+      stderr.on('data', (chunk: Buffer) => {
+        errorOutput += chunk.toString();
+      });
+      writePreparedResult(
+        prepareResult({
+          result,
+          options: { json },
+          streams: { stdout, stderr },
+        }),
+        { stdout, stderr },
+      );
+      stdout.destroy();
+      stderr.destroy();
+      expect(out + errorOutput).toContain('services');
+      expect(out + errorOutput).not.toContain(secret);
+      if (json) {
+        expect(errorOutput).toBe('');
+        expect(out.trim().split('\n')).toHaveLength(1);
+        expect(JSON.parse(out)).toMatchObject({
+          schemaVersion: 1,
+          command: 'doctor',
+          ok: false,
+          error: { code: 'PREFLIGHT' },
+          data: { currentReadiness: { ready: false } },
+        });
+      } else {
+        expect(out).toBe('');
+        expect(errorOutput.replaceAll(/\s+/g, ' ')).toContain(
+          'Probe: services · Reason: Service registry response could not be read.',
+        );
+      }
+    }
   });
 
   it('should keep failed native inspection visible in show --inspect', async () => {
@@ -725,6 +746,7 @@ describe('provider choice on an existing workstation', () => {
       machine: 'primary',
       options: {
         providerTokenSource: 'env:OPEN_AGENT_TEST_SOURCE',
+        json: true,
         nonInteractive: true,
       },
     });
