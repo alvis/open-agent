@@ -116,6 +116,7 @@ describe('fn:runCommand', () => {
           provider: 'sprite',
           name: 'workstation',
           yes: true,
+          github: false,
           network: 'none',
         },
       },
@@ -303,6 +304,7 @@ describe('fn:runCommand', () => {
         provider: 'sprite',
         section: 'network',
         network: 'none',
+        github: false,
       },
     });
 

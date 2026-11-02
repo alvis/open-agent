@@ -122,6 +122,8 @@ export interface ProviderDeclaration<
   incompatibilities: readonly ProfileIncompatibility[];
   /** host tools and credential every provider-reaching command needs */
   prerequisites: ProviderPrerequisites;
+  /** guest login accounts the provider adds beside the agent account; they share its GitHub CLI login */
+  shellAccounts: readonly string[];
   /** OS images the provider can create workstations from, the default first */
   images: readonly [OsImage, ...OsImage[]];
   /** guest program the idle governor runs to apply an awake deadline; absent when nothing keeps the provider awake */

@@ -98,7 +98,7 @@ export async function parseApplication({
   }
 }
 
-const PAIRED_BOOLEAN_FLAGS = ['color', 'local-credentials'];
+const PAIRED_BOOLEAN_FLAGS = ['color', 'local-credentials', 'github'];
 
 /**
  * names the per-agent spellings of --with-pair-code

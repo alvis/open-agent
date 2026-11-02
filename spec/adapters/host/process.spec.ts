@@ -28,7 +28,7 @@ vi.mock('execa', () => {
 });
 
 describe('fn:runLocal', () => {
-  it('should trim output for unscoped execution', async () => {
+  it('should trim output and disable interactive prompts for unscoped execution', async () => {
     const output = await runLocal({
       program: 'generated-program',
       arguments: ['status'],
@@ -46,6 +46,11 @@ describe('fn:runLocal', () => {
           stderr: 'pipe',
           stdout: 'pipe',
           reject: false,
+          env: {
+            ...process.env,
+            GIT_TERMINAL_PROMPT: '0',
+            GH_PROMPT_DISABLED: '1',
+          },
         },
       ],
     ]);

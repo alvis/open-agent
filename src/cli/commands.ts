@@ -12,6 +12,8 @@ import { execute } from './execution';
 import {
   commonFlags,
   consentFlags,
+  integrationCredentialFlags,
+  integrationFlags,
   outputFlags,
   pairingFlags,
   providerCredentialFlags,
@@ -29,7 +31,8 @@ import type { InvocationContext } from './parser';
 type BooleanKeys<T> = {
   [K in keyof T]-?: NonNullable<T[K]> extends boolean ? K : never;
 }[keyof T];
-type OptionalBooleanKey = 'withPairCode' | 'localCredentials' | 'color';
+type OptionalBooleanKey =
+  'withPairCode' | 'github' | 'localCredentials' | 'color';
 type RequiredBooleanFields<T> = Omit<T, BooleanKeys<T>> &
   Required<Pick<T, Exclude<BooleanKeys<T>, OptionalBooleanKey>>> &
   Pick<T, Extract<BooleanKeys<T>, OptionalBooleanKey>>;
@@ -42,7 +45,9 @@ type ConfigurationFlags = FlagsFor<
   typeof consentFlags &
     typeof pairingFlags &
     typeof selectionFlags &
+    typeof integrationFlags &
     typeof providerCredentialFlags &
+    typeof integrationCredentialFlags &
     typeof outputFlags
 >;
 type CreateFlags = ConfigurationFlags & Pick<CommandOptions, 'name'>;
@@ -97,7 +102,9 @@ const createCommand = buildCommand({
       ...consentFlags,
       ...pairingFlags,
       ...selectionFlags,
+      ...integrationFlags,
       ...providerCredentialFlags,
+      ...integrationCredentialFlags,
       ...outputFlags,
     },
   },
@@ -131,7 +138,9 @@ const setupCommand = buildCommand({
       ...consentFlags,
       ...pairingFlags,
       ...selectionFlags,
+      ...integrationFlags,
       ...providerCredentialFlags,
+      ...integrationCredentialFlags,
       ...outputFlags,
     },
     positional: machinePositional,

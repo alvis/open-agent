@@ -95,8 +95,8 @@ describe('fn:prepareGuestSection', () => {
       ...target,
       supplied: { options: {} },
       sources: { processEnv: {}, fileEnv: {} },
-      section: 'tools',
-      options: { nonInteractive: true },
+      section: 'github',
+      options: { github: false, nonInteractive: true },
       mutation,
     });
 
@@ -138,6 +138,7 @@ describe('fn:prepareGuestSection', () => {
       options: {
         nonInteractive: true,
         localCredentials: false,
+        github: false,
       },
       mutation,
     });

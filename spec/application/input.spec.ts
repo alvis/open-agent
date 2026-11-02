@@ -9,6 +9,7 @@ import {
   requireValidProfile,
   requireValidSuppliedSelection,
   resolveCreateInputs,
+  resolveInputs,
 } from '#application/input';
 import { resolveProviderCredential } from '#application/input/provider-credential';
 
@@ -125,6 +126,7 @@ describe('fn:resolveInputs', () => {
         network: 'none',
         nonInteractive: true,
         localCredentials: false,
+        github: false,
       });
 
       expect({
@@ -149,7 +151,7 @@ describe('fn:resolveInputs', () => {
     const secretPath = join(directory, 'secret');
     await writeFile(
       path,
-      ['SPRITES_TOKEN=file-provider-secret', ''].join('\n'),
+      ['SPRITES_TOKEN=file-provider-secret', 'GH_TOKEN=unused', ''].join('\n'),
     );
     await writeFile(secretPath, 'explicit-provider-secret\n');
 
@@ -184,5 +186,34 @@ describe('fn:resolveInputs', () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it('should report an unavailable required GitHub token and defer account lookup while mandatory inputs are missing', async () => {
+    const options = { nonInteractive: true, localCredentials: false };
+    const absent = await resolveInputs(dependencies, {
+      options,
+      requirementSelection: {
+        sources: { processEnv: {}, fileEnv: {} },
+        required: ['githubToken'],
+      },
+    });
+    const deferred = await resolveInputs(dependencies, {
+      options,
+      requirementSelection: {
+        sources: {
+          processEnv: { GH_TOKEN: 'unvalidated-account-candidate' },
+          fileEnv: {},
+        },
+        required: ['name'],
+      },
+    });
+
+    expect([
+      { token: absent.githubToken, missing: absent.missing },
+      { token: deferred.githubToken, missing: deferred.missing },
+    ]).toEqual([
+      { token: undefined, missing: [expect.stringContaining('GitHub token')] },
+      { token: undefined, missing: [expect.stringContaining('--name')] },
+    ]);
   });
 });

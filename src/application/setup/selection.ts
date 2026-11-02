@@ -17,6 +17,11 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
     description: 'Workstation networking',
   },
   {
+    value: 'github',
+    label: 'GitHub authentication',
+    description: 'Configure the native GitHub CLI credential',
+  },
+  {
     value: 'tools',
     label: 'Managed tools',
     description: 'View recorded versions or explicitly update tools in place',

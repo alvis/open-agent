@@ -70,6 +70,8 @@ export class SpriteProvider implements ProviderDriver<'sprite'> {
   public readonly machines: readonly MachineOffer[] = [SPRITE_MACHINE];
   public readonly incompatibilities: readonly ProfileIncompatibility[] = [];
   public readonly prerequisites: ProviderPrerequisites = SPRITE_PREREQUISITES;
+  // the Sprite login account receives the same GitHub CLI login as the agent
+  public readonly shellAccounts: readonly string[] = ['sprite'];
   // a Sprite boots one image Fly picks and names neither its release nor its
   // architecture, so only the guest probe tells them; its tooling is Debian's
   public readonly images: readonly [OsImage, ...OsImage[]] = [

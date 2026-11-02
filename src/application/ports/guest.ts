@@ -8,6 +8,7 @@ import type { ServiceDefinition } from '#domain/services';
 import type { RefusedSource } from '#domain/tools';
 import type { WorkstationRecord } from '#domain/workstation';
 import type { CommandFault } from '#kernel/faults';
+import type { Secret } from '#kernel/secret';
 
 import type { ProviderDriver } from './drivers';
 import type { GuestChannel, GuestServiceControl } from './guest-channel';
@@ -69,6 +70,14 @@ export interface InspectionParams {
  */
 export type ReleaseSource = 'metadata' | 'guest' | 'guest-or-metadata';
 
+/** where GitHub CLI is authenticated */
+export interface GithubTarget {
+  /** selected GitHub host; github.com when absent */
+  hostname?: string;
+  /** provider shell accounts that share the agent account's login */
+  shellAccounts: readonly string[];
+}
+
 /** what the provider's own services are installed from */
 export interface ProviderServiceParams {
   /** the provider's own service control */
@@ -128,6 +137,17 @@ export interface GuestNativeConfiguration {
     guest: GuestChannel,
     agent?: AgentId,
   ): Promise<AgentEnvironments[AgentId] | undefined>;
+  /**
+   * authenticates GitHub CLI using a selected credential over stdin
+   * @param guest target guest, running over a setup session
+   * @param token GitHub credential, piped to the native CLI as session input
+   * @param target selected GitHub host and provider shell accounts
+   */
+  configureGithub(
+    guest: GuestChannel,
+    token: Secret,
+    target: GithubTarget,
+  ): Promise<void>;
 }
 
 /**

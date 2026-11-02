@@ -1,10 +1,13 @@
 import { inspect } from 'node:util';
 
+import { rememberSecret } from '#kernel/redaction';
+
 /**
  * where the host obtained a credential it hands to the guest; `embedded` is
  * guest file contents that hold one
  */
-type HostCredentialSource = 'embedded';
+type HostCredentialSource =
+  'credential-store' | 'prompt' | 'github' | 'embedded';
 
 /** source and registered value held by one secret */
 interface SecretParams {
@@ -35,6 +38,22 @@ export class Secret {
   private constructor({ source, value }: SecretParams) {
     this.source = source;
     values.set(this, value);
+  }
+
+  /**
+   * wraps a credential the host obtained from one of its sources
+   * @param source where the host obtained it
+   * @param value the credential
+   * @returns the credential, redacted wherever it is printed
+   * @throws {Error} when the credential is empty
+   */
+  public static fromHost(source: HostCredentialSource, value: string): Secret {
+    if (value === '') {
+      throw new Error(`An empty credential from ${source} cannot be sent`);
+    }
+    rememberSecret(value);
+
+    return new Secret({ source, value });
   }
 
   /**
@@ -75,9 +94,9 @@ export class Secret {
 /**
  * reads a secret's value for delivery to the guest; only the session framing
  * calls it, and the value never leaves the session's standard input
- * @param secret a credential built by {@link Secret.embedding}
+ * @param secret a credential built by {@link Secret.fromHost}
  * @returns its value
- * @throws {Error} when the value was not built by {@link Secret.embedding}
+ * @throws {Error} when the value was not built by {@link Secret.fromHost}
  */
 export function revealSecret(secret: Secret): string {
   const value = values.get(secret);

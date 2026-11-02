@@ -31,12 +31,24 @@ describe('fn:createPreflightSummary', () => {
   });
 
   it('should provide applicable readiness checks and reminders without exposing input secrets', () => {
-    const summary = createPreflightSummary(dependencies, {
+    const native = createPreflightSummary(dependencies, baseInput);
+    const supplied = createPreflightSummary(dependencies, {
       ...baseInput,
-      providerToken: 'provider-secret',
+      githubToken: 'github-secret',
     });
 
-    expect(summary).toEqual({
+    expect(native).toEqual({
+      checks: [
+        expect.stringMatching(/Required inputs/),
+        expect.stringMatching(/Sprite prerequisites/),
+      ],
+      reminders: [
+        expect.stringMatching(/hourly.*a day has passed/),
+        expect.stringMatching(/native sign-in/),
+        expect.stringMatching(/Private GitHub access/),
+      ],
+    });
+    expect(supplied).toEqual({
       checks: [
         expect.stringMatching(/Required inputs/),
         expect.stringMatching(/Sprite prerequisites/),
@@ -46,6 +58,6 @@ describe('fn:createPreflightSummary', () => {
         expect.stringMatching(/native sign-in/),
       ],
     });
-    expect(JSON.stringify(summary)).not.toMatch(/provider-secret/);
+    expect(JSON.stringify(supplied)).not.toMatch(/github-secret/);
   });
 });

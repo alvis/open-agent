@@ -15,11 +15,20 @@ import type { GuestAsset } from '#domain/guest';
 
 import type { GuestRunResult } from './run';
 
+/** a non-root guest account and the provider shell accounts it may be one of */
+export interface NativeAccountOwner {
+  /** account that owns the path */
+  user: string;
+  /** provider shell accounts core may manage besides the agent account */
+  shellAccounts: readonly string[];
+}
+
 /** arguments for an operation confined to one native account home */
 interface NativeFileCommandParams {
   guest: GuestChannel;
   path: string;
   operation: 'mkdir' | 'write';
+  owner?: NativeAccountOwner;
   contents?: string;
 }
 
@@ -63,12 +72,14 @@ export async function runAsAgent(
  * ensures a non-root-owned private guest directory
  * @param guest target guest
  * @param path absolute directory path
+ * @param owner provider shell account that owns the directory; the agent account when omitted
  */
 export async function ensurePrivateDirectory(
   guest: GuestChannel,
   path: string,
+  owner?: NativeAccountOwner,
 ): Promise<void> {
-  await runNativeFileCommand({ guest, path, operation: 'mkdir' });
+  await runNativeFileCommand({ guest, path, owner, operation: 'mkdir' });
 }
 
 /**
@@ -89,15 +100,17 @@ export async function writeOwnedFile(
 /**
  * runs the home files program as the native account, which refuses a linked
  * or foreign path below its home
- * @param params target path, operation and private stdin contents
- * @throws {Error} when the destination is outside the managed home
+ * @param params target account, operation and private stdin contents
+ * @throws {Error} when the account or destination is outside the managed home
  */
 async function runNativeFileCommand(
   params: NativeFileCommandParams,
 ): Promise<void> {
-  const { guest, path, operation, contents } = params;
-  const home = accountHome(USER);
+  const { guest, path, operation, owner, contents } = params;
+  const user = owner?.user ?? USER;
+  const home = accountHome(user);
   if (
+    ![USER, ...(owner?.shellAccounts ?? [])].includes(user) ||
     !path.startsWith(`${home}/`) ||
     posix.normalize(path) !== path ||
     path.includes('\0')
@@ -111,7 +124,7 @@ async function runNativeFileCommand(
     [
       '/usr/sbin/runuser',
       '-u',
-      USER,
+      user,
       '--',
       '/bin/sh',
       '-c',

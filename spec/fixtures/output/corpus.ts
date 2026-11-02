@@ -321,6 +321,7 @@ export const CORPUS: readonly CorpusCase[] = [
       retainedCredentials: { provider: { storage: 'keychain' } },
       service: 'configured',
       pairing: { status: 'not requested' },
+      github: 'configured',
       network: { status: 'disabled', readiness: 'skipped' },
       components: { installed: 6, skipped: 1, failed: 1 },
       tools: 'updated',
@@ -375,6 +376,21 @@ export const CORPUS: readonly CorpusCase[] = [
       network: { status: 'disabled', readiness: 'skipped' },
     },
   }),
+  corpusCase('setup-github-configured', {
+    command: 'setup',
+    ok: true,
+    data: { section: 'github', machine: MACHINE, github: 'configured' },
+  }),
+  corpusCase('setup-github-preserved', {
+    command: 'setup',
+    ok: true,
+    data: { section: 'github', machine: MACHINE, github: 'preserved' },
+  }),
+  corpusCase('setup-github-skipped', {
+    command: 'setup',
+    ok: true,
+    data: { section: 'github', machine: MACHINE, github: 'skipped' },
+  }),
   corpusCase('setup-tools-updated', {
     command: 'setup',
     ok: true,
@@ -412,7 +428,7 @@ export const CORPUS: readonly CorpusCase[] = [
   corpusCase('setup-failure-bare', {
     command: 'setup',
     ok: false,
-    error: { code: 'AUTH', message: 'The provider rejected the token' },
+    error: { code: 'AUTH', message: 'GitHub rejected the token' },
   }),
   corpusCase('setup-failure-readiness-recovery', {
     command: 'setup',

@@ -23,6 +23,7 @@ import { SpriteProvider } from '#adapters/drivers/providers/sprite';
 import { SpriteGuestChannel } from '#adapters/drivers/providers/sprite/channel';
 import { toRecord } from '#adapters/drivers/providers/sprite/records';
 import { sessionGuest } from '#adapters/guest/platform/session/channel';
+import { HOMEBREW_GH } from '#adapters/guest/tools/accounts';
 import { registry } from '#composition/registry';
 
 import { dependencies } from './dependencies';
@@ -586,7 +587,7 @@ export function createNativeCommandExecutor(
 
   return vi.fn<Sprite['execFile']>(async (file, args = []) => {
     const harnessIndex = args.findIndex((argument) =>
-      ['claude'].includes(argument),
+      ['claude', HOMEBREW_GH].includes(argument),
     );
     if (file === SUDO && harnessIndex >= 0) {
       const expected = pending.shift();

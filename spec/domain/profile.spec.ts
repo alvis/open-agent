@@ -57,6 +57,7 @@ vi.mock('#composition/registry', async (importOriginal) => {
       },
       documentation: [],
     },
+    shellAccounts: [],
     images: [{ id: 'fixture', family: 'debian', arch: ['x86_64'] }],
   };
   const claude: HarnessDeclaration<'claude'> = {

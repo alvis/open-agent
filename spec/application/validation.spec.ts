@@ -21,6 +21,7 @@ describe('fn:validateCommandRequest', () => {
 
   it('should reject conflicting requests before credentials or remote access', () => {
     const conflicts: CommandOptions[] = [
+      { github: false, githubTokenSource: 'env:TEST_GITHUB_TOKEN' },
       {
         localCredentials: false,
         providerTokenSource: 'keychain:test/account',
@@ -38,7 +39,7 @@ describe('fn:validateCommandRequest', () => {
     expect(() =>
       validateCommandRequest({
         command: 'create',
-        options: { section: 'tools' },
+        options: { section: 'github' },
       }),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
@@ -50,7 +51,7 @@ describe('fn:validateCommandRequest', () => {
     expect(() =>
       validateCommandRequest({
         command: 'setup',
-        options: { section: 'tools', withPairCode: true },
+        options: { section: 'github', withPairCode: true },
       }),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
   });
@@ -73,7 +74,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
       validateSetupIntegrationOptions({ network: 'none' }, 'network'),
     ).not.toThrow();
     expect(() =>
-      validateSetupIntegrationOptions({ network: 'none' }, 'tools'),
+      validateSetupIntegrationOptions({ network: 'none' }, 'github'),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
       validateSetupIntegrationOptions({ idleMinutes: 30 }, 'network'),
@@ -83,7 +84,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
   it.each([{ release: 'latest' }] satisfies CommandOptions[])(
     'should refuse integration input outside the section that applies it: %j',
     (options) => {
-      expect(() => validateSetupIntegrationOptions(options, 'tools')).toThrow(
+      expect(() => validateSetupIntegrationOptions(options, 'github')).toThrow(
         expect.objectContaining({ code: 'USAGE' }),
       );
     },
@@ -96,7 +97,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
       validateSetupIntegrationOptions(options, 'tools'),
     ).not.toThrow();
     expect(() => validateSetupIntegrationOptions(options, 'all')).not.toThrow();
-    expect(() => validateSetupIntegrationOptions(options, 'agent')).toThrow(
+    expect(() => validateSetupIntegrationOptions(options, 'github')).toThrow(
       expect.objectContaining({ code: 'USAGE' }),
     );
     expect(() =>

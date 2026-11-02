@@ -34,11 +34,12 @@ vi.mock(
 );
 describe('fn:setupAll', () => {
   it.each([
-    { isReleaseChanged: false, withPairCode: false },
-    { isReleaseChanged: true, withPairCode: true },
+    { isReleaseChanged: false, withPairCode: false, optionalSections: false },
+    { isReleaseChanged: true, withPairCode: true, optionalSections: false },
+    { isReleaseChanged: false, withPairCode: false, optionalSections: true },
   ])(
     'should complete the full setup and record readiness after configuring the guest (%o)',
-    async ({ isReleaseChanged, withPairCode }) => {
+    async ({ isReleaseChanged, withPairCode, optionalSections }) => {
       await using directory = await mkdtempDisposable(
         join(tmpdir(), 'open-agent-setup-all-'),
       );
@@ -65,6 +66,7 @@ describe('fn:setupAll', () => {
       const context: SetupContext = {
         ...workstationOf(sprite),
         options: {
+          github: optionalSections ? undefined : false,
           localCredentials: false,
           nonInteractive: true,
           withPairCode,
@@ -171,6 +173,7 @@ describe('fn:setupAll', () => {
       ).resolves.toMatchObject({
         tools: 'updated',
         ...(withPairCode ? { pairing: { status: 'created' } } : {}),
+        ...(optionalSections ? { github: 'skipped' } : {}),
       });
 
       expect(
@@ -211,6 +214,7 @@ describe('fn:setupAll', () => {
     const context: SetupContext = {
       ...workstationOf(sprite),
       options: {
+        github: false,
         localCredentials: false,
         nonInteractive: true,
       },

@@ -8,7 +8,7 @@ import { traceStage } from '#kernel/operation';
 
 import { installSetupPlan } from './installation';
 import { setupNetwork } from './network';
-import { setupAgent, stopService } from './sections';
+import { setupGithub, setupAgent, stopService } from './sections';
 import { exposeWhenServing } from './serving';
 
 import type { AllSetupData } from '#application/data';
@@ -19,8 +19,8 @@ import type { SetupContext } from './context';
 
 /**
  * reconciles every managed guest section: the setup plan installs the tools,
- * then the guest is named after its workstation and the network and
- * harnesses are configured before the plan
+ * then the guest is named after its workstation and the network, accounts,
+ * and harnesses are configured before the plan
  * installs and starts the services and jobs, the
  * agent is verified to serve and exposed, and only then is the installation
  * recorded ready
@@ -73,7 +73,8 @@ export async function setupAll(
 }
 
 /**
- * configures each section in turn through its owner
+ * configures each section in turn through its owner, skipping those this run
+ * opts out of
  * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
  * @param guest guest channel of the managed workstation
  * @param context full setup choices and mutation state
@@ -84,11 +85,19 @@ async function configureSections(
   guest: GuestChannel,
   context: SetupContext,
 ): Promise<Omit<AllSetupData, 'tools'>> {
+  const { options } = context;
   const network = setupNetwork();
+  const github =
+    options.github === false
+      ? undefined
+      : await setupGithub(dependencies, guest, context);
   await configureHarnesses(guest, {
     drivers: harnessDrivers(dependencies.registry, context.profile.harnesses),
     awakeHook: awakeHookCommand(dependencies.guest.facts),
   });
 
-  return network;
+  return {
+    ...network,
+    ...github,
+  };
 }

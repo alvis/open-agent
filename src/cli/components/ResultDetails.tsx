@@ -28,6 +28,7 @@ const FIELD_LABELS: Record<string, string> = {
   python3: 'Python',
   httpie: 'HTTPie',
   rust: 'Rust',
+  github: 'GitHub',
   ...Object.fromEntries(
     [
       ...Object.values(registry.agents),

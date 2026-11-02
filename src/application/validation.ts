@@ -61,9 +61,16 @@ export function validateCommandRequest(
  * @param options parsed flags common to every command
  */
 function validateCommonOptions(options: CommandOptions): void {
+  if (options.github === false && options.githubTokenSource) {
+    throw new CommandValidationError({
+      message: '--no-github conflicts with a GitHub token source',
+    });
+  }
   if (
     options.localCredentials === false &&
-    options.providerTokenSource?.startsWith('keychain:')
+    [options.providerTokenSource, options.githubTokenSource].some((source) =>
+      source?.startsWith('keychain:'),
+    )
   ) {
     throw new CommandValidationError({
       message: '--no-local-credentials conflicts with a keychain source',

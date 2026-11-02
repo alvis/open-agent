@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { configureNewWorkstation } from '#application/create/configuration';
 import { registry } from '#composition/registry';
+import { Secret } from '#kernel/secret';
 
 import { environmentOf } from '../../fixtures/environment';
 import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
@@ -134,7 +135,7 @@ describe('fn:configureNewWorkstation', () => {
     });
   });
 
-  it('should apply the selected harness configuration', async () => {
+  it('should apply selected GitHub configuration', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-configure-options-'),
     );
@@ -146,6 +147,11 @@ describe('fn:configureNewWorkstation', () => {
       harnesses: ['claude'],
     } satisfies WorkstationProfile;
     const connection = connectionOf(sprite);
+    using github = vi
+      .spyOn(wired.guest.native, 'configureGithub')
+      .mockImplementation(async () => {
+        calls.push('github configured');
+      });
     vi.spyOn(registry.harnesses.claude, 'configure').mockImplementation(
       async () => {
         calls.push('harness configured');
@@ -163,12 +169,25 @@ describe('fn:configureNewWorkstation', () => {
       configuration: {
         hostname: 'box',
         profile,
+        githubToken: 'selected-github-token',
+        githubHost: 'github.com',
       },
     });
 
-    expect({ guest, calls }).toEqual({
+    expect({
+      guest,
+      calls,
+      github: github.mock.calls,
+    }).toEqual({
       guest: await connection.guest(),
-      calls: ['harness configured', 'hook installed'],
+      calls: ['github configured', 'harness configured', 'hook installed'],
+      github: [
+        [
+          expect.anything(),
+          expect.any(Secret),
+          expect.objectContaining({ hostname: 'github.com' }),
+        ],
+      ],
     });
   });
 });

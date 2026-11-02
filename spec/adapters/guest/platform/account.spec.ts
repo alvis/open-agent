@@ -58,12 +58,16 @@ describe('native account SDK boundary', () => {
     }
   });
 
-  it('should dispatch the agent account through runuser and sends private writes over HTTP stdin', async () => {
+  it('should dispatch both accounts through runuser and sends private writes over HTTP stdin', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-native-dispatch-'),
     );
     const sprite = createFilesystemSprite({ root: directory.path });
     await ensurePrivateDirectory(guestOf(sprite), '/home/agent/.config');
+    await ensurePrivateDirectory(guestOf(sprite), '/home/sprite/.config', {
+      user: 'sprite',
+      shellAccounts: ['sprite'],
+    });
     await writeOwnedFile(
       guestOf(sprite),
       '/home/agent/.config/native.json',
@@ -102,6 +106,17 @@ describe('native account SDK boundary', () => {
         'mkdir',
         '/home/agent',
         '/home/agent/.config',
+      ],
+      [
+        '/usr/sbin/runuser',
+        '-u',
+        'sprite',
+        '--',
+        '/bin/sh',
+        '-c',
+        'mkdir',
+        '/home/sprite',
+        '/home/sprite/.config',
       ],
       [
         '/usr/sbin/runuser',

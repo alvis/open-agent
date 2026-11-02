@@ -13,6 +13,7 @@ import {
   OperationContext,
   checkOperation,
   currentOperation,
+  operationSignal,
   publishStatus,
   promptUnavailableDetail,
   recoverOperation,
@@ -437,6 +438,22 @@ describe('invocation-scoped operations', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('should compose transport signals with the active invocation', async () => {
+    const directSignal = operationSignal(60_000);
+    const controller = new AbortController();
+    const context = new OperationContext({ signal: controller.signal });
+    let scopedSignal!: AbortSignal;
+
+    await withOperation(context, async () => {
+      scopedSignal = operationSignal(60_000);
+      expect(scopedSignal.aborted).toBe(false);
+      controller.abort();
+      expect(scopedSignal.aborted).toBe(true);
+    });
+
+    expect(directSignal.aborted).toBe(false);
   });
 
   it('should run unscoped IO directly and prevent pre-cancelled scoped IO', async () => {
