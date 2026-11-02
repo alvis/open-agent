@@ -231,7 +231,9 @@ const cancellation = vi.mocked(createCommandCancellation);
 const readInputFile = vi.fn<HostPorts['readInputFile']>(async (path) => {
   switch (path) {
     case 'credentials.env':
-      return 'CI=true\n';
+      return 'CI=true\nNO_COLOR=1\n';
+    case 'mode.env':
+      return 'NO_COLOR=1\n';
     default:
       return '';
   }
@@ -246,13 +248,8 @@ const success: CommandResult = {
 };
 const request: CommandRequest = {
   command: 'list',
-  options: { json: true, nonInteractive: true },
+  options: { quiet: true, json: true, nonInteractive: true },
 };
-
-/** stderr that carries only the stage progress lines non-interactive output writes */
-const STAGE_LINES_ONLY = expect.stringMatching(
-  /^(?:[\w.]+: (?:started|completed|failed)(?: \(\d+ ms\))?\n)*$/u,
-);
 
 /** @returns fresh invocation-local command state */
 function state(): ExecutionState {
@@ -321,7 +318,7 @@ describe('fn:execute', () => {
         ok: true,
         data: { machines: [], unavailable: [] },
       },
-      stderr: STAGE_LINES_ONLY,
+      stderr: '',
       exitCode: 0,
       state: { command: 'list', emitted: true, errors: [] },
     });
@@ -354,7 +351,7 @@ describe('fn:execute', () => {
         ok: true,
         data: { machines: [], unavailable: [] },
       },
-      stderr: STAGE_LINES_ONLY,
+      stderr: '',
       exitCode: 0,
     });
     expect(readInputFile.mock.calls).toEqual([
@@ -385,7 +382,7 @@ describe('fn:execute', () => {
           message: expect.stringContaining('readable regular file'),
         },
       },
-      stderr: STAGE_LINES_ONLY,
+      stderr: '',
       exitCode: 1,
     });
     expect(captured.stdout).not.toContain('private file path');
@@ -418,7 +415,7 @@ describe('fn:execute', () => {
           message: expect.stringContaining('Setup-only options'),
         },
       },
-      stderr: STAGE_LINES_ONLY,
+      stderr: '',
       exitCode: 2,
     });
     expect(readInputFile.mock.calls).toEqual([]);
@@ -441,7 +438,7 @@ describe('fn:execute', () => {
         ok: false,
         error: { code: 'UNEXPECTED', message: 'workflow failed' },
       },
-      stderr: STAGE_LINES_ONLY,
+      stderr: '',
       exitCode: 1,
     });
   });
@@ -454,7 +451,7 @@ describe('fn:execute', () => {
     run.mockRejectedValueOnce(new Error('workflow failed'));
     const selected: CommandRequest = {
       ...request,
-      options: { nonInteractive: false },
+      options: { quiet: true, nonInteractive: false },
     };
 
     const captured = await captureExecution({ request: selected });
@@ -502,7 +499,7 @@ describe('fn:execute', () => {
           message: expect.stringContaining('Cancelled by user'),
         },
       },
-      stderr: STAGE_LINES_ONLY,
+      stderr: '',
       exitCode: 130,
     });
   });
@@ -548,7 +545,7 @@ describe('fn:execute', () => {
           message: expect.stringContaining('Forced interruption'),
         },
       },
-      stderr: STAGE_LINES_ONLY,
+      stderr: '',
       exitCode: 130,
       state: { command: 'list', emitted: true, errors: [] },
     });
@@ -607,9 +604,41 @@ describe('fn:execute', () => {
           ],
         },
       },
-      stderr: STAGE_LINES_ONLY,
+      stderr: '',
       exitCode: 130,
     });
+  });
+
+  it('should honor explicit color over selected NO_COLOR in a real session', async () => {
+    vi.stubEnv('CI', 'false');
+    vi.stubEnv('NON_INTERACTIVE', 'false');
+    vi.stubEnv('TERM', 'xterm');
+    vi.stubEnv('FORCE_COLOR', '1');
+    run.mockImplementationOnce(async (_dependencies, _request, session) => {
+      session?.interaction?.status({
+        kind: 'success',
+        message: 'colour-selected',
+      });
+
+      return success;
+    });
+    const selected: CommandRequest = {
+      ...request,
+      options: {
+        quiet: false,
+        nonInteractive: false,
+        color: true,
+        credentialFile: 'mode.env',
+      },
+    };
+
+    const captured = await captureExecution({ request: selected });
+
+    expect({
+      status: captured.stderr.includes('SUCCESS: colour-selected'),
+      colored: captured.stderr.includes('\u001b[32m'),
+      exitCode: captured.exitCode,
+    }).toEqual({ status: true, colored: true, exitCode: 0 });
   });
 
   it('should observe a real session disposal failure after a forced interrupt', async () => {
@@ -645,7 +674,7 @@ describe('fn:execute', () => {
     });
     const selected: CommandRequest = {
       ...request,
-      options: { nonInteractive: false },
+      options: { quiet: true, nonInteractive: false },
     };
 
     await expect(captureExecution({ request: selected })).rejects.toEqual(
@@ -692,7 +721,7 @@ describe('fn:execute', () => {
         ok: true,
         data: { machines: [], unavailable: [] },
       })}\n`,
-      stderr: STAGE_LINES_ONLY,
+      stderr: '',
       exitCode: 0,
       state: { command: 'list', emitted: true, errors: [] },
     });

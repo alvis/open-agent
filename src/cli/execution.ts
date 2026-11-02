@@ -38,6 +38,7 @@ export interface ExecuteParams {
 
 /** command inputs whose stage and status belong to one operation */
 interface CreateExecutionOperationParams {
+  request: CommandRequest;
   cancellation: CommandCancellation;
   session: () => InteractionSession | undefined;
 }
@@ -88,6 +89,7 @@ export async function execute({
     },
   });
   const operation = createExecutionOperation({
+    request,
     cancellation,
     session: () => session,
   });
@@ -167,9 +169,13 @@ async function runScopedCommand({
     const session = options.nonInteractive
       ? undefined
       : createInteraction({
+          noColor:
+            options.color === false ||
+            (options.color !== true && Boolean(modeEnv.NO_COLOR)),
           io: { stdin, stderr },
           cancellation: {
             ...cancellation,
+            quiet: options.quiet === true,
             stagesOwnProgress: true,
           },
         });
@@ -210,20 +216,22 @@ function validateEarlyRequest(
 }
 
 /**
- * binds stage and status reporting to the current cancellation scope
- * @param params cancellation authority and current session
+ * binds verbose diagnostics to the current cancellation scope
+ * @param params command, cancellation authority and current session
+ * @param params.request parsed command and verbose mode
  * @param params.cancellation command-owned interruption authority
  * @param params.session current terminal session, when available
  * @returns invocation context
  */
 function createExecutionOperation({
+  request,
   cancellation,
   session,
 }: CreateExecutionOperationParams): OperationContext {
   return new OperationContext({
     signal: cancellation.signal,
-    onStage: createStageReporter(session),
-    onStatus: createStatusReporter(session),
+    onStage: createStageReporter(request, session),
+    onStatus: createStatusReporter(request, session),
   });
 }
 

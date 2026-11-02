@@ -19,8 +19,10 @@ import type {
 
 /** terminal controls used by the interaction's prompt methods */
 export interface PromptMethodsParams {
+  noColor: boolean;
   output: NodeJS.WritableStream;
   active: () => boolean;
+  quiet: boolean;
   publishProgress: (update: ProgressUpdate) => void;
 }
 
@@ -37,22 +39,24 @@ export type PresentPrompt = <T>(
  * binds typed workflow prompts to the one active session
  * @param present queue-backed prompt presentation
  * @param params status rendering and active-session ownership
+ * @param params.noColor whether to suppress status colors
  * @param params.output status output stream
  * @param params.active whether the session can publish progress
+ * @param params.quiet whether routine status is suppressed
  * @param params.publishProgress command-lifetime activity reporter
  * @returns Interaction callbacks
  */
 export function createPromptMethods(
   present: PresentPrompt,
-  { output, active, publishProgress }: PromptMethodsParams,
+  { noColor, output, active, quiet, publishProgress }: PromptMethodsParams,
 ): Interaction {
   return {
-    ...textPromptMethods(present),
+    ...textPromptMethods(present, noColor),
     ...choicePromptMethods(present),
     progress: publishProgress,
     status: (update) => {
-      if (active()) {
-        writeStatus(statusElement(update), output);
+      if (active() && !(quiet && ['info', 'success'].includes(update.kind))) {
+        writeStatus(statusElement(update, noColor), output);
       }
     },
   };
@@ -61,10 +65,12 @@ export function createPromptMethods(
 /**
  * binds visible and secret text entry to the current prompt queue
  * @param present queue-backed prompt presentation
+ * @param noColor whether status color is disabled
  * @returns text and secret prompt callbacks
  */
 function textPromptMethods(
   present: PresentPrompt,
+  noColor: boolean,
 ): Pick<Interaction, 'input' | 'secret'> {
   return {
     input: async (prompt) =>
@@ -72,6 +78,7 @@ function textPromptMethods(
         (submit, cancel) =>
           inputPromptElement({
             prompt,
+            noColor,
             onSubmit: submit,
             onCancel: cancel,
           }),
@@ -82,6 +89,7 @@ function textPromptMethods(
         (submit, cancel) =>
           secretPromptElement({
             prompt,
+            noColor,
             onSubmit: submit,
             onCancel: cancel,
           }),

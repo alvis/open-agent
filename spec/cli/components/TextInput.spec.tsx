@@ -22,7 +22,7 @@ describe('rc:TextInput', () => {
     }
   });
 
-  it('should keep invalid input pending and preserve validation feedback', () => {
+  it('should keep invalid input pending and preserve validation feedback when color is disabled', () => {
     const onSubmit = vi.fn<(value: string) => void>();
     const onCancel = vi.fn<(back?: boolean) => void>();
     const validate = (value: string): string | undefined =>
@@ -50,6 +50,7 @@ describe('rc:TextInput', () => {
       act(() => view.stdin.write('\r'));
       view.rerender(
         <TextInput
+          noColor
           required
           description="A validated value"
           label="Value"
@@ -132,10 +133,11 @@ describe('rc:TextInput', () => {
     }
   });
 
-  it('should keep a visible caret and inserts at that point', () => {
+  it('should keep a visible caret and inserts at that point without color', () => {
     const onSubmit = vi.fn();
     const view = render(
       <TextInput
+        noColor
         defaultValue="ac"
         label="Git name"
         onCancel={vi.fn()}
@@ -159,6 +161,7 @@ describe('rc:TextInput', () => {
     const shortSubmit = vi.fn();
     const short = render(
       <SecretInput
+        noColor
         label="Access token"
         onCancel={vi.fn()}
         onSubmit={shortSubmit}
@@ -179,6 +182,7 @@ describe('rc:TextInput', () => {
     const longSubmit = vi.fn();
     const long = render(
       <SecretInput
+        noColor
         label="Access token"
         onCancel={vi.fn()}
         onSubmit={longSubmit}

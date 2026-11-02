@@ -96,6 +96,8 @@ export async function parseApplication({
   }
 }
 
+const PAIRED_BOOLEAN_FLAGS = ['color'];
+
 /**
  * spells a camel-case flag name the way users type it
  * @param name internal camel-case flag name
@@ -122,6 +124,14 @@ function validateBooleanFlagSyntax(argv: string[]): CommandError | undefined {
       code: 'USAGE',
       message: `${doubleNegation} is invalid; use --${name} or --no-${name}.`,
     };
+  }
+  for (const flag of PAIRED_BOOLEAN_FLAGS) {
+    if (flags.has(`--${flag}`) && flags.has(`--no-${flag}`)) {
+      return {
+        code: 'USAGE',
+        message: `--${flag} and --no-${flag} are mutually exclusive; choose one.`,
+      };
+    }
   }
 
   return undefined;

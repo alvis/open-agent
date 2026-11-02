@@ -31,11 +31,13 @@ interface InteractionRootElementParams {
 /** text prompt and callbacks to render */
 interface InputPromptElementParams extends PromptCallbacks<string> {
   prompt: TextInputPrompt;
+  noColor: boolean;
 }
 
 /** secret prompt and callbacks to render */
 interface SecretPromptElementParams extends PromptCallbacks<string> {
   prompt: SecretInputPrompt;
+  noColor: boolean;
 }
 
 /** single-choice prompt and callbacks to render */
@@ -85,12 +87,14 @@ export function interactionRootElement({
  * creates an ordinary text prompt with inline validation
  * @param params ordinary text prompt and callbacks
  * @param params.prompt prompt to present
+ * @param params.noColor whether color is disabled
  * @param params.onSubmit value submission handler
  * @param params.onCancel rejects or returns to a parent prompt
  * @returns the text prompt element
  */
 export function inputPromptElement({
   prompt,
+  noColor,
   onSubmit,
   onCancel,
 }: InputPromptElementParams): ReactElement {
@@ -100,6 +104,7 @@ export function inputPromptElement({
       defaultValue={prompt.defaultValue}
       description={prompt.description}
       label={prompt.message}
+      noColor={noColor}
       required={prompt.required}
       validate={prompt.validate}
       onCancel={onCancel}
@@ -112,12 +117,14 @@ export function inputPromptElement({
  * creates a masked secret prompt
  * @param params secret prompt and callbacks
  * @param params.prompt prompt to present
+ * @param params.noColor whether color is disabled
  * @param params.onSubmit value submission handler
  * @param params.onCancel rejects or returns to a parent prompt
  * @returns masked entry without prefilled plaintext
  */
 export function secretPromptElement({
   prompt,
+  noColor,
   onSubmit,
   onCancel,
 }: SecretPromptElementParams): ReactElement {
@@ -126,6 +133,7 @@ export function secretPromptElement({
       backLabel={prompt.backLabel}
       description={prompt.description}
       label={prompt.message}
+      noColor={noColor}
       required={prompt.required}
       validate={prompt.validate}
       onCancel={onCancel}
@@ -229,8 +237,12 @@ export function progressElement(
 /**
  * creates a status line
  * @param update current status report
+ * @param noColor whether color is disabled
  * @returns Ink node with status kind and optional color
  */
-export function statusElement(update: StatusUpdate): ReactElement {
-  return <StatusMessage update={update} />;
+export function statusElement(
+  update: StatusUpdate,
+  noColor: boolean,
+): ReactElement {
+  return <StatusMessage noColor={noColor} update={update} />;
 }

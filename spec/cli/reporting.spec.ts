@@ -54,8 +54,9 @@ describe('fn:createStageReporter', () => {
         progress,
       } satisfies Partial<InteractionSession> as Partial<InteractionSession> as InteractionSession;
       using writing = vi.spyOn(stderr, 'write').mockImplementation(() => true);
-      const report = createStageReporter(() =>
-        interactive ? session : undefined,
+      const report = createStageReporter(
+        { command: 'setup', options: {} },
+        () => (interactive ? session : undefined),
       );
 
       report(failedStage);
@@ -69,14 +70,14 @@ describe('fn:createStageReporter', () => {
 describe('fn:createStatusReporter', () => {
   it.each([
     {
-      name: 'interactive status',
-      interactive: true,
-      statusCalls: statuses.map((update) => [update]),
+      name: 'quiet interactive status',
+      quiet: true,
+      statusCalls: [[statuses[2]], [statuses[3]]],
       writes: [],
     },
     {
-      name: 'noninteractive stderr',
-      interactive: false,
+      name: 'verbose noninteractive stderr',
+      quiet: false,
       statusCalls: [],
       writes: [
         [expect.stringMatching(/Info:.*Reading inventory/u)],
@@ -86,15 +87,16 @@ describe('fn:createStatusReporter', () => {
       ],
     },
   ])(
-    'should route every status through $name',
-    ({ interactive, statusCalls, writes }) => {
+    'should route $name with its configured verbosity',
+    ({ quiet, statusCalls, writes }) => {
       const status = vi.fn<InteractionSession['status']>();
       const session = {
         status,
       } satisfies Partial<InteractionSession> as Partial<InteractionSession> as InteractionSession;
       using writing = vi.spyOn(stderr, 'write').mockImplementation(() => true);
-      const report = createStatusReporter(() =>
-        interactive ? session : undefined,
+      const report = createStatusReporter(
+        { command: 'show', options: { quiet } },
+        () => (quiet ? session : undefined),
       );
 
       for (const update of statuses) {

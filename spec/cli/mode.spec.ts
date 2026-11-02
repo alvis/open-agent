@@ -111,6 +111,12 @@ describe('fn:resolveInteractionMode', () => {
       ).toEqual({ nonInteractive: true });
     },
   );
+
+  it('should keep NO_COLOR independent of the prompt decision', () => {
+    expect(
+      resolveInteractionMode({}, { ...terminal, env: { NO_COLOR: '1' } }),
+    ).toEqual({ nonInteractive: false });
+  });
 });
 
 describe('fn:resolveProcessExecutionOptions', () => {

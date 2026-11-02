@@ -30,6 +30,27 @@ const parserFlags = {
 };
 
 describe('cmd:setup', () => {
+  it.each([['color', 'color']] as const)(
+    'should preserve omitted, positive and negative values for --%s',
+    async (flag, property) => {
+      const omitted = await parseFlags([]);
+      const enabled = await parseFlags([`--${flag}`]);
+      const disabled = await parseFlags([`--no-${flag}`]);
+
+      expect(omitted.options[0]).toHaveProperty(property, undefined);
+      expect(enabled.options[0]).toHaveProperty(property, true);
+      expect(disabled.options[0]).toHaveProperty(property, false);
+      expect([omitted.exitCode, enabled.exitCode, disabled.exitCode]).toEqual([
+        0, 0, 0,
+      ]);
+      expect([
+        omitted.diagnostics,
+        enabled.diagnostics,
+        disabled.diagnostics,
+      ]).toEqual([[], [], []]);
+    },
+  );
+
   it('should parse a network choice with a setup section', async () => {
     const parsed = await parseFlags(['--network', 'none', '--section', 'all']);
 

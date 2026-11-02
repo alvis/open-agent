@@ -11,6 +11,7 @@ type TextInputProps = {
   defaultValue?: string;
   required?: boolean;
   secret?: boolean;
+  noColor?: boolean;
   validate?: (value: string) => string | undefined;
   onSubmit: (value: string) => void;
   onCancel: (back?: boolean) => void;
@@ -49,6 +50,7 @@ interface InputEventParams<Context extends EditContext> {
  * @param root0.defaultValue initial non-secret value
  * @param root0.required whether a value is required
  * @param root0.secret whether to mask the value
+ * @param root0.noColor whether color is disabled
  * @param root0.validate optional inline validation, never echoing a secret value
  * @param root0.onSubmit accepted-value callback
  * @param root0.onCancel cancellation callback
@@ -61,6 +63,7 @@ export function TextInput({
   defaultValue = '',
   required = false,
   secret = false,
+  noColor = false,
   validate,
   onSubmit,
   onCancel,
@@ -110,7 +113,7 @@ export function TextInput({
         )}
       </Text>
       {description && <Text dimColor>{description}</Text>}
-      {error && <Text color="red">{error}</Text>}
+      {error && <Text color={noColor ? undefined : 'red'}>{error}</Text>}
       <Text dimColor>
         Enter confirm · Esc {backLabel ?? 'cancel'} · Ctrl+C cancel
       </Text>

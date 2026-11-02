@@ -93,6 +93,14 @@ describe('rc:Display', () => {
         ),
       ).toContain(`${kind.toUpperCase()}: observed`);
     }
+    expect(
+      renderToString(
+        <StatusMessage
+          noColor
+          update={{ kind: 'warning', message: 'observed' }}
+        />,
+      ),
+    ).toContain('WARNING: observed');
   });
 
   it('should keep machine details readable in narrow and wide terminals', () => {

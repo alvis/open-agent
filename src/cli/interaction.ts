@@ -34,6 +34,7 @@ interface InteractionSessionSettings
 
 /** terminal presentation and cancellation for one interaction session */
 export interface CreateInteractionParams {
+  noColor: boolean;
   io?: InteractionIO;
   cancellation?: InteractionSessionSettings;
 }
@@ -56,12 +57,14 @@ interface PromptQueueState {
 
 /**
  * creates one command-lifetime Ink root and an ordered prompt queue
- * @param params terminal streams and optional cancellation authority
+ * @param params color, terminal streams and optional cancellation authority
+ * @param params.noColor whether to suppress status colors
  * @param params.io terminal streams; defaults to the caller's process streams
- * @param params.cancellation optional command-owned cancellation port; stagesOwnProgress ignores legacy phase-less progress
+ * @param params.cancellation optional command-owned cancellation port; quiet suppresses routine presentation and stagesOwnProgress ignores legacy phase-less progress
  * @returns workflow interaction callbacks and explicit disposal
  */
 export function createInteraction({
+  noColor,
   io = { stdin, stderr },
   cancellation,
 }: CreateInteractionParams): InteractionSession {
@@ -108,8 +111,10 @@ export function createInteraction({
 
   return {
     ...createPromptMethods(present, {
+      noColor,
       output: io.stderr,
       active: () => !state.disposed && !port.signal.aborted,
+      quiet: cancellation?.quiet === true,
       publishProgress: activity.publish,
     }),
     dispose: createSessionDisposer({

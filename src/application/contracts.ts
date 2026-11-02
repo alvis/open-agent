@@ -28,6 +28,12 @@ export interface CommandOptions {
   json?: boolean;
   /** confirms prompts that would otherwise ask for consent */
   yes?: boolean;
+  /** enables or disables color regardless of the terminal */
+  color?: boolean;
+  /** shows detailed status */
+  verbose?: boolean;
+  /** hides routine status and progress */
+  quiet?: boolean;
   /** adds a live guest inspection to show */
   inspect?: boolean;
   /** source reference of the provider management credential */
