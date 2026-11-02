@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -15,10 +15,24 @@ import { redactResolved } from '#kernel/redaction';
 import { dependencies } from '../../mocks/dependencies';
 
 describe('fn:readInputSources', () => {
-  it('should parse the selected dotenv file', async () => {
+  it('should parse the selected dotenv file and keep only non-secret profile inputs', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'open-agent-input-'));
+    vi.stubEnv('HOME', directory);
     vi.stubEnv('SPRITES_TOKEN', 'process-secret-for-source-test');
+    const profileDirectory = join(directory, '.config', 'open-agent');
     const envPath = join(directory, 'chosen.env');
+    await mkdir(profileDirectory, { recursive: true });
+    await writeFile(
+      join(profileDirectory, 'profile.json'),
+      JSON.stringify({
+        CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
+        SPRITES_TOKEN: 'profile-secret-must-be-ignored',
+        GH_TOKEN: 'profile-github-must-be-ignored',
+        GIT_AUTHOR_NAME: 'profile-identity-must-be-ignored',
+        EXTRA: 'profile-runtime-must-be-ignored',
+        OTHER: 123,
+      }),
+    );
     await writeFile(
       envPath,
       'export SPRITES_TOKEN="file secret"\nRUNTIME_VALUE="value # retained" # comment\nMULTILINE="first\\nsecond"\n',
@@ -31,6 +45,7 @@ describe('fn:readInputSources', () => {
 
       expect({
         fileEnv: sources.fileEnv,
+        profile: sources.profile,
         token: sources.processEnv.SPRITES_TOKEN,
       }).toEqual({
         fileEnv: {
@@ -38,8 +53,46 @@ describe('fn:readInputSources', () => {
           RUNTIME_VALUE: 'value # retained',
           MULTILINE: 'first\nsecond',
         },
+        profile: {
+          CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
+        },
         token: 'process-secret-for-source-test',
       });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('should tolerate an absent profile and reject malformed or unreadable profiles', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'open-agent-profile-'));
+    vi.stubEnv('HOME', directory);
+    const profilePath = join(
+      directory,
+      '.config',
+      'open-agent',
+      'profile.json',
+    );
+
+    try {
+      const sources = await readInputSources(dependencies, {});
+      expect({ fileEnv: sources.fileEnv, profile: sources.profile }).toEqual({
+        fileEnv: {},
+        profile: {},
+      });
+      await mkdir(join(directory, '.config', 'open-agent'), {
+        recursive: true,
+      });
+      for (const profile of [null, [], 'text']) {
+        await writeFile(profilePath, JSON.stringify(profile));
+        await expect(readInputSources(dependencies, {})).rejects.toEqual(
+          expect.objectContaining({ code: 'INPUT' }),
+        );
+      }
+      await rm(profilePath);
+      await mkdir(profilePath);
+      await expect(readInputSources(dependencies, {})).rejects.toEqual(
+        expect.objectContaining({ code: 'INPUT' }),
+      );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -52,6 +105,7 @@ describe('fn:runtimeEnvironment', () => {
       SPRITES_TOKEN: 'sprites-management',
       OPEN_AGENT_NETWORK: 'none',
       OPEN_AGENT_IDLE_MINUTES: '0',
+      CLIPROXYAPI_API_KEY: 'native-proxy-client',
       GH_TOKEN: 'native-github-client',
       GIT_AUTHOR_NAME: 'Author',
       CI: 'true',
@@ -242,5 +296,21 @@ describe('input source failures', () => {
     await expect(
       readSetupFile({ host }, '/selected-setup'),
     ).rejects.toMatchObject({ code: 'INPUT', causeVisibility: 'private' });
+  });
+
+  it('should reject malformed profile JSON', async () => {
+    const host = {
+      ...dependencies.host,
+      readInputFile: vi.fn<typeof dependencies.host.readInputFile>(
+        async () => '{',
+      ),
+    } satisfies typeof dependencies.host;
+
+    await expect(
+      readInputSources({ ...dependencies, host }, {}),
+    ).rejects.toMatchObject({
+      code: 'INPUT',
+      message: expect.stringContaining('JSON'),
+    });
   });
 });

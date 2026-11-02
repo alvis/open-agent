@@ -53,6 +53,7 @@ export interface SetupDataOutput {
   network?: { status: 'disabled'; readiness: 'skipped' };
   github?: string;
   gitIdentity?: string;
+  proxy?: { status: 'configured'; baseUrl?: string } | { status: 'disabled' };
   runtimeEnvironment?:
     { status: 'configured'; names: readonly string[] } | { status: 'skipped' };
   setupFile?: 'ran' | 'skipped';
@@ -136,6 +137,16 @@ export function projectSetup(data: SetupData): SetupDataOutput {
     github: same,
     gitIdentity: same,
     setupFile: same,
+    proxy: (proxy) =>
+      proxy.status === 'configured'
+        ? projectFields<typeof proxy, NonNullable<SetupDataOutput['proxy']>>(
+            proxy,
+            { status: same, baseUrl: same },
+          )
+        : projectFields<typeof proxy, NonNullable<SetupDataOutput['proxy']>>(
+            proxy,
+            { status: same },
+          ),
     runtimeEnvironment: (environment) =>
       environment.status === 'configured'
         ? projectFields<

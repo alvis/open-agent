@@ -12,6 +12,7 @@ import {
 
 import type {
   AgentDeclaration,
+  GatewayDeclaration,
   HarnessDeclaration,
   NetworkDeclaration,
   ProviderDeclaration,
@@ -64,7 +65,9 @@ vi.mock('#composition/registry', async (importOriginal) => {
     id: 'claude',
     kind: 'harnesses',
     displayName: 'Claude Code',
+    supportsProxy: true,
     spawnEnvironment: {},
+    reservedEnvironment: [],
     acpAdapter: {
       tool: {
         name: 'claude-acp',
@@ -116,8 +119,34 @@ vi.mock('#composition/registry', async (importOriginal) => {
     displayName: 'None',
   };
 
+  const cliproxyapi: GatewayDeclaration<'cliproxyapi'> = {
+    id: 'cliproxyapi',
+    kind: 'gateways',
+    displayName: 'CLIProxyAPI',
+    inputs: {
+      enabled: { environment: 'CLIPROXYAPI_ENABLED' },
+      baseUrl: {
+        environment: 'CLIPROXYAPI_BASE_URL',
+        prompt: 'CLIProxyAPI base URL',
+        flag: '--proxy-url URL',
+      },
+      apiKey: {
+        environment: 'CLIPROXYAPI_API_KEY',
+        prompt: 'CLIProxyAPI client key',
+        flag: '--proxy-api-key-source',
+      },
+    },
+  };
+
   const mockedRegistry = {
     ...original.registry,
+    gateways: {
+      ...original.registry.gateways,
+      cliproxyapi: {
+        ...original.registry.gateways.cliproxyapi,
+        ...cliproxyapi,
+      },
+    },
     providers: {
       ...original.registry.providers,
       sprite: { ...original.registry.providers.sprite, ...sprite },
@@ -142,12 +171,12 @@ vi.mock('#composition/registry', async (importOriginal) => {
   >;
 });
 
-// the fixture catalog with Claude lacking an ACP adapter,
-// standing in for a harness that declares none
+// the fixture catalog with Claude lacking an ACP adapter and proxy support,
+// standing in for a harness that declares neither
 const { acpAdapter: _adapter, ...bareClaude } = registry.harnesses.claude;
 const BARE = {
   ...registry,
-  harnesses: { claude: bareClaude },
+  harnesses: { claude: { ...bareClaude, supportsProxy: false } },
 };
 
 const valid: ProfileCandidate = {
@@ -185,6 +214,7 @@ describe('fn:defaultProfile', () => {
       harnesses: ['claude'],
       network: 'none',
       options: {
+        isProxyEnabled: false,
         minCpus: 2,
         minMemoryGb: 2,
         idleTimeoutMinutes: 5,
@@ -259,6 +289,27 @@ describe('fn:registeredSummary', () => {
 });
 
 describe('fn:validateProfile', () => {
+  it('should identify the proxy flag and environment when no selected harness supports proxy routing', () => {
+    expect(
+      validateProfile({
+        declarations: BARE,
+        candidate: {
+          ...valid,
+          options: { ...valid.options, isProxyEnabled: true },
+        },
+      }),
+    ).toEqual({
+      isValid: false,
+      violations: [
+        {
+          code: 'undeclared-capability',
+          fields: ['harnesses', 'isProxyEnabled'],
+          message: expect.stringMatching(/--proxy.*CLIPROXYAPI_ENABLED/),
+        },
+      ],
+    });
+  });
+
   it('should accept the default profile and an idle timeout of 0', () => {
     expect(violationCodes({})).toEqual([]);
     expect(
@@ -425,11 +476,17 @@ describe('fn:validateProfile', () => {
         harnesses: [],
         options: {
           ...valid.options,
+          isProxyEnabled: true,
           idleTimeoutMinutes: -1,
           holdMaxMinutes: 0,
         },
       }),
-    ).toEqual(['no-harness', 'invalid-option', 'invalid-option']);
+    ).toEqual([
+      'no-harness',
+      'undeclared-capability',
+      'invalid-option',
+      'invalid-option',
+    ]);
   });
 });
 
@@ -461,6 +518,10 @@ describe('fn:parseProfile', () => {
     { field: 'harness list', value: { ...valid, harnesses: 'claude' } },
     { field: 'harness entry', value: { ...valid, harnesses: ['claude', 7] } },
     { field: 'network', value: { ...valid, network: false } },
+    {
+      field: 'proxy option',
+      value: { ...valid, options: { ...valid.options, isProxyEnabled: 'yes' } },
+    },
     {
       field: 'numeric option',
       value: { ...valid, options: { ...valid.options, minCpus: 'many' } },

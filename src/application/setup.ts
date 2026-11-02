@@ -19,6 +19,7 @@ import {
   setupGit,
   setupGithub,
   setupAgent,
+  setupProxy,
   setupSystem,
 } from './setup/sections';
 import { selectSetupSection } from './setup/selection';
@@ -301,6 +302,10 @@ async function applySection(
     git: async (): Promise<AppliedSetupSection> => ({
       section: 'git',
       ...(await setupGit(dependencies, guest, context)),
+    }),
+    proxy: async (): Promise<AppliedSetupSection> => ({
+      section: 'proxy',
+      ...(await setupProxy(dependencies, guest, context)),
     }),
     env: async (): Promise<AppliedSetupSection> => ({
       section: 'env',

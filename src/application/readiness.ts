@@ -1,6 +1,6 @@
 import { harnessDrivers } from '#application/catalog/harnesses';
 import { networkDriver } from '#application/catalog/networks';
-import { finding } from '#domain/findings';
+import { finding, gatedFinding } from '#domain/findings';
 import { CRON_SERVICE_NAME } from '#domain/services';
 
 import { CommandFault } from '#kernel/faults';
@@ -38,7 +38,7 @@ export class ReadinessFault extends CommandFault {
 }
 
 /**
- * evaluates current routing, service, and native harness evidence
+ * evaluates current routing, service, gateway, and native harness evidence
  * @param dependencies the registered drivers
  * @param inspection fresh guest inspection, including native plugin loading
  * @returns readiness and named checks that could not be verified
@@ -97,7 +97,7 @@ export function servedVersionMismatch(
 
 /**
  * builds required service, environment, and enabled-integration checks,
- * interleaving the agent, network and harness findings in reporting order
+ * interleaving the agent, network, gateway and harness findings in reporting order
  * @param dependencies the registered drivers
  * @param inspection fresh guest inspection
  * @returns named readiness findings in reporting order
@@ -108,6 +108,7 @@ function readinessChecks(
 ): ReadinessFinding[] {
   const { profile } = inspection.environment;
   const { native } = inspection;
+  const { isProxyEnabled } = profile.options;
   const drivers = harnessDrivers(dependencies.registry, profile.harnesses);
   const agent = dependencies.registry.agents[profile.agent].readiness({
     services: inspection.services,
@@ -126,6 +127,15 @@ function readinessChecks(
     ),
     ...agent.environment,
     ...network.readiness(inspection.network),
-    ...drivers.flatMap((driver) => driver.readiness(native?.[driver.id])),
+    gatedFinding({
+      isSelected: isProxyEnabled,
+      passed: inspection.hub.reachable,
+      name: 'CLIProxyAPI gateway',
+    }),
+    ...drivers.flatMap((driver) =>
+      driver.readiness(native?.[driver.id], {
+        proxy: isProxyEnabled,
+      }),
+    ),
   ];
 }

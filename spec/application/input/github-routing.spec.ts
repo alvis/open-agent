@@ -48,6 +48,7 @@ describe('fn:resolveInputs GitHub candidate routing', () => {
         sources: {
           processEnv: { GH_TOKEN: 'provided-token' },
           fileEnv: {},
+          profile: {},
         },
       },
     });
@@ -83,7 +84,7 @@ describe('fn:resolveInputs GitHub candidate routing', () => {
       requirementSelection: {
         required: [],
         discoverGithub: true,
-        sources: { processEnv: {}, fileEnv: {} },
+        sources: { processEnv: {}, fileEnv: {}, profile: {} },
       },
     });
 

@@ -8,6 +8,7 @@ import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
 import { prepareGuestSection } from '#application/setup/preparation';
 import { registry } from '#composition/registry';
 import { summarizeProfile } from '#domain/recorded';
+import { OperationContext, withOperation } from '#kernel/operation';
 
 import { environmentOf } from '../../fixtures/environment';
 import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
@@ -66,7 +67,7 @@ describe('fn:prepareGuestSection', () => {
       const prepared = await prepareGuestSection(dependencies, {
         ...target,
         supplied: { options: { agentRelease: release } },
-        sources: { processEnv: {}, fileEnv: {} },
+        sources: { processEnv: {}, fileEnv: {}, profile: {} },
         section: 'agent',
         options: { release, nonInteractive: true },
         mutation: { started: false },
@@ -94,7 +95,7 @@ describe('fn:prepareGuestSection', () => {
     const prepared = await prepareGuestSection(dependencies, {
       ...target,
       supplied: { options: {} },
-      sources: { processEnv: {}, fileEnv: {} },
+      sources: { processEnv: {}, fileEnv: {}, profile: {} },
       section: 'git',
       options: { gitIdentity: false, nonInteractive: true },
       mutation,
@@ -133,7 +134,7 @@ describe('fn:prepareGuestSection', () => {
       ...target,
       workstation,
       supplied: { options: {} },
-      sources: { processEnv: {}, fileEnv: {} },
+      sources: { processEnv: {}, fileEnv: {}, profile: {} },
       section: 'all',
       options: {
         nonInteractive: true,
@@ -163,6 +164,49 @@ describe('fn:prepareGuestSection', () => {
       started: false,
       recorded: undefined,
     });
+    await target.connection.close();
+  });
+
+  it('should report unresolved proxy credentials and the actual unavailable terminal without changing the guest', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-missing-setup-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    const before = JSON.stringify(environmentOf(DISABLED_NETWORK_PROFILE));
+    await sprite.filesystem().writeFile(ENVIRONMENT_PATH, before);
+    const target = workstationOf(sprite);
+    const mutation = { started: false };
+    const operation = new OperationContext({
+      signal: new AbortController().signal,
+    });
+    operation.setPromptBlocker('stdin is not a terminal');
+
+    await expect(
+      withOperation(operation, async () =>
+        prepareGuestSection(dependencies, {
+          ...target,
+          supplied: { options: { isProxyEnabled: true } },
+          sources: { processEnv: {}, fileEnv: {}, profile: {} },
+          section: 'proxy',
+          options: {
+            proxy: true,
+            nonInteractive: true,
+            localCredentials: false,
+          },
+          mutation,
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'INPUT',
+      details: expect.arrayContaining([
+        expect.stringMatching(/CLIProxyAPI/iu),
+        expect.stringContaining('stdin is not a terminal'),
+      ]),
+    });
+    expect({
+      started: mutation.started,
+      recorded: await sprite.filesystem().readFile(ENVIRONMENT_PATH, 'utf8'),
+    }).toEqual({ started: false, recorded: before });
     await target.connection.close();
   });
 
@@ -207,7 +251,7 @@ describe('fn:prepareGuestSection', () => {
       provider,
       workstation,
       supplied: { options: { minCpus: 4 } },
-      sources: { processEnv: {}, fileEnv: {} },
+      sources: { processEnv: {}, fileEnv: {}, profile: {} },
       section: 'tools',
       options: { cpu: 4, nonInteractive: true, yes: true },
       mutation,
@@ -291,7 +335,7 @@ describe('fn:prepareGuestSection', () => {
           supplied: {
             options: resize ? { minCpus: 4 } : { updateDueIntervalDays: 2 },
           },
-          sources: { processEnv: {}, fileEnv: {} },
+          sources: { processEnv: {}, fileEnv: {}, profile: {} },
           section: 'tools',
           options: {
             cpu: resize ? 4 : undefined,

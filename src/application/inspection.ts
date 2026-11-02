@@ -304,6 +304,7 @@ export async function doctorWorkstation(
       skipped,
       probeFailures,
       network: inspection.network,
+      hub: inspection.hub,
       native: inspection.native,
       services: inspection.services.map((service) => ({
         name: service.name,

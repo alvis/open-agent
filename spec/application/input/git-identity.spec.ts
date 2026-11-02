@@ -7,7 +7,7 @@ import { dependencies } from '../../mocks/dependencies';
 
 import type { Interaction } from '#application/ports/interaction';
 
-const sources = { processEnv: {}, fileEnv: {} };
+const sources = { processEnv: {}, fileEnv: {}, profile: {} };
 const identity = {
   authorName: 'Author',
   authorEmail: 'author@example.test',

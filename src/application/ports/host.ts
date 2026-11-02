@@ -89,5 +89,7 @@ export interface HostPorts {
   environment: {
     /** the variables this computer's process was started with */
     variables(): NodeJS.ProcessEnv;
+    /** the home directory of the user running the process */
+    homeDirectory(): string;
   };
 }

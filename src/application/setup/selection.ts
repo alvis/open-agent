@@ -32,6 +32,11 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
     description: 'Configure author and committer names and emails',
   },
   {
+    value: 'proxy',
+    label: 'CLIProxyAPI',
+    description: 'Configure harness routing to your existing hub',
+  },
+  {
     value: 'env',
     label: 'Environment variables',
     description: 'Configure variables for the agent and every shell',

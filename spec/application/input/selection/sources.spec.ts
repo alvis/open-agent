@@ -9,14 +9,27 @@ import type { InputSources } from '#application/input/sources';
 import type { Interaction } from '#application/ports/interaction';
 
 describe('fn:environmentReader', () => {
-  it('should trim comma-separated values from the selected file', () => {
+  it('should trim comma-separated values and parse a false boolean from the selected file', () => {
     const sources = {
-      processEnv: { OPEN_AGENT_HARNESSES: 'claude' },
-      fileEnv: { OPEN_AGENT_HARNESSES: ' claude, , claude ' },
+      processEnv: {
+        OPEN_AGENT_HARNESSES: 'claude',
+        CLIPROXYAPI_ENABLED: 'true',
+      },
+      fileEnv: {
+        OPEN_AGENT_HARNESSES: ' claude, , claude ',
+        CLIPROXYAPI_ENABLED: 'off',
+      },
+      profile: {},
     } satisfies InputSources;
     const read = environmentReader(sources);
 
-    expect(read.list('OPEN_AGENT_HARNESSES')).toEqual(['claude', 'claude']);
+    expect({
+      harnesses: read.list('OPEN_AGENT_HARNESSES'),
+      proxy: read.flag(undefined, 'CLIPROXYAPI_ENABLED'),
+    }).toEqual({
+      harnesses: ['claude', 'claude'],
+      proxy: { value: false, problems: [] },
+    });
   });
 });
 
@@ -46,7 +59,7 @@ describe('fn:activePrompts', () => {
     } satisfies Interaction;
     const prompts = activePrompts({
       options: {},
-      sources: { processEnv: {}, fileEnv: {} },
+      sources: { processEnv: {}, fileEnv: {}, profile: {} },
       interaction,
     });
 

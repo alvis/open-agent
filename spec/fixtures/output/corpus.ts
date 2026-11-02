@@ -1,7 +1,7 @@
 import { PairingSecret } from '#kernel/pairing-secret';
 
 import { environmentOf } from '../environment';
-import { DISABLED_NETWORK_PROFILE } from '../profile';
+import { DISABLED_NETWORK_PROFILE, profileWith } from '../profile';
 
 import type { CommandOptions } from '#application/contracts';
 import type { CreatePreflight } from '#application/create/context';
@@ -12,6 +12,7 @@ import type { CommandResult } from '#application/result';
 import type { GovernorState } from '#domain/observations/governor';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { UpdateStatus } from '#domain/observations/updates';
+import type { WorkstationProfile } from '#domain/profile';
 import type { CommandErrorCode } from '#kernel/faults';
 
 /** one characterized result and the output controls it is rendered with */
@@ -33,10 +34,10 @@ type ListedMachine = MachineSummary & {
 /** credentials registered with the process before any result is rendered */
 export const CORPUS_SECRETS = [
   'v1-golden-nested-secret',
-  'v1-golden-hidden-reason-secret',
+  'v1-golden-hidden-proxy-key',
 ] as const;
 
-const [NESTED_SECRET, REASON_SECRET] = CORPUS_SECRETS;
+const [NESTED_SECRET, PROXY_SECRET] = CORPUS_SECRETS;
 
 const PAIRING = new PairingSecret({ token: 'v1-golden-pairing-token' });
 
@@ -110,6 +111,8 @@ const INSPECTION: GuestInspection = {
   },
   native: {
     claude: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
       pluginListAvailable: false,
       awakeHooksInstalled: false,
       authentication: 'not-configured',
@@ -121,9 +124,22 @@ const INSPECTION: GuestInspection = {
       },
     },
   },
+  hub: {
+    skipped: true,
+    reachable: false,
+    reason: 'CLIProxyAPI is disabled',
+  },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
   governor: { recorded: true, state: RECORDED_GOVERNOR },
+};
+
+const PROXY_PROFILE: WorkstationProfile = profileWith({ cliproxyapi: true });
+
+const REACHABLE_HUB: GuestInspection['hub'] = {
+  skipped: false,
+  reachable: true,
+  status: 200,
 };
 
 const UPDATES: UpdateStatus = {
@@ -196,6 +212,7 @@ export const CORPUS: readonly CorpusCase[] = [
       profile: DISABLED_NETWORK_PROFILE,
       readiness: PASSING_READINESS,
       network: INSPECTION.network,
+      hub: INSPECTION.hub,
       services: [{ name: 't3-code', state: 'running' }, { name: 'cron' }],
       native: INSPECTION.native,
       pairing: {
@@ -207,7 +224,7 @@ export const CORPUS: readonly CorpusCase[] = [
     retainedCredential: { storage: 'keychain' },
   }),
   corpusCase(
-    'create-success-protected-file',
+    'create-success-proxy',
     {
       command: 'create',
       ok: true,
@@ -220,9 +237,10 @@ export const CORPUS: readonly CorpusCase[] = [
         },
         machine: DETAILED_MACHINE,
         preflight: PREFLIGHT,
-        profile: DISABLED_NETWORK_PROFILE,
+        profile: PROXY_PROFILE,
         readiness: PASSING_READINESS,
         network: INSPECTION.network,
+        hub: REACHABLE_HUB,
         services: [{ name: 't3-code', state: 'running' }],
         native: INSPECTION.native,
         pairing: { status: 'not requested' },
@@ -239,6 +257,7 @@ export const CORPUS: readonly CorpusCase[] = [
       profile: DISABLED_NETWORK_PROFILE,
       readiness: PASSING_READINESS,
       network: INSPECTION.network,
+      hub: INSPECTION.hub,
       services: [],
       native: INSPECTION.native,
       pairing: {
@@ -331,6 +350,7 @@ export const CORPUS: readonly CorpusCase[] = [
       },
       plugins: { claude: 'applied' },
       network: { status: 'disabled', readiness: 'skipped' },
+      proxy: { status: 'configured', baseUrl: 'https://hub.example.test/' },
       components: { installed: 6, skipped: 1, failed: 1 },
       tools: 'updated',
     },
@@ -342,6 +362,7 @@ export const CORPUS: readonly CorpusCase[] = [
       section: 'all',
       machine: MACHINE,
       network: { status: 'disabled', readiness: 'skipped' },
+      proxy: { status: 'disabled' },
       tools: 'unchanged',
     },
   }),
@@ -408,6 +429,20 @@ export const CORPUS: readonly CorpusCase[] = [
     command: 'setup',
     ok: true,
     data: { section: 'git', machine: MACHINE, gitIdentity: 'preserved' },
+  }),
+  corpusCase('setup-proxy-configured', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'proxy',
+      machine: MACHINE,
+      proxy: { status: 'configured', baseUrl: 'https://hub.example.test/' },
+    },
+  }),
+  corpusCase('setup-proxy-disabled', {
+    command: 'setup',
+    ok: true,
+    data: { section: 'proxy', machine: MACHINE, proxy: { status: 'disabled' } },
   }),
   corpusCase('setup-env-configured', {
     command: 'setup',
@@ -620,7 +655,8 @@ export const CORPUS: readonly CorpusCase[] = [
       inspection: {
         ...INSPECTION,
         services: [{ name: 't3-code', status: 'running', needs: [] }],
-        environment: environmentOf(DISABLED_NETWORK_PROFILE, {
+        hub: REACHABLE_HUB,
+        environment: environmentOf(PROXY_PROFILE, {
           tools: INSTALLED_TOOLS,
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
@@ -718,7 +754,7 @@ export const CORPUS: readonly CorpusCase[] = [
                 manager: 'brew',
                 required: false,
                 outcome: 'failed',
-                reason: REASON_SECRET,
+                reason: PROXY_SECRET,
               },
             ],
           },
@@ -819,7 +855,8 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       machine: DETAILED_MACHINE,
       currentReadiness: currentReadiness({
-        environment: environmentOf(DISABLED_NETWORK_PROFILE, {
+        hub: REACHABLE_HUB,
+        environment: environmentOf(PROXY_PROFILE, {
           tools: INSTALLED_TOOLS,
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
@@ -936,7 +973,7 @@ export const CORPUS: readonly CorpusCase[] = [
       },
       inspection: {
         ...INSPECTION,
-        probeFailures: [{ probe: 'network', reason: 'no answer' }],
+        probeFailures: [{ probe: 'proxy', reason: 'no answer' }],
         services: [
           { name: 'a', needs: [] },
           sdkObservation<GuestInspection['services'][number]>(undefined),
@@ -990,6 +1027,7 @@ function currentReadiness(
   return {
     ...PASSING_READINESS,
     network: INSPECTION.network,
+    hub: INSPECTION.hub,
     native: INSPECTION.native,
     services: [],
     environment: INSPECTION.environment,

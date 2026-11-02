@@ -72,6 +72,7 @@ export function createResult(
         skipped: observed.network.skipped,
         reason: observed.network.reason,
       },
+      hub: observed.hub,
       services: observed.services.map((service) => ({
         name: service.name,
         state: service.status,

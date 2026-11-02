@@ -21,7 +21,7 @@ describe('input source resolution', () => {
       ...defaultProfile(defaults),
       harnesses: ['claude'],
     };
-    const sources = { processEnv: {}, fileEnv: {} };
+    const sources = { processEnv: {}, fileEnv: {}, profile: {} };
     const observed = await driveInk(async (interaction) => {
       const setup = await resolveSetupSelection(dependencies, {
         options: { yes: true },
@@ -49,7 +49,10 @@ describe('input source resolution', () => {
       network: 'none',
       harnesses: recorded.harnesses,
     });
-    expect(observed.result.create).toMatchObject({ network: 'none' });
+    expect(observed.result.create).toMatchObject({
+      network: 'none',
+      options: { isProxyEnabled: false },
+    });
   });
 
   it('should accept the default create selection through Enter at every prompt', async () => {
@@ -57,18 +60,19 @@ describe('input source resolution', () => {
       async (interaction) =>
         resolveCreateSelection(dependencies, {
           options: {},
-          sources: { processEnv: {}, fileEnv: {} },
+          sources: { processEnv: {}, fileEnv: {}, profile: {} },
           interaction,
         }),
       [
         { waitFor: 'Minimum CPUs', input: '\r' },
         { waitFor: 'Minimum memory (GB)', input: '\r' },
         { waitFor: 'Release channel', input: '\r' },
+        { waitFor: 'Route harnesses through CLIProxyAPI?', input: '\r' },
         { waitFor: 'Suspend after idle', input: '\r' },
       ],
     );
 
-    expect(observed.matchedSteps, observed.output).toBe(4);
+    expect(observed.matchedSteps, observed.output).toBe(5);
     expect(observed.result.candidate).toMatchObject({
       provider: 'sprite',
       harnesses: ['claude'],
@@ -77,6 +81,7 @@ describe('input source resolution', () => {
         minCpus: 2,
         minMemoryGb: 2,
         agentRelease: 'stable',
+        isProxyEnabled: false,
         idleTimeoutMinutes: 5,
       },
     });
@@ -89,7 +94,7 @@ describe('input source resolution', () => {
         gitName: 'Ada',
         gitEmail: 'ada@example.test',
       },
-      sources: { processEnv: {}, fileEnv: {} },
+      sources: { processEnv: {}, fileEnv: {}, profile: {} },
     };
     const observed = await driveInk(
       async (interaction) => {
@@ -159,7 +164,7 @@ describe('input source resolution', () => {
         gitName: 'Ada',
         gitEmail: 'ada@example.test',
       },
-      sources: { processEnv: {}, fileEnv: {} },
+      sources: { processEnv: {}, fileEnv: {}, profile: {} },
     });
 
     expect(result).toEqual({

@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import { createPreflightSummary } from '#application/create/reminders';
 
-import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
+import { profileWith } from '../../fixtures/profile';
 
 import { dependencies } from '../../mocks/dependencies';
 
 import type { ResolvedInputs } from '#application/input/types';
 
+const disabled = { cliproxyapi: false };
+
 const baseInput: ResolvedInputs = {
-  profile: DISABLED_NETWORK_PROFILE,
+  profile: profileWith(disabled),
   runtimeEnv: {},
   sources: {},
   missing: [],
@@ -17,7 +19,7 @@ const baseInput: ResolvedInputs = {
 
 describe('fn:createPreflightSummary', () => {
   it('should describe a longer maintenance interval', () => {
-    const profile = DISABLED_NETWORK_PROFILE;
+    const profile = profileWith(disabled);
     const summary = createPreflightSummary(dependencies, {
       ...baseInput,
       profile: {
@@ -33,8 +35,9 @@ describe('fn:createPreflightSummary', () => {
 
   it('should provide applicable readiness checks and reminders without exposing input secrets', () => {
     const native = createPreflightSummary(dependencies, baseInput);
-    const supplied = createPreflightSummary(dependencies, {
+    const enabled = createPreflightSummary(dependencies, {
       ...baseInput,
+      profile: profileWith({ cliproxyapi: true }),
       githubToken: 'github-secret',
       gitIdentity: {
         authorName: 'Author',
@@ -56,16 +59,16 @@ describe('fn:createPreflightSummary', () => {
         expect.stringMatching(/Git identity/),
       ],
     });
-    expect(supplied).toEqual({
+    expect(enabled).toEqual({
       checks: [
         expect.stringMatching(/Required inputs/),
         expect.stringMatching(/Sprite prerequisites/),
       ],
       reminders: [
         expect.stringMatching(/hourly.*a day has passed/),
-        expect.stringMatching(/native sign-in/),
+        expect.stringMatching(/CLIProxyAPI authentication/),
       ],
     });
-    expect(JSON.stringify(supplied)).not.toMatch(/github-secret/);
+    expect(JSON.stringify(enabled)).not.toMatch(/github-secret/);
   });
 });

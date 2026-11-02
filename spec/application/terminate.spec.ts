@@ -53,7 +53,10 @@ async function createTerminationBoundary(root: string): Promise<{
     deleteSprite: vi.fn<SpritesClient['deleteSprite']>(async () => undefined),
   } satisfies Partial<SpritesClient>);
   const envPath = join(root, 'selected.env');
-  await writeFile(envPath, ['OPEN_AGENT_NETWORK=none', ''].join('\n'));
+  await writeFile(
+    envPath,
+    ['OPEN_AGENT_NETWORK=none', 'CLIPROXYAPI_ENABLED=false', ''].join('\n'),
+  );
   const request = {
     command: 'terminate',
     machine: sprite.name,

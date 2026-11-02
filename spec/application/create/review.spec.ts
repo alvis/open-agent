@@ -79,6 +79,7 @@ describe('fn:reviewCreatePlan', () => {
       options: {
         ...DISABLED_NETWORK_PROFILE.options,
         idleTimeoutMinutes: 0,
+        isProxyEnabled: true,
       },
     };
 
@@ -88,6 +89,7 @@ describe('fn:reviewCreatePlan', () => {
         input: {
           ...input,
           profile,
+          proxyUrl: 'https://hub.example.test',
           githubToken: 'github-token',
           gitIdentity: {
             authorName: 'Author',

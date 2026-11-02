@@ -1,8 +1,3 @@
-import { awakeHookCommand } from '#application/catalog/awake';
-import {
-  configureHarnesses,
-  harnessDrivers,
-} from '#application/catalog/harnesses';
 import { markInstallationReady } from '#application/installation/readiness';
 import { traceStage } from '#kernel/operation';
 
@@ -13,6 +8,7 @@ import {
   setupEnvironment,
   setupGit,
   setupGithub,
+  setupProxy,
   setupAgent,
   setupSystem,
   stopService,
@@ -28,7 +24,7 @@ import type { SetupContext } from './context';
 /**
  * reconciles every managed guest section: the setup plan installs the tools,
  * then the guest is named after its workstation and the network, accounts,
- * harnesses, runtime environment and plugins are configured and the setup
+ * gateway, runtime environment and plugins are configured and the setup
  * file is run before the plan
  * installs and starts the services and jobs, the
  * agent is verified to serve and exposed, and only then is the installation
@@ -104,10 +100,7 @@ async function configureSections(
     options.gitIdentity === false
       ? undefined
       : await setupGit(dependencies, guest, context);
-  await configureHarnesses(guest, {
-    drivers: harnessDrivers(dependencies.registry, context.profile.harnesses),
-    awakeHook: awakeHookCommand(dependencies.guest.facts),
-  });
+  const proxy = await setupProxy(dependencies, guest, context);
   const environment = options.envFile
     ? await setupEnvironment(dependencies, guest, context)
     : undefined;
@@ -123,6 +116,7 @@ async function configureSections(
     ...network,
     ...github,
     ...git,
+    ...proxy,
     ...environment,
     ...plugins,
     ...system,

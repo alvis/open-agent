@@ -37,6 +37,7 @@ const SELECTABLE_OPTIONS: readonly SelectableOption[] = [
   'agentRelease',
   'minCpus',
   'minMemoryGb',
+  'isProxyEnabled',
   'idleTimeoutMinutes',
   'holdMaxMinutes',
   'updateDueIntervalDays',
@@ -108,11 +109,16 @@ export function readSelection(
 ): Resolved<SuppliedSelection> {
   const { options, sources } = context;
   const read = environmentReader(sources);
-  const inputs = selectionInputs();
+  const inputs = selectionInputs(dependencies.registry);
   const owned = (field: SelectionField): string | undefined =>
     fields.includes(field) ? inputs[field].environment : undefined;
+  const unread = { value: undefined, problems: [] };
+  const proxyEnvironment = owned('isProxyEnabled');
   const harnessEnvironment = owned('harnesses');
   const networkEnvironment = owned('network');
+  const proxy = proxyEnvironment
+    ? read.flag(options.proxy, proxyEnvironment)
+    : unread;
   const numbers = readNumberOptions(options, read, owned);
 
   return {
@@ -136,10 +142,11 @@ export function readSelection(
           flag: options.release,
           environment: owned('agentRelease'),
         }),
+        isProxyEnabled: proxy.value,
         ...numbers.value,
       },
     },
-    problems: numbers.problems,
+    problems: [...proxy.problems, ...numbers.problems],
   };
 }
 

@@ -2,6 +2,7 @@ import { projectEnvironment } from './environment';
 import { each, projectFields, same } from './fields';
 import {
   projectGovernor,
+  projectHub,
   projectNative,
   projectNetworkStatus,
   projectServiceSummary,
@@ -15,6 +16,7 @@ import type { CurrentReadiness, DoctorData } from '#application/data';
 import type { EnvironmentOutput } from './environment';
 import type {
   GovernorOutput,
+  HubOutput,
   NativeOutput,
   NetworkOutput,
   ServiceSummaryOutput,
@@ -30,6 +32,7 @@ export interface CurrentReadinessOutput {
   skipped: readonly string[];
   probeFailures: ProbeFailureOutput[];
   network: NetworkOutput;
+  hub: HubOutput;
   native?: NativeOutput;
   services: ServiceSummaryOutput[];
   environment: EnvironmentOutput;
@@ -57,6 +60,7 @@ function projectCurrentReadiness(
     skipped: same,
     probeFailures: each(projectProbeFailure),
     network: projectNetworkStatus,
+    hub: projectHub,
     native: projectNative,
     services: each(projectServiceSummary),
     environment: projectEnvironment,

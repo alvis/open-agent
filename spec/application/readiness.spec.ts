@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { assessReadiness } from '#application/readiness';
 
 import { environmentOf } from '../fixtures/environment';
-import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
+import { profileWith } from '../fixtures/profile';
 
 import { dependencies } from '../mocks/dependencies';
 
@@ -15,7 +15,7 @@ import type { GuestServiceState } from '#domain/services';
  * builds an inspection of a workstation on a provider with the given services
  * @param provider the selected provider
  * @param services the services the provider reported
- * @returns a complete inspection without a network
+ * @returns a complete inspection without a network or gateway
  */
 function inspectionOf(
   provider: ProviderId,
@@ -24,8 +24,9 @@ function inspectionOf(
   return {
     services,
     network: { online: false, skipped: true },
+    hub: { reachable: false, skipped: true },
     environment: environmentOf({
-      ...DISABLED_NETWORK_PROFILE,
+      ...profileWith({ cliproxyapi: false }),
       provider,
     }),
     probeFailures: [],

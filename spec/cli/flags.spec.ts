@@ -60,6 +60,7 @@ describe('cmd:setup', () => {
     ['git-identity', 'gitIdentity'],
     ['plugins', 'plugins'],
     ['claude-plugins', 'claudePlugins'],
+    ['proxy', 'proxy'],
   ] as const)(
     'should preserve omitted, positive and negative values for --%s',
     async (flag, property) => {
@@ -126,20 +127,32 @@ describe('cmd:setup', () => {
           },
         },
       ],
-      options: [expect.objectContaining({ network: undefined })],
+      options: [
+        expect.objectContaining({
+          network: undefined,
+          proxy: undefined,
+        }),
+      ],
       diagnostics: [],
       exitCode: 0,
     });
   });
 
-  it('should parse a network choice with a setup section', async () => {
-    const parsed = await parseFlags(['--network', 'none', '--section', 'all']);
+  it('should preserve explicit false values for independent integration switches', async () => {
+    const parsed = await parseFlags([
+      '--network',
+      'none',
+      '--proxy',
+      '--section',
+      'all',
+    ]);
 
     expect(parsed).toEqual(
       expect.objectContaining({
         options: [
           expect.objectContaining({
             network: 'none',
+            proxy: true,
             section: 'all',
           }),
         ],

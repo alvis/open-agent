@@ -16,7 +16,7 @@ export function driverCredentialNames(
 
 /**
  * lists the variables the given harnesses own: those their agent sets when
- * spawning them
+ * spawning them and the model-gateway variables they read
  * @param declarations the data every registered driver declares
  * @param ids harnesses whose variables are listed
  * @returns environment variable names a runtime environment must not override
@@ -25,7 +25,10 @@ export function harnessEnvironmentNames(
   declarations: ProductDeclarations,
   ids: readonly HarnessId[],
 ): string[] {
-  return ids.flatMap((id) =>
-    Object.keys(declarations.harnesses[id].spawnEnvironment),
-  );
+  return ids.flatMap((id) => {
+    const { spawnEnvironment, reservedEnvironment } =
+      declarations.harnesses[id];
+
+    return [...Object.keys(spawnEnvironment), ...reservedEnvironment];
+  });
 }

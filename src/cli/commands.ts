@@ -44,6 +44,7 @@ type BooleanKeys<T> = {
 }[keyof T];
 type OptionalBooleanKey =
   | 'withPairCode'
+  | 'proxy'
   | 'github'
   | 'gitIdentity'
   | 'plugins'

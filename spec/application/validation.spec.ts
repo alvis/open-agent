@@ -155,6 +155,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
       validateSetupIntegrationOptions(
         {
           network: 'none',
+          proxy: false,
           harness: ['claude'],
           idleMinutes: 0,
         },
@@ -166,7 +167,13 @@ describe('fn:validateSetupIntegrationOptions', () => {
       validateSetupIntegrationOptions({ network: 'none' }, 'network'),
     ).not.toThrow();
     expect(() =>
-      validateSetupIntegrationOptions({ network: 'none' }, 'git'),
+      validateSetupIntegrationOptions({ proxy: false }, 'proxy'),
+    ).not.toThrow();
+    expect(() =>
+      validateSetupIntegrationOptions({ network: 'none' }, 'proxy'),
+    ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+    expect(() =>
+      validateSetupIntegrationOptions({ proxy: false }, 'network'),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
       validateSetupIntegrationOptions({ idleMinutes: 30 }, 'network'),
@@ -196,6 +203,9 @@ describe('fn:validateSetupIntegrationOptions', () => {
     expect(() => validateSetupIntegrationOptions(options, 'git')).toThrow(
       expect.objectContaining({ code: 'USAGE' }),
     );
+    expect(() =>
+      validateSetupIntegrationOptions({ updateDueDays: 3 }, 'proxy'),
+    ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
       validateSetupIntegrationOptions({ updateDueDays: 3 }, 'network'),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));

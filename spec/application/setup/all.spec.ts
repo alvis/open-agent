@@ -17,7 +17,7 @@ import { summarizeProfile } from '#domain/recorded';
 import { agentService, CRON_SERVICE_NAME } from '#domain/services';
 import { OPEN_AGENT_VERSION } from '#kernel/version';
 
-import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
+import { profileWith } from '../../fixtures/profile';
 import { dependencies, dependenciesWith } from '../../mocks/dependencies';
 import {
   createFilesystemSprite,
@@ -59,7 +59,10 @@ describe('fn:setupAll', () => {
       });
       const services = holdServiceDefinitions(sprite);
       vi.spyOn(sprite, 'updateURLSettings').mockResolvedValue(undefined);
-      const profile = DISABLED_NETWORK_PROFILE;
+      const integrations = {
+        cliproxyapi: false,
+      };
+      const profile = profileWith(integrations);
       Object.assign(sprite, {
         labels: mergeMetadataLabels([MANAGED_LABEL, SCHEMA_LABEL], {
           setup: 'ready',
@@ -154,6 +157,8 @@ describe('fn:setupAll', () => {
             },
             native: {
               claude: {
+                gatewayConfigured: false,
+                modelDiscoveryEnabled: false,
                 pluginListAvailable: false,
                 awakeHooksInstalled: true,
                 authentication: 'not-configured' as const,
@@ -161,6 +166,7 @@ describe('fn:setupAll', () => {
               agentEnvironment: { ok: true as const, serverVersion: '' },
               harnesses: {},
             },
+            hub: { skipped: true, reachable: false },
             environment: await dependencies.guest.environment.read(
               await context.connection.guest(),
             ),
@@ -223,7 +229,9 @@ describe('fn:setupAll', () => {
     const exposure = vi
       .spyOn(sprite, 'updateURLSettings')
       .mockResolvedValue(undefined);
-    const profile = DISABLED_NETWORK_PROFILE;
+    const profile = profileWith({
+      cliproxyapi: false,
+    });
     const context: SetupContext = {
       ...workstationOf(sprite),
       options: {
@@ -278,7 +286,7 @@ describe('fn:setupAll', () => {
     await context.connection.close();
   });
 
-  it('should name the guest and apply native harness settings before rejecting a restricted env file and before services or exposure', async () => {
+  it('should name the guest and apply native proxy settings before rejecting a restricted env file and before services or exposure', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-setup-order-'),
     );
@@ -290,6 +298,9 @@ describe('fn:setupAll', () => {
     });
     const services = vi.spyOn(sprite, 'listServices');
     const exposure = vi.spyOn(sprite, 'updateURLSettings');
+    const integrations = {
+      cliproxyapi: true,
+    };
     const context: SetupContext = {
       ...workstationOf(sprite),
       options: {
@@ -301,12 +312,14 @@ describe('fn:setupAll', () => {
         nonInteractive: true,
       },
       input: {
-        profile: DISABLED_NETWORK_PROFILE,
+        profile: profileWith(integrations),
         runtimeEnv: {},
         sources: {},
         missing: [],
+        proxyUrl: 'https://proxy.example/v1',
+        proxyApiKey: 'client-key',
       },
-      profile: DISABLED_NETWORK_PROFILE,
+      profile: profileWith(integrations),
       persistsProfile: false,
       isReleaseChanged: false,
       mutation: { started: false },

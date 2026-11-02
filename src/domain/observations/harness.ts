@@ -16,12 +16,16 @@ export type HarnessPluginEvidence = HarnessCommandEvidence;
 
 /** non-secret native harness configuration and authentication evidence */
 export interface NativeHarnessInspection {
+  /** the managed CLIProxyAPI gateway is configured */
+  gatewayConfigured: boolean;
+  /** native model discovery through the gateway is enabled */
+  modelDiscoveryEnabled: boolean;
   /** the native plugin inventory command succeeded */
   pluginListAvailable: boolean;
   /** every exact idle-governor awake command the harness driver owns is installed in its hooks */
   awakeHooksInstalled: boolean;
   /** how the harness authenticates */
-  authentication: 'native' | 'not-configured';
+  authentication: 'managed-proxy' | 'native' | 'not-configured';
 }
 
 /** current native state of one harness, observed without a model turn */

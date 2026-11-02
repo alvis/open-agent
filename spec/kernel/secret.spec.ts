@@ -20,7 +20,7 @@ describe('host secrets', () => {
   });
 
   it('should deliver embedded guest contents without printing them', () => {
-    const contents = 'token=kernel-embedded-value';
+    const contents = 'gateway_key=kernel-embedded-value';
     const secret = Secret.embedding(contents);
 
     expect(revealSecret(secret)).toBe(contents);

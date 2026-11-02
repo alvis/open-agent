@@ -107,6 +107,7 @@ const PAIRED_BOOLEAN_FLAGS = [
   'git-identity',
   'plugins',
   ...harnessPluginToggleNames(),
+  'proxy',
 ];
 
 /**

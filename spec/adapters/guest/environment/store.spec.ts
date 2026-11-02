@@ -48,7 +48,7 @@ describe('environment access on a guest', () => {
     await expect(access.find(guest)).resolves.toBeUndefined();
   });
 
-  it('should record profile changes', async () => {
+  it('should record profile changes and reject stale integration choices', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-environment-'),
     );
@@ -68,6 +68,13 @@ describe('environment access on a guest', () => {
       profile: updated,
       schedule: { dueDays: 14 },
     });
+    await expect(access.assertProfile(guest, updated)).resolves.toBeUndefined();
+    await expect(
+      access.assertProfile(guest, {
+        ...updated,
+        options: { ...updated.options, isProxyEnabled: true },
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
   it('should return the updater record when it exists', async () => {

@@ -1,3 +1,9 @@
+import { awakeHookCommand } from '#application/catalog/awake';
+import {
+  configureHarnesses,
+  harnessDrivers,
+  proxyRoute,
+} from '#application/catalog/harnesses';
 import { pairAgent } from '#application/catalog/services';
 import { resolveInputs } from '#application/input';
 import { readSetupFile } from '#application/input/sources';
@@ -14,6 +20,7 @@ import type {
   AgentSetupData,
   GithubSetupData,
   GitSetupData,
+  ProxySetupData,
   EnvironmentSetupData,
   SystemSetupData,
 } from '#application/data';
@@ -182,6 +189,43 @@ export async function setupGit(
   await dependencies.guest.native.configureGit(guest, input.gitIdentity);
 
   return { gitIdentity: 'configured' };
+}
+
+/**
+ * configures each selected harness against the selected CLIProxyAPI gateway
+ * @param dependencies the registered drivers, the guest mechanics
+ * @param guest guest channel of the managed workstation
+ * @param context gateway choices, prompts, and redaction values
+ * @returns non-secret gateway summary
+ */
+export async function setupProxy(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'guest'>,
+  guest: GuestChannel,
+  context: SetupContext,
+): Promise<ProxySetupData> {
+  const { input, profile, mutation } = context;
+  const { isProxyEnabled } = profile.options;
+  await dependencies.guest.environment.assertProfile(guest, profile);
+  mutation.started = true;
+  const drivers = harnessDrivers(dependencies.registry, profile.harnesses);
+  await configureHarnesses(guest, {
+    drivers,
+    proxy: proxyRoute({
+      enabled: isProxyEnabled,
+      gateway: dependencies.registry.gateways.cliproxyapi,
+      url: input.proxyUrl,
+      apiKey: input.proxyApiKey,
+      drivers,
+    }),
+    hub: dependencies.guest.hub,
+    awakeHook: awakeHookCommand(dependencies.guest.facts),
+  });
+
+  return {
+    proxy: isProxyEnabled
+      ? { status: 'configured', baseUrl: input.proxyUrl }
+      : { status: 'disabled' },
+  };
 }
 
 /**

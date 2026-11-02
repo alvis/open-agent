@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -13,7 +13,7 @@ import {
 } from '#application/input';
 import { resolveProviderCredential } from '#application/input/provider-credential';
 
-import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
+import { DISABLED_NETWORK_PROFILE, profileWith } from '../fixtures/profile';
 import { dependencies } from '../mocks/dependencies';
 
 import type { Interaction } from '#application/ports/interaction';
@@ -118,6 +118,78 @@ describe('fn:requireValidSuppliedSelection', () => {
 });
 
 describe('fn:resolveInputs', () => {
+  it('should aggregate all missing selection inputs, each naming every source, before account discovery', async () => {
+    const input = await resolveInputs(dependencies, {
+      options: {
+        nonInteractive: true,
+        localCredentials: false,
+        github: false,
+        gitIdentity: false,
+      },
+      requirementSelection: {
+        sources: { processEnv: {}, fileEnv: {}, profile: {} },
+        required: [
+          'name',
+          'providerToken',
+          'proxyUrl',
+          'proxyApiKey',
+          'gitIdentity',
+        ],
+        profile: profileWith({ cliproxyapi: true }),
+      },
+    });
+    const defaults = await resolveInputs(dependencies, {
+      options: {
+        nonInteractive: true,
+        localCredentials: false,
+        github: false,
+        gitIdentity: false,
+      },
+      requirementSelection: {
+        sources: { processEnv: {}, fileEnv: {}, profile: {} },
+      },
+    });
+
+    expect([input.missing, defaults.missing]).toEqual([
+      [
+        expect.stringContaining('--name'),
+        expect.stringContaining(
+          'Set CLIPROXYAPI_BASE_URL or pass --credential-file FILE containing CLIPROXYAPI_BASE_URL; use --proxy-url URL;',
+        ),
+        expect.stringContaining(
+          'Set CLIPROXYAPI_API_KEY or pass --credential-file FILE containing CLIPROXYAPI_API_KEY;',
+        ),
+      ],
+      [expect.stringContaining('--name')],
+    ]);
+  });
+
+  it('should report an invalid proxy URL without including embedded credentials', async () => {
+    const input = await resolveInputs(dependencies, {
+      options: {
+        nonInteractive: true,
+        localCredentials: false,
+        github: false,
+        gitIdentity: false,
+        proxyUrl:
+          'https://sensitive-user:sensitive-password@proxy.example.test',
+      },
+      requirementSelection: {
+        sources: {
+          processEnv: {},
+          fileEnv: { CLIPROXYAPI_API_KEY: 'client-key' },
+          profile: {},
+        },
+        required: ['proxyUrl', 'proxyApiKey'],
+      },
+    });
+
+    expect(input.missing).toEqual([expect.stringContaining('CLIProxyAPI')]);
+    expect(JSON.stringify(input.missing)).not.toMatch(
+      /sensitive-user|sensitive-password/,
+    );
+  });
+
   it('should resolve independent author and committer identity without local credential discovery', async () => {
     const input = await resolveInputs(dependencies, {
       options: {
@@ -139,6 +211,7 @@ describe('fn:resolveInputs', () => {
             GIT_COMMITTER_NAME: 'File Committer',
             GIT_COMMITTER_EMAIL: 'file-committer@example.test',
           },
+          profile: {},
         },
         required: ['gitIdentity'],
       },
@@ -178,7 +251,7 @@ describe('fn:resolveInputs', () => {
       },
       interaction,
       requirementSelection: {
-        sources: { processEnv: {}, fileEnv: {} },
+        sources: { processEnv: {}, fileEnv: {}, profile: {} },
         required: ['gitIdentity'],
       },
     });
@@ -208,7 +281,7 @@ describe('fn:resolveInputs', () => {
       const before = await resolveInputs(dependencies, {
         options,
         requirementSelection: {
-          sources: { processEnv: {}, fileEnv: {} },
+          sources: { processEnv: {}, fileEnv: {}, profile: {} },
           required: ['providerToken', 'gitIdentity'],
         },
       });
@@ -223,14 +296,14 @@ describe('fn:resolveInputs', () => {
           gitEmail: 'known@example.test',
         },
         requirementSelection: {
-          sources: { processEnv: {}, fileEnv: {} },
+          sources: { processEnv: {}, fileEnv: {}, profile: {} },
           required: ['providerToken', 'gitIdentity'],
         },
       });
       const missingNameAndIdentity = await resolveInputs(dependencies, {
         options,
         requirementSelection: {
-          sources: { processEnv: {}, fileEnv: {} },
+          sources: { processEnv: {}, fileEnv: {}, profile: {} },
           required: ['name', 'gitIdentity'],
         },
       });
@@ -252,13 +325,20 @@ describe('fn:resolveInputs', () => {
   });
 
   it('should derive create preflight requirements from the selected integrations', async () => {
-    vi.stubEnv('SPRITES_TOKEN', undefined);
+    for (const name of [
+      'SPRITES_TOKEN',
+      'CLIPROXYAPI_BASE_URL',
+      'CLIPROXYAPI_API_KEY',
+    ]) {
+      vi.stubEnv(name, undefined);
+    }
     const directory = await mkdtemp(join(tmpdir(), 'open-agent-create-input-'));
     vi.stubEnv('HOME', directory);
 
     try {
       const selected = await resolveCreateInputs(dependencies, {
         network: 'none',
+        proxy: true,
         nonInteractive: true,
         localCredentials: false,
         github: false,
@@ -267,10 +347,16 @@ describe('fn:resolveInputs', () => {
 
       expect({
         network: selected.profile.network,
+        options: selected.profile.options,
         missing: selected.missing,
       }).toEqual({
         network: 'none',
-        missing: [expect.stringContaining('--name')],
+        options: expect.objectContaining({ isProxyEnabled: true }),
+        missing: [
+          expect.stringContaining('--name'),
+          expect.stringContaining('CLIPROXYAPI_BASE_URL'),
+          expect.stringContaining('CLIPROXYAPI_API_KEY'),
+        ],
       });
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -285,6 +371,13 @@ describe('fn:resolveInputs', () => {
     vi.stubEnv('HOME', directory);
     const path = join(directory, 'chosen.env');
     const secretPath = join(directory, 'secret');
+    await mkdir(join(directory, '.config', 'open-agent'), {
+      recursive: true,
+    });
+    await writeFile(
+      join(directory, '.config', 'open-agent', 'profile.json'),
+      'malformed unrelated profile',
+    );
     await writeFile(
       path,
       ['SPRITES_TOKEN=file-provider-secret', 'GH_TOKEN=unused', ''].join('\n'),
@@ -329,7 +422,7 @@ describe('fn:resolveInputs', () => {
     const absent = await resolveInputs(dependencies, {
       options,
       requirementSelection: {
-        sources: { processEnv: {}, fileEnv: {} },
+        sources: { processEnv: {}, fileEnv: {}, profile: {} },
         required: ['githubToken'],
       },
     });
@@ -339,6 +432,7 @@ describe('fn:resolveInputs', () => {
         sources: {
           processEnv: { GH_TOKEN: 'unvalidated-account-candidate' },
           fileEnv: {},
+          profile: {},
         },
         required: ['name', 'gitIdentity'],
       },

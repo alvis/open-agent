@@ -4,8 +4,9 @@
 # link the account controls. It refuses a symbolic link, a component another
 # account owns or another account may write, at and below the home. `write`
 # replaces the file with standard input atomically, private to the account;
-# `mkdir` creates the missing directories, private to the account
-# arguments: mkdir|write, the home, then the path inside it
+# `mkdir` creates the missing directories, private to the account; `remove`
+# deletes a regular file the account owns, or nothing when it is absent
+# arguments: mkdir|write|remove, the home, then the path inside it
 
 umask 077
 oa_operation=$1
@@ -82,6 +83,11 @@ case $oa_operation in
     oa_walk "$oa_parent" || exit 1
     oa_replaceable "$oa_path" || oa_refuse "$oa_path is a link or not the account's own file"
     mv -f "$oa_temporary" "$oa_path"
+    ;;
+  remove)
+    oa_walk "$oa_parent" || exit 1
+    oa_replaceable "$oa_path" || oa_refuse "$oa_path is a link or not the account's own file"
+    rm -f "$oa_path"
     ;;
   *)
     oa_refuse "unknown operation $oa_operation"

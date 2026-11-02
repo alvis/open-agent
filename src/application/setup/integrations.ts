@@ -13,8 +13,8 @@ export interface PersistSetupProfileParams {
   guest: GuestChannel;
   /** validated selection this run applies */
   profile: WorkstationProfile;
-  /** mutation tracking */
-  context: Pick<SetupContext, 'mutation'>;
+  /** recorded selection and mutation tracking */
+  context: Pick<SetupContext, 'mutation'> & { expected: WorkstationProfile };
 }
 
 /**
@@ -30,7 +30,8 @@ export async function persistSetupProfile(
   params: PersistSetupProfileParams,
 ): Promise<void> {
   const { guest, profile, context } = params;
-  const { mutation } = context;
+  const { mutation, expected } = context;
+  await dependencies.guest.environment.assertProfile(guest, expected);
   mutation.started = true;
   await dependencies.guest.environment.writeProfile(guest, profile);
 }
@@ -93,4 +94,25 @@ function isMachineChanged(
     profile.options.minCpus !== recorded.options.minCpus ||
     profile.options.minMemoryGb !== recorded.options.minMemoryGb
   );
+}
+
+/**
+ * limits preflight credentials to the parts of the selection this run applies
+ * @param section selected setup area
+ * @param profile validated selection
+ * @returns the profile with an untargeted gateway choice cleared
+ */
+export function targetedProfile(
+  section: SetupSection,
+  profile: WorkstationProfile,
+): WorkstationProfile {
+  const isProxyTargeted = sectionFields(section).includes('isProxyEnabled');
+
+  return {
+    ...profile,
+    options: {
+      ...profile.options,
+      isProxyEnabled: isProxyTargeted && profile.options.isProxyEnabled,
+    },
+  };
 }

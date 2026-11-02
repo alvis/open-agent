@@ -119,6 +119,8 @@ async function configureAndFinalize(
     configuration: {
       hostname: workstation.name,
       profile: context.input.profile,
+      proxyUrl: context.input.proxyUrl,
+      proxyApiKey: context.input.proxyApiKey,
       githubToken: context.input.githubToken,
       githubHost: context.options.githubHost,
       gitIdentity: context.input.gitIdentity,

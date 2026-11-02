@@ -11,7 +11,7 @@ import type { WorkstationRecord } from '#domain/workstation';
 import type { CommandFault } from '#kernel/faults';
 import type { Secret } from '#kernel/secret';
 
-import type { ProviderDriver } from './drivers';
+import type { ProviderDriver, ProxyRoute } from './drivers';
 import type { GuestChannel, GuestServiceControl } from './guest-channel';
 import type {
   AssemblyParams,
@@ -46,7 +46,7 @@ export interface GuestFacts {
 
 /** one thing an inspection reads, named without its commands */
 export type InspectionProbe =
-  'inspection' | 'services' | 'network' | 'native' | 'governor';
+  'inspection' | 'services' | 'network' | 'native' | 'proxy' | 'governor';
 
 /** the lifecycle of one probe an inspection runs */
 export type ProbeEvent =
@@ -118,6 +118,17 @@ export interface GuestEnvironmentAccess {
    * @param profile the profile to record
    */
   writeProfile(guest: GuestChannel, profile: WorkstationProfile): Promise<void>;
+  /**
+   * refuses to go on when the recorded integration choices changed while
+   * inputs were being collected
+   * @param guest target guest
+   * @param expected the profile the inputs were collected for
+   * @throws {CommandFault} when the network or gateway choice differs
+   */
+  assertProfile(
+    guest: GuestChannel,
+    expected: WorkstationProfile,
+  ): Promise<void>;
   /**
    * reads what the updater recorded about its last run
    * @param guest target guest
@@ -269,7 +280,7 @@ export interface GuestMechanics {
      * reads current service, route and installation state
      * @param guest target guest
      * @param params the probe observer
-     * @returns current service, network, native, environment and update status
+     * @returns current service, network, native, gateway, environment and update status
      */
     inspect(
       guest: GuestChannel,
@@ -305,5 +316,13 @@ export interface GuestMechanics {
      * @returns the newer recorded release, or nothing
      */
     newerMetadata(workstation: WorkstationRecord): string | undefined;
+  };
+  hub: {
+    /**
+     * records the gateway the probe checks, or forgets it when routing is off
+     * @param guest target guest
+     * @param route CLIProxyAPI route, or undefined when no gateway is configured
+     */
+    record(guest: GuestChannel, route: ProxyRoute | undefined): Promise<void>;
   };
 }

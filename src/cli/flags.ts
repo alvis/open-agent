@@ -148,6 +148,12 @@ export const selectionFlags = {
 
 /** non-secret provision and setup integration choices */
 export const integrationFlags = {
+  proxy: {
+    kind: 'boolean',
+    optional: true,
+    withNegated: true,
+    brief: 'enable or disable CLIProxyAPI routing',
+  },
   github: {
     kind: 'boolean',
     optional: true,
@@ -159,6 +165,13 @@ export const integrationFlags = {
     optional: true,
     withNegated: true,
     brief: 'enable or disable Git/JJ identity',
+  },
+  proxyUrl: {
+    kind: 'parsed',
+    parse: String,
+    optional: true,
+    placeholder: 'URL',
+    brief: 'URL · existing CLIProxyAPI hub URL',
   },
   gitName: {
     kind: 'parsed',
@@ -199,6 +212,13 @@ export const integrationFlags = {
 
 /** credential source references for selected integrations */
 export const integrationCredentialFlags = {
+  proxyApiKeySource: {
+    kind: 'parsed',
+    parse: String,
+    optional: true,
+    placeholder: 'SOURCE',
+    brief: 'SOURCE · hub client key source reference',
+  },
   githubTokenSource: {
     kind: 'parsed',
     parse: String,
@@ -228,6 +248,7 @@ export const setupFlags = {
       'network',
       'github',
       'git',
+      'proxy',
       'env',
       'system',
       'plugins',
@@ -236,7 +257,7 @@ export const setupFlags = {
     optional: true,
     placeholder: 'SECTION',
     brief:
-      'SECTION · all, agent, network, github, git, env, system, plugins, or tools',
+      'SECTION · all, agent, network, github, git, proxy, env, system, plugins, or tools',
   },
   pluginHarness: {
     kind: 'parsed',

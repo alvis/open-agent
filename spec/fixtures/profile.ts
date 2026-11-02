@@ -20,3 +20,27 @@ export const DEFAULT_AGENT_PORT = agentPort(
 export const DISABLED_NETWORK_SUMMARY: ProfileSummary = summarizeProfile(
   DISABLED_NETWORK_PROFILE,
 );
+
+/** integration choices a test workstation selects */
+export interface FixtureIntegrations {
+  cliproxyapi: boolean;
+}
+
+/**
+ * builds the default profile with the given integration choices
+ * @param integrations whether the gateway is selected
+ * @returns a complete workstation profile
+ */
+export function profileWith(
+  integrations: FixtureIntegrations,
+): WorkstationProfile {
+  const profile = defaultProfile(defaults);
+
+  return {
+    ...profile,
+    options: {
+      ...profile.options,
+      isProxyEnabled: integrations.cliproxyapi,
+    },
+  };
+}

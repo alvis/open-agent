@@ -3,10 +3,15 @@ import { AGENT_IDS, PROVIDER_IDS } from '#domain/ids';
 import { networkIds } from '#domain/networks';
 import { isDriverId } from '#domain/profile';
 
+import { hasValue } from './sources';
+
+import type { CommandOptions } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { InteractionChoice } from '#application/ports/interaction';
 import type { ReleaseChannels } from '#domain/declarations';
 import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
+
+import type { InputSources } from '../sources';
 
 /**
  * offers every registered provider
@@ -121,4 +126,36 @@ export function defaultHarnesses(
   );
 
   return preselected.length > 0 ? preselected : supported;
+}
+
+/** the named inputs of inferred options */
+export interface InferredOptionsParams {
+  /** parsed flags */
+  options: CommandOptions;
+  /** process, credential file and profile values */
+  sources: InputSources;
+}
+
+/**
+ * infers options from supplied inputs, as non-interactive runs always have
+ * @param dependencies the registered drivers
+ * @param params the call's inputs: options, sources
+ * @returns options the supplied inputs imply
+ */
+export function inferredOptions(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  params: InferredOptionsParams,
+): { isProxyEnabled: boolean } {
+  const { options, sources } = params;
+
+  return {
+    isProxyEnabled:
+      [options.proxyUrl, options.proxyApiKeySource].some((value) =>
+        Boolean(value?.trim()),
+      ) ||
+      [
+        dependencies.registry.gateways.cliproxyapi.inputs.baseUrl,
+        dependencies.registry.gateways.cliproxyapi.inputs.apiKey,
+      ].some(({ environment }) => hasValue(sources, environment)),
+  };
 }

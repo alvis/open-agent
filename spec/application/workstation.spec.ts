@@ -120,6 +120,7 @@ describe('fn:runCommand', () => {
           plugins: false,
           gitIdentity: false,
           network: 'none',
+          proxy: false,
         },
       },
       { operation },
@@ -255,6 +256,7 @@ describe('fn:runCommand', () => {
     const observation = {
       services: [],
       network: { online: false, skipped: true },
+      hub: { reachable: false, skipped: true },
       environment: environmentOf(DISABLED_NETWORK_PROFILE),
       probeFailures: [],
       governor: { recorded: false, reason: 'no awake event has been recorded' },

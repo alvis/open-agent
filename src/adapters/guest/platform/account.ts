@@ -35,7 +35,7 @@ export interface AccountFile {
 interface NativeFileCommandParams {
   guest: GuestChannel;
   path: string;
-  operation: 'mkdir' | 'write';
+  operation: 'mkdir' | 'write' | 'remove';
   owner?: NativeAccountOwner;
   contents?: string;
 }
@@ -92,7 +92,7 @@ export async function ensurePrivateDirectory(
 
 /**
  * writes a private native configuration file owned by the guest account;
- * contents that hold a credential, such as a runtime variable, go as a secret input
+ * contents that hold a credential, such as a gateway key, go as a secret input
  * @param guest target guest
  * @param path absolute file path
  * @param contents serialized native settings
@@ -118,6 +118,18 @@ export async function writeAccountFile(
   file: AccountFile,
 ): Promise<void> {
   await runNativeFileCommand({ guest, owner, operation: 'write', ...file });
+}
+
+/**
+ * removes native files as their non-root owner after refusing linked paths
+ * @param guest target guest
+ * @param path absolute native file path
+ */
+export async function removeOwnedFile(
+  guest: GuestChannel,
+  path: string,
+): Promise<void> {
+  await runNativeFileCommand({ guest, path, operation: 'remove' });
 }
 
 /**

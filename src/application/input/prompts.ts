@@ -130,10 +130,16 @@ async function promptPublicInputs(
       validate: machineNameProblem,
     });
   }
+  if (required.includes('proxyUrl')) {
+    input.proxyUrl ??= await interaction.input({
+      message: dependencies.registry.gateways.cliproxyapi.inputs.baseUrl.prompt,
+      required: true,
+    });
+  }
 }
 
 /**
- * prompts only for missing management credentials
+ * prompts only for missing management and guest credentials
  * @param dependencies the registered drivers, what this computer provides
  * @param input values to complete in place
  * @param context local credential policy and active secret prompts
@@ -164,6 +170,13 @@ async function promptSecrets(
     input.isProviderTokenEntered = true;
     input.sources[credential.environment] = 'the entered token';
   }
+  if (required.includes('proxyApiKey')) {
+    input.proxyApiKey ??= await interaction.secret({
+      message: dependencies.registry.gateways.cliproxyapi.inputs.apiKey.prompt,
+      required: true,
+    });
+  }
+  rememberSecret(input.proxyApiKey);
 }
 
 /** the named inputs of retain prompted credential */

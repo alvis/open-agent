@@ -7,6 +7,7 @@ import type {
   GovernorState,
 } from '#domain/observations/governor';
 import type { NativeHarnessInspection } from '#domain/observations/harness';
+import type { HubStatus } from '#domain/observations/hub';
 import type {
   HarnessAgentState,
   NativeConfigurationInspection,
@@ -42,8 +43,18 @@ export interface NetworkOutput {
   reason?: string;
 }
 
+/** whether the gateway answered */
+export interface HubOutput {
+  reachable: boolean;
+  skipped: boolean;
+  status?: number;
+  reason?: string;
+}
+
 /** native configuration of one harness */
 export interface NativeHarnessOutput {
+  gatewayConfigured: boolean;
+  modelDiscoveryEnabled: boolean;
   pluginListAvailable: boolean;
   awakeHooksInstalled: boolean;
   authentication: string;
@@ -99,6 +110,7 @@ export interface InspectionOutput {
   services: GuestServiceOutput[];
   network: NetworkOutput;
   native?: NativeOutput;
+  hub: HubOutput;
   environment: EnvironmentOutput;
   updates?: UpdateStatusOutput;
   probeFailures: ProbeFailureOutput[];
@@ -152,6 +164,20 @@ export function projectNetworkStatus(network: NetworkStatus): NetworkOutput {
 }
 
 /**
+ * projects the gateway state
+ * @param hub internal state
+ * @returns output state
+ */
+export function projectHub(hub: HubStatus): HubOutput {
+  return projectFields<HubStatus, HubOutput>(hub, {
+    reachable: same,
+    skipped: same,
+    status: same,
+    reason: same,
+  });
+}
+
+/**
  * projects the native configuration of a harness
  * @param native internal inspection
  * @returns output inspection
@@ -160,6 +186,8 @@ function projectNativeHarness(
   native: NativeHarnessInspection,
 ): NativeHarnessOutput {
   return projectFields<NativeHarnessInspection, NativeHarnessOutput>(native, {
+    gatewayConfigured: same,
+    modelDiscoveryEnabled: same,
     pluginListAvailable: same,
     awakeHooksInstalled: same,
     authentication: same,

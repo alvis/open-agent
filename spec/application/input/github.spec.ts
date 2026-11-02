@@ -23,7 +23,7 @@ const execute = promisify(execFile);
 const resolverChild = fileURLToPath(
   new URL('../../fixtures/github-resolver-child.ts', import.meta.url),
 );
-const emptySources = { processEnv: {}, fileEnv: {} };
+const emptySources = { processEnv: {}, fileEnv: {}, profile: {} };
 
 /** builds a disposable trusted HTTPS GitHub Enterprise endpoint. */
 async function githubServer() {
@@ -205,18 +205,25 @@ describe('fn:GitHub credential provenance', () => {
           }),
         },
         { options, stringCandidate: rejectedToken },
+        {
+          options,
+          resolution: resolution({
+            ...emptySources,
+            profile: { GH_TOKEN: rejectedToken },
+          }),
+        },
       ],
       { OPEN_AGENT_GITHUB_SOURCE: rejectedToken, GH_TOKEN: undefined },
     );
 
-    expect(observed.results).toHaveLength(5);
+    expect(observed.results).toHaveLength(6);
     for (const result of observed.results) {
       expect(result).toMatchObject({ ok: false, error: { code: 'AUTH' } });
     }
     expect(observed.stderr).toBe('');
     expect(observed.stdout).not.toContain(rejectedToken);
     expect(observed.stdout).not.toContain('private-provider-body');
-    expect(endpoint.requests).toHaveLength(5);
+    expect(endpoint.requests).toHaveLength(6);
     expect(
       endpoint.requests.every((request) => request.path === '/api/v3/user'),
     ).toBe(true);

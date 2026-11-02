@@ -1,5 +1,6 @@
 import { prerequisiteDetails, missingInput } from '#domain/prerequisites';
 
+import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { InputPrerequisite } from '#domain/prerequisites';
 
 import type { RequiredInput, ResolvedInputs } from './types';
@@ -37,17 +38,29 @@ export const MISSING_GITHUB_TOKEN = prerequisiteDetails([
 /**
  * enumerates all provisioning values absent before remote account discovery,
  * each with every place it is read from
+ * @param dependencies the registered drivers
  * @param input values resolved from explicit and local sources
  * @param required inputs needed by the selected workflow
  * @returns one actionable line per missing input
  */
 export function missingProvisioningInputs(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
   input: ResolvedInputs,
   required: readonly RequiredInput[],
 ): string[] {
+  const isProxyRequired =
+    required.includes('proxyUrl') || required.includes('proxyApiKey');
+  const gateway = isProxyRequired
+    ? dependencies.registry.gateways.cliproxyapi.preflight({
+        url: input.proxyUrl,
+        apiKey: input.proxyApiKey,
+      })
+    : [];
+
   return [
     ...(required.includes('name') && !input.name
       ? ['workstation name (--name)']
       : []),
+    ...prerequisiteDetails(gateway),
   ];
 }

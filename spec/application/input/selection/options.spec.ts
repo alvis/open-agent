@@ -34,6 +34,7 @@ describe('fn:resolveMachine', () => {
       }),
       choose: async () => undefined,
       chooseMany: async () => undefined,
+      confirm: async (_message, fallback) => fallback,
     };
 
     const machine = await resolveMachine(dependencies, {
@@ -58,6 +59,7 @@ describe('fn:resolveMachine', () => {
       },
       choose: async () => undefined,
       chooseMany: async () => undefined,
+      confirm: async (_message, fallback) => fallback,
     };
 
     expect(
@@ -76,11 +78,28 @@ describe('fn:resolveMachine', () => {
 });
 
 describe('fn:resolveOptions', () => {
+  it('should turn off proxy routing while an unknown harness choice awaits validation', async () => {
+    const options = await resolveOptions(dependencies, {
+      selected: {
+        provider: 'sprite',
+        agent: 't3',
+        harnesses: ['unregistered-harness'],
+      },
+      supplied: {},
+      fields: ['isProxyEnabled'],
+      base: { ...defaults.options, isProxyEnabled: true },
+      inferred: { isProxyEnabled: true },
+    });
+
+    expect(options.isProxyEnabled).toBe(false);
+  });
+
   it('should preserve idle minutes while an unknown provider choice awaits validation', async () => {
     const options = await resolveOptions(dependencies, {
       selected: {
         provider: 'unregistered-provider',
         agent: 't3',
+        harnesses: ['claude'],
       },
       supplied: {},
       fields: ['idleTimeoutMinutes'],
@@ -90,5 +109,30 @@ describe('fn:resolveOptions', () => {
     expect(options.idleTimeoutMinutes).toBe(
       defaults.options.idleTimeoutMinutes,
     );
+  });
+
+  it('should enable proxy routing for the proxy setup section and retain the recorded fallback otherwise', async () => {
+    const selected = {
+      provider: 'sprite',
+      agent: 't3',
+      harnesses: ['claude'],
+    };
+    const base = { ...defaults.options, isProxyEnabled: true };
+    const section = await resolveOptions(dependencies, {
+      selected,
+      supplied: {},
+      fields: ['isProxyEnabled'],
+      base: { ...base, isProxyEnabled: false },
+      enables: 'proxy',
+    });
+    const recorded = await resolveOptions(dependencies, {
+      selected,
+      supplied: {},
+      fields: ['isProxyEnabled'],
+      base,
+    });
+
+    expect(section.isProxyEnabled).toBe(true);
+    expect(recorded.isProxyEnabled).toBe(true);
   });
 });

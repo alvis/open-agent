@@ -1,4 +1,5 @@
 import { inspectGovernor } from '#adapters/guest/governor';
+import { inspectHub } from '#adapters/guest/hub';
 import { checkOperation, traceStage } from '#kernel/operation';
 
 import { settleInspectionResults } from './inspection/results';
@@ -32,7 +33,7 @@ export function createInspection(context: {
      * fetches current service, route, and installation state on explicit inspection
      * @param guest target guest
      * @param options probe observer
-     * @returns current service, network, native, environment and update status
+     * @returns current service, network, native, gateway, environment and update status
      */
     inspect: async (guest, options = {}) => {
       const { onProbe } = options;
@@ -45,7 +46,7 @@ export function createInspection(context: {
       const { profile } = environment;
       const network = registry.networks[profile.network];
       // the governor report settles every failure into a reason itself
-      const [[serviceProbe, networkProbe, nativeProbe], governor] =
+      const [[serviceProbe, networkProbe, nativeProbe, proxyProbe], governor] =
         await Promise.all([
           Promise.allSettled([
             inspectStage(
@@ -59,6 +60,18 @@ export function createInspection(context: {
               async () => native.inspect(guest, profile),
               onProbe,
             ),
+            inspectStage(
+              'proxy',
+              async () =>
+                profile.options.isProxyEnabled
+                  ? inspectHub(guest)
+                  : Promise.resolve({
+                      reachable: false,
+                      skipped: true,
+                      reason: 'The model gateway is disabled',
+                    }),
+              onProbe,
+            ),
           ] as const),
           inspectStage('governor', async () => inspectGovernor(guest), onProbe),
         ]);
@@ -68,6 +81,7 @@ export function createInspection(context: {
           serviceProbe,
           networkProbe,
           nativeProbe,
+          proxyProbe,
         ]),
         governor,
       };
