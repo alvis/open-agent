@@ -39,7 +39,7 @@ export interface ListData {
   machines: Array<
     MachineSummary & {
       provider: ProviderId;
-      /** the release that set it up, when newer than this open-agent */
+      /** the release that set it up, when newer than this open-agent, which then refuses to manage it */
       newerRelease?: string;
     }
   >;
@@ -47,10 +47,17 @@ export interface ListData {
   unavailable: UnavailableProvider[];
 }
 
+/** selected workstation and explicitly requested inspection */
+export interface ShowData {
+  machine: MachineSummary;
+  inspection?: GuestInspection & { readiness?: ReadinessAssessment };
+}
+
 /** success payload for each executed command */
 export interface CommandData {
   create: CreateData;
   list: ListData;
+  show: ShowData;
 }
 
 /** failed creation can still preserve verified preflight facts */
@@ -68,4 +75,5 @@ export interface CreateFailureData {
 export interface CommandFailureData {
   create: CreateFailureData;
   list: never;
+  show: never;
 }

@@ -13,7 +13,6 @@ import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
 
 import { dependencies } from '../mocks/dependencies';
 
-import type { CreateData } from '#application/data';
 import type { MachineSummary } from '#application/machine';
 import type { CommandResult } from '#application/result';
 import type { GuestInspection } from '#domain/observations/inspection';
@@ -48,28 +47,6 @@ const inspection: GuestInspection = {
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
 };
-
-/**
- * a successful create result over the shared machine and inspection
- * @param overrides fields that differ from the default creation
- * @returns the create result
- */
-function created(overrides: Partial<CreateData> = {}): CommandResult {
-  return {
-    command: 'create',
-    ok: true,
-    data: {
-      machine,
-      preflight: { checks: [], reminders: [] },
-      profile: DISABLED_NETWORK_PROFILE,
-      readiness: { ready: true, failures: [], skipped: [], probeFailures: [] },
-      network: inspection.network,
-      services: [],
-      native: inspection.native,
-      ...overrides,
-    },
-  };
-}
 
 /**
  * captures writes to the real output stream seam
@@ -135,9 +112,11 @@ describe('fn:prepareResult', () => {
   });
 
   it('should render workstation details when the terminal does not report its width', () => {
-    const result = created({
-      machine: { ...machine, name: 'missing-width-workstation' },
-    });
+    const result: CommandResult = {
+      command: 'show',
+      ok: true,
+      data: { machine: { ...machine, name: 'missing-width-workstation' } },
+    };
     const streams = {
       stdout: Object.assign(new PassThrough(), { isTTY: true }),
       stderr: new PassThrough(),
@@ -285,7 +264,11 @@ describe('fn:prepareResult', () => {
   });
 
   it('should show disabled checks from a typed inspection on stdout', () => {
-    const output = captureResult(created());
+    const output = captureResult({
+      command: 'show',
+      ok: true,
+      data: { machine, inspection },
+    });
 
     expect(output.stdout).toContain('No private network is selected');
     expect(output.stderr).toBe('');
@@ -310,14 +293,22 @@ describe('fn:prepareResult', () => {
       undefined,
       'saf08-nested-output-secret',
     );
-    const success = created({
-      network: {
-        ...inspection.network,
-        reason: `the network rejected ${secret} twice: ${secret}`,
+    const success: CommandResult = {
+      command: 'show',
+      ok: true,
+      data: {
+        machine,
+        inspection: {
+          ...inspection,
+          network: {
+            ...inspection.network,
+            reason: `the network rejected ${secret} twice: ${secret}`,
+          },
+        },
       },
-    });
+    };
     const failure: CommandResult = {
-      command: 'create',
+      command: 'show',
       ok: false,
       error: {
         ...commandError(`provider rejected ${secret}`),

@@ -1,0 +1,58 @@
+import { projectEnvironment } from './environment';
+import { each, projectFields } from './fields';
+import {
+  projectGuestService,
+  projectNative,
+  projectNetworkStatus,
+} from './inspection';
+import { projectMachine } from './machine';
+import { projectProbeFailure, projectReadiness } from './readiness';
+
+import type { ShowData } from '#application/data';
+
+import type { InspectionOutput } from './inspection';
+import type { MachineOutput } from './machine';
+import type { ReadinessOutput } from './readiness';
+
+/** the guest evidence an inspection requested, with optional readiness */
+export interface ShowInspectionOutput extends InspectionOutput {
+  readiness?: ReadinessOutput;
+}
+
+/** the selected workstation and any inspection requested */
+export interface ShowDataOutput {
+  machine: MachineOutput;
+  inspection?: ShowInspectionOutput;
+}
+
+type ShownInspection = NonNullable<ShowData['inspection']>;
+
+/**
+ * projects the requested inspection
+ * @param inspection internal inspection with optional readiness
+ * @returns output inspection
+ */
+function projectShownInspection(
+  inspection: ShownInspection,
+): ShowInspectionOutput {
+  return projectFields<ShownInspection, ShowInspectionOutput>(inspection, {
+    services: each(projectGuestService),
+    network: projectNetworkStatus,
+    native: projectNative,
+    environment: projectEnvironment,
+    probeFailures: each(projectProbeFailure),
+    readiness: projectReadiness,
+  });
+}
+
+/**
+ * projects the show result
+ * @param data internal result
+ * @returns output result
+ */
+export function projectShow(data: ShowData): ShowDataOutput {
+  return projectFields<ShowData, ShowDataOutput>(data, {
+    machine: projectMachine,
+    inspection: projectShownInspection,
+  });
+}

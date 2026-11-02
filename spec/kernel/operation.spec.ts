@@ -132,7 +132,7 @@ describe('invocation-scoped operations', () => {
         });
       }),
       withOperation(second, async () => {
-        second.select('create');
+        second.select('show');
 
         return traceStage({
           stage: 'command',
@@ -156,9 +156,9 @@ describe('invocation-scoped operations', () => {
       { command: 'list', targetKnown: true, stage: 'command', outcome: 'ok' },
     ]);
     expect(secondEvents).toMatchObject([
-      { command: 'create', targetKnown: false, stage: 'command' },
+      { command: 'show', targetKnown: false, stage: 'command' },
       {
-        command: 'create',
+        command: 'show',
         targetKnown: false,
         stage: 'command',
         outcome: 'ok',

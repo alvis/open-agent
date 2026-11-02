@@ -164,7 +164,7 @@ describe('mt:SpriteServiceControl.list private cause boundary', () => {
       cause: failure,
     });
     const result: CommandResult = {
-      command: 'list',
+      command: 'show',
       ok: false,
       error: { ...commandError(nested), machine: 'temporary' },
     };

@@ -1,6 +1,10 @@
 import { buildCommand } from '@stricli/core';
 
-import { createDocumentation, listDocumentation } from './documentation';
+import {
+  createDocumentation,
+  listDocumentation,
+  showDocumentation,
+} from './documentation';
 import { execute } from './execution';
 import {
   commonFlags,
@@ -34,6 +38,20 @@ type ConfigurationFlags = FlagsFor<
     typeof outputFlags
 >;
 type CreateFlags = ConfigurationFlags & Pick<CommandOptions, 'name'>;
+type InspectFlags = ProviderCommonFlags &
+  Required<Pick<CommandOptions, 'inspect'>>;
+
+const machinePositional = {
+  kind: 'tuple',
+  parameters: [
+    {
+      parse: String,
+      brief: 'exact workstation name',
+      placeholder: 'workstation',
+      optional: true,
+    },
+  ],
+} as const;
 
 const createCommand = buildCommand({
   /**
@@ -87,6 +105,40 @@ const listCommand = buildCommand({
   parameters: { flags: { ...providerFlags, ...commonFlags } },
   docs: listDocumentation,
 });
+const showCommand = buildCommand({
+  /**
+   * executes the selected workstation command
+   * @param flags parsed command options
+   * @param machine optional exact workstation name
+   * @returns completion after final output
+   */
+  async func(
+    this: InvocationContext,
+    flags: InspectFlags,
+    machine?: string,
+  ): Promise<void> {
+    return execute({
+      dependencies: this.dependencies,
+      request: { command: 'show', machine, options: flags },
+      state: this.state,
+    });
+  },
+  parameters: {
+    flags: {
+      inspect: {
+        kind: 'boolean',
+        default: false,
+        brief: 'check live guest services and configuration (may wake it)',
+      },
+      ...providerFlags,
+      ...providerCredentialFlags,
+      ...outputFlags,
+    },
+    positional: machinePositional,
+  },
+  docs: showDocumentation,
+});
+
 /**
  * keeps root route usage concise while naming optional workstation selection
  * @param command built command and its supported usage formatter
@@ -106,4 +158,5 @@ function withRootUsage(
 export const commandRoutes = {
   create: withRootUsage(createCommand, '[--name NAME]'),
   list: listCommand,
+  show: withRootUsage(showCommand, '[<workstation>]'),
 };

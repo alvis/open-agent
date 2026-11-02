@@ -6,7 +6,7 @@ import { assertImageTools, assemblePlan } from './plan/assembly';
 import { needsBottleProbe, probeBottles } from './plan/bottles';
 import { runPlan } from './plan/execution';
 import { ENVIRONMENT_PATH } from './platform/layout';
-import { newerMetadataRelease } from './release-guard';
+import { assertSupportedRelease, newerMetadataRelease } from './release-guard';
 import { installProviderServices } from './services/provider';
 import { SetupConnection } from './session/connection';
 
@@ -63,6 +63,7 @@ export function createGuestMechanics(
     },
     label: { write: writeWorkstationLabel },
     release: {
+      assertSupported: assertSupportedRelease,
       newerMetadata: newerMetadataRelease,
     },
   };

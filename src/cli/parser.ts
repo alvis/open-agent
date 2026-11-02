@@ -136,6 +136,7 @@ export function requestedCommand(argv: string[]): CommandName | null {
   switch (argv[0]) {
     case 'create':
     case 'list':
+    case 'show':
       return argv[0];
     default:
       return null;

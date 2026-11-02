@@ -3,7 +3,7 @@ import { bindProvider } from '#application/catalog/providers';
 import { createWorkstation } from '#application/create';
 import { commandError } from '#application/failures';
 import { resolveProviderCredential } from '#application/input/provider-credential';
-import { listWorkstations } from '#application/inspection';
+import { listWorkstations, showWorkstation } from '#application/inspection';
 import { validateCommandRequest } from '#application/validation';
 import { PROVIDER_IDS } from '#domain/ids';
 import { prerequisiteDetails } from '#domain/prerequisites';
@@ -15,16 +15,29 @@ import {
   promptUnavailableDetail,
 } from '#kernel/operation';
 
-import { enterCommandCredential } from './workstation/credentials';
-import { providerAvailability, skippedProvider } from './workstation/providers';
+import {
+  enterCommandCredential,
+  resolveCommandCredential,
+} from './workstation/credentials';
+import {
+  locateProvider,
+  providerAvailability,
+  skippedProvider,
+} from './workstation/providers';
 
-import type { CommandRequest } from '#application/contracts';
+import type {
+  CommandRequest,
+  WorkstationCommandParams,
+} from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { Interaction } from '#application/ports/interaction';
 import type { CommandResult } from '#application/result';
 import type { ProviderId } from '#domain/ids';
 import type { PrerequisiteProblem } from '#domain/prerequisites';
+import type { CommandName } from '#kernel/commands';
 import type { OperationContext } from '#kernel/operation';
+
+type AuthenticatedCommand = Exclude<CommandName, 'create' | 'list'>;
 
 /** the interaction and caller-owned cancellation scope one command runs with */
 export interface CommandSession {
@@ -37,7 +50,7 @@ export interface CommandSession {
 /**
  * dispatches one workstation request without starting the CLI or printing its result
  * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
- * @param request command and options
+ * @param request command, options and optional machine selection
  * @param session the call's inputs: interaction, operation
  * @returns the structured command result with resolved errors redacted
  * @example
@@ -64,8 +77,32 @@ export async function runCommand(
     if (request.command === 'create') {
       return await createWorkstation(dependencies, request, interaction);
     }
+    if (request.command === 'list') {
+      return await listAvailableProviders(dependencies, request, interaction);
+    }
+    const provider =
+      request.options.provider ??
+      (await locateProvider(dependencies, request, interaction)) ??
+      dependencies.defaults.selection.provider;
+    const credential = await resolveCommandCredential(dependencies, {
+      request,
+      provider,
+      interaction,
+    });
+    const problems = await providerPreflight(
+      { registry: dependencies.registry, host: dependencies.host },
+      provider,
+      credential,
+    );
+    if (!credential.token || problems.length > 0) {
+      return prerequisiteFailure(request, problems);
+    }
 
-    return await listAvailableProviders(dependencies, request, interaction);
+    return await dispatchAuthenticated(dependencies, {
+      request: { ...request, command: request.command },
+      provider: bindProvider(dependencies.registry, provider, credential.token),
+      interaction,
+    });
   } catch (error) {
     return commandFailureResult(
       error,
@@ -90,7 +127,7 @@ function commandFailureResult(
   const failure = commandError(
     context?.signal.aborted ? cancellationReason() : error,
   );
-  const machine = context?.target?.name;
+  const machine = context?.target?.name ?? request.machine;
 
   return {
     command: context?.command ?? request.command,
@@ -103,6 +140,7 @@ function commandFailureResult(
         failure.code === 'CANCELLED' && machine
           ? [
               ...(failure.details ?? []),
+              `Inspect: open-agent show ${JSON.stringify(machine)} --inspect`,
               'Remote work may be unfinished; inspect before retrying mutations.',
             ]
           : failure.details,
@@ -202,4 +240,25 @@ async function listAvailableProviders(
       driver: bindProvider(dependencies.registry, provider, credential.token),
     },
   ]);
+}
+
+/**
+ * routes a command after authenticating the provider driver
+ * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
+ * @param params the call's inputs: request, provider, interaction
+ * @returns the selected workflow's result
+ */
+async function dispatchAuthenticated(
+  dependencies: ApplicationDependencies,
+  params: WorkstationCommandParams & {
+    request: CommandRequest & { command: AuthenticatedCommand };
+  },
+): Promise<CommandResult> {
+  const { request, provider, interaction } = params;
+  const actions = {
+    show: async () =>
+      showWorkstation(dependencies, { request, provider, interaction }),
+  } satisfies Record<AuthenticatedCommand, () => Promise<CommandResult>>;
+
+  return actions[request.command]();
 }

@@ -19,7 +19,7 @@ describe('D10 failure boundaries', () => {
         code: 'AUTH',
         message: 'Supplied provider credential was rejected',
       });
-      expect(resultExitCode({ command: 'create', ok: false, error })).toBe(1);
+      expect(resultExitCode({ command: 'show', ok: false, error })).toBe(1);
     },
   );
 
@@ -49,7 +49,7 @@ describe('D10 failure boundaries', () => {
     });
 
     expect(error).toMatchObject({ code: 'UNEXPECTED' });
-    expect(resultExitCode({ command: 'create', ok: false, error })).toBe(1);
+    expect(resultExitCode({ command: 'show', ok: false, error })).toBe(1);
   });
 
   it('should use the same status table for usage, input and successful results', () => {
@@ -62,7 +62,7 @@ describe('D10 failure boundaries', () => {
     ).toBe(2);
     expect(
       resultExitCode({
-        command: 'create',
+        command: 'show',
         ok: false,
         error: {
           code: 'INPUT',

@@ -52,7 +52,7 @@ export interface ProfileDefaults {
   selection: DefaultSelection;
 }
 
-/** the driver selection a provider records natively for list */
+/** the driver selection a provider records natively for list and plain show */
 export type ProfileSummary = Pick<
   WorkstationProfile,
   'provider' | 'agent' | 'harnesses' | 'network'

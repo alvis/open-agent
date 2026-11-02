@@ -121,12 +121,13 @@ describe('fn:runCommand', () => {
     withoutProviderCredentials();
 
     const result = await runCommand(dependencies, {
-      command: 'list',
+      command: 'show',
+      machine: 'workstation',
       options: { ...options, provider: 'sprite' },
     });
 
     expect(result).toMatchObject({
-      command: 'list',
+      command: 'show',
       ok: false,
       error: { code: 'INPUT', details: expect.any(Array) },
     });
@@ -184,19 +185,19 @@ describe('fn:runCommand', () => {
 
     const result = await runCommand(
       dependencies,
-      { command: 'create', options },
+      { command: 'show', machine: 'requested-name', options },
       { operation },
     );
 
     expect(result).toMatchObject({
-      command: 'create',
+      command: 'show',
       ok: false,
       error: {
         code: 'CANCELLED',
         machine: 'workstation',
         machineId: 'sprite-workstation',
         details: expect.arrayContaining([
-          expect.stringContaining('Remote work may be unfinished'),
+          expect.stringContaining('workstation'),
         ]),
       },
     });

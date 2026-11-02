@@ -18,6 +18,12 @@ const FIELD_LABELS: Record<string, string> = {
   machine: 'Workstation',
   agentUrl: 'Agent URL',
   id: 'ID',
+  gh: 'GitHub CLI',
+  jj: 'Jujutsu',
+  node: 'Node.js',
+  python3: 'Python',
+  httpie: 'HTTPie',
+  rust: 'Rust',
   ...Object.fromEntries(
     [
       ...Object.values(registry.agents),

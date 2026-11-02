@@ -10,7 +10,6 @@ import {
   SETUP_READY_LABEL,
   profileSummaryLabels,
 } from '#adapters/drivers/providers/sprite/labels';
-import { toRecord } from '#adapters/drivers/providers/sprite/records';
 
 import { OperationContext, withOperation } from '#kernel/operation';
 
@@ -340,6 +339,28 @@ describe('mt:SpriteProvider.create', () => {
   });
 });
 
+describe('mt:SpriteProvider.get', () => {
+  it('should require provider identity, organization, and the ownership label before accepting a target', async () => {
+    for (const fields of [
+      { id: '' },
+      { organizationName: '' },
+      { labels: ['unrelated'] },
+    ]) {
+      boundary.getSprite.mockResolvedValueOnce(createProviderSprite(fields));
+
+      await expect(provider.get('primary')).rejects.toMatchObject({
+        code: 'ownership-mismatch',
+        message: 'Sprite primary is not a verified open-agent workstation',
+      });
+    }
+
+    expect(await provider.get('primary')).toMatchObject({
+      id: 'sprite-primary',
+      organization: 'test-organization',
+    });
+  });
+});
+
 describe('mt:SpriteProvider.setMetadata', () => {
   it.each([
     {
@@ -363,7 +384,7 @@ describe('mt:SpriteProvider.setMetadata', () => {
         ],
       });
       const subject = providerWithSprite(sprite);
-      const workstation = toRecord(sprite);
+      const workstation = await subject.get('primary');
 
       const updated = await subject.setMetadata(workstation, {
         setup: 'not recorded',
@@ -384,7 +405,7 @@ describe('mt:SpriteProvider.setMetadata', () => {
       ],
     });
     const subject = providerWithSprite(sprite);
-    const workstation = toRecord(sprite);
+    const workstation = await subject.get('primary');
 
     const updated = await subject.setMetadata(workstation, {
       setup: 'ready',
@@ -397,7 +418,9 @@ describe('mt:SpriteProvider.setMetadata', () => {
   it('should reject an unmanaged target before changing labels', async () => {
     const unmanaged = createProviderSprite({ labels: [] });
     const subject = providerWithSprite(unmanaged);
-    const workstation = toRecord(createProviderSprite());
+    const workstation = await providerWithSprite(createProviderSprite()).get(
+      'primary',
+    );
 
     await expect(
       subject.setMetadata(workstation, { setup: 'ready' }),
@@ -410,7 +433,7 @@ describe('mt:SpriteProvider.expose', () => {
   it('should expose a managed URL and restore provider authentication for private visibility', async () => {
     const sprite = createProviderSprite();
     const subject = providerWithSprite(sprite);
-    const workstation = toRecord(sprite);
+    const workstation = await subject.get('primary');
 
     await subject.expose(workstation, 3773, 'public');
 
@@ -423,26 +446,9 @@ describe('mt:SpriteProvider.expose', () => {
 });
 
 describe('mt:SpriteProvider.openGuest', () => {
-  it('should require provider identity, organization, and the ownership label before accepting a target', async () => {
-    for (const fields of [
-      { id: '' },
-      { organizationName: '' },
-      { labels: ['unrelated'] },
-    ]) {
-      const subject = providerWithSprite(createProviderSprite(fields));
-
-      await expect(
-        subject.openGuest(toRecord(createProviderSprite())),
-      ).rejects.toMatchObject({
-        code: 'ownership-mismatch',
-        message: 'Sprite primary is not a verified open-agent workstation',
-      });
-    }
-  });
-
   it('should share one guest channel for repeated opens of a workstation', async () => {
     const subject = providerWithSprite(createProviderSprite());
-    const workstation = toRecord(createProviderSprite());
+    const workstation = await subject.get('primary');
 
     const first = await subject.openGuest(workstation);
     const second = await subject.openGuest(workstation);
@@ -451,7 +457,9 @@ describe('mt:SpriteProvider.openGuest', () => {
   });
 
   it('should refetch an external record and reject it when its immutable identity changed', async () => {
-    const workstation = toRecord(createProviderSprite());
+    const workstation = await providerWithSprite(createProviderSprite()).get(
+      'primary',
+    );
     const matched = createProviderSprite();
     const execute = vi.spyOn(matched, 'execFile').mockResolvedValue({
       exitCode: 0,
@@ -488,7 +496,7 @@ describe('mt:SpriteProvider.openRootShell', () => {
     ]);
     const spawn = vi.spyOn(sprite, 'spawn').mockReturnValue(command);
     const subject = providerWithSprite(sprite);
-    const workstation = toRecord(sprite);
+    const workstation = await subject.get('primary');
 
     const shell = await subject.openRootShell(workstation, '/bin/sh');
 
@@ -503,7 +511,7 @@ describe('mt:SpriteProvider.openRootShell', () => {
 
 describe('mt:SpriteProvider.awaitGuestReady', () => {
   it('should return without a boot probe because Sprite exec performs its wake-up', async () => {
-    const workstation = toRecord(createProviderSprite());
+    const workstation = await provider.get('primary');
 
     await expect(
       unboundProvider.awaitGuestReady(workstation),

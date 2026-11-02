@@ -18,10 +18,10 @@ describe('rc:Display', () => {
     for (const columns of [40, 120]) {
       const text = renderToString(
         <ResultDetails
-          title="create"
+          title="show"
           value={{
             machine: { name: 'primary' },
-            network: {
+            inspection: {
               online: true,
               reachable: false,
               entries: [entry],

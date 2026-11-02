@@ -240,7 +240,7 @@ function forcedCancellation({
   operation,
   forced = true,
 }: ForcedCancellationParams): CommandResult {
-  const name = operation.target?.name;
+  const name = operation.target?.name ?? request.machine;
 
   return {
     command: operation.command ?? request.command,
@@ -254,7 +254,10 @@ function forcedCancellation({
       machineId: operation.target?.id,
       outcome: name ? 'unknown' : undefined,
       details: name
-        ? ['Inspect provider state before retrying any mutation.']
+        ? [
+            'Inspect provider state before retrying any mutation.',
+            `Inspect: open-agent show ${JSON.stringify(name)} --inspect`,
+          ]
         : undefined,
     },
   };
@@ -313,7 +316,7 @@ function executionFailure({
     ok: false,
     error: {
       ...commandError(error),
-      machine: operation.target?.name,
+      machine: operation.target?.name ?? request.machine,
       machineId: operation.target?.id,
     },
   };

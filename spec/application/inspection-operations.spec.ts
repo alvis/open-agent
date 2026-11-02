@@ -6,8 +6,12 @@ import {
   SCHEMA_LABEL,
   VERSION_LABEL_PREFIX,
 } from '#adapters/drivers/providers/sprite/labels';
-import { listWorkstations } from '#application/inspection';
+import {
+  listWorkstations,
+  selectManagedMachine,
+} from '#application/inspection';
 
+import { driveInk } from '../fixtures/ink';
 import { dependencies } from '../mocks/dependencies';
 import { providerOf } from '../mocks/sprites';
 
@@ -148,4 +152,67 @@ describe('fn:listWorkstations', () => {
     expect(client.listAllSprites).toHaveBeenCalledOnce();
     expect(client.getSprite).not.toHaveBeenCalled();
   });
+});
+
+describe('fn:selectManagedMachine', () => {
+  it('should require a name before querying a provider when interaction is unavailable', async () => {
+    const { client, provider } = spritesOf([]);
+
+    await expect(
+      selectManagedMachine(dependencies, {
+        provider,
+        requestedName: undefined,
+        release: 'metadata',
+      }),
+    ).rejects.toMatchObject({ code: 'INPUT' });
+    expect(client.listAllSprites).not.toHaveBeenCalled();
+    expect(client.getSprite).not.toHaveBeenCalled();
+  });
+
+  it('should report an empty managed list without asking for a selection', async () => {
+    const { client, provider } = spritesOf([spriteOf('unrelated', [])]);
+    const observed = await driveInk(
+      async (interaction) =>
+        selectManagedMachine(dependencies, {
+          provider,
+          requestedName: undefined,
+          interaction,
+          release: 'metadata',
+        }).catch((error: unknown) => error),
+      [],
+    );
+
+    expect(observed.result).toMatchObject({ code: 'PROVIDER' });
+    expect(observed.matchedSteps).toBe(0);
+    expect(client.listAllSprites).toHaveBeenCalledOnce();
+    expect(client.getSprite).not.toHaveBeenCalled();
+  });
+
+  it('should fetch the chosen managed Sprite even when another choice lacks an ID', async () => {
+    const missingId = Object.assign(spriteOf('missing-id'), { id: '' });
+    const chosen = spriteOf('chosen');
+    const { client, provider } = spritesOf([missingId, chosen], chosen);
+    const observed = await driveInk(
+      async (interaction) =>
+        selectManagedMachine(dependencies, {
+          provider,
+          requestedName: undefined,
+          interaction,
+          release: 'metadata',
+        }),
+      [
+        { waitFor: 'Select a workstation', input: 'chosen' },
+        { waitFor: 'Search: chosen', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(2);
+    expect(observed.result).toMatchObject({
+      id: 'sprite-chosen',
+      name: 'chosen',
+      organization: 'test-org',
+    });
+    expect(client.listAllSprites).toHaveBeenCalledOnce();
+    expect(client.getSprite).toHaveBeenCalledExactlyOnceWith('chosen');
+  }, 15_000);
 });
