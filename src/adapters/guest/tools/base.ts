@@ -1,9 +1,27 @@
 import type {
   BrewToolSource,
+  SystemRepository,
   SystemToolSource,
   ToolSpec,
   ToolVersionProbe,
 } from '#domain/tools';
+
+/**
+ * Google's Linux package repository, which serves Chrome; its key is pinned to
+ * the primary key of "Google Inc. (Linux Packages Signing Authority)"
+ */
+const GOOGLE_CHROME_REPOSITORY: SystemRepository = {
+  id: 'google-chrome',
+  key: {
+    url: 'https://dl.google.com/linux/linux_signing_key.pub',
+    fingerprints: ['EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796'],
+  },
+  debian: {
+    uri: 'https://dl.google.com/linux/chrome/deb/',
+    suite: 'stable',
+    components: ['main'],
+  },
+};
 
 /** keeps rustup, and every proxy it provides, from fetching a toolchain as a side effect of asking for a version */
 const RUSTUP_ENVIRONMENT = { RUSTUP_AUTO_INSTALL: '0' };
@@ -66,8 +84,8 @@ function packageProbe(name: string): ToolVersionProbe {
 
 /**
  * every tool a workstation installs before any driver's: Homebrew's formula
- * first wherever one exists, and the distribution's packages for what Homebrew
- * does not serve
+ * first wherever one exists, the distribution's packages for what Homebrew
+ * does not serve, and Chrome from Google's signed repository
  */
 export const BASE_TOOLS: readonly ToolSpec[] = [
   // the TLS roots, downloader and process tools every later step uses
@@ -290,5 +308,28 @@ export const BASE_TOOLS: readonly ToolSpec[] = [
     executables: ['http', 'https', 'httpie'],
     version: probe('http', '--version'),
     sources: [brew('httpie')],
+  },
+  {
+    name: 'chrome',
+    required: false,
+    executables: ['google-chrome'],
+    version: probe('google-chrome', '--version'),
+    sources: [
+      {
+        kind: 'system',
+        family: 'debian',
+        packages: ['google-chrome-stable'],
+        repository: GOOGLE_CHROME_REPOSITORY,
+      },
+    ],
+  },
+  {
+    // finds the workstation's Chrome as `google-chrome` on PATH, so its own
+    // browser download is never needed
+    name: 'agent-browser',
+    required: false,
+    executables: ['agent-browser'],
+    version: probe('agent-browser', '--version'),
+    sources: [brew('agent-browser')],
   },
 ];
