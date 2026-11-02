@@ -294,8 +294,8 @@ describe('fn:emitResult', () => {
         command: 'setup',
         ok: true,
         data: {
-          section: 'github',
-          github: 'configured',
+          section: 'git',
+          gitIdentity: 'configured',
           machine: machineWithUnreadableState('incomplete'),
         },
       } satisfies CommandResult,

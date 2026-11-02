@@ -32,6 +32,11 @@ export function createPreflightSummary(
             'Private GitHub access is not configured; supply GH_TOKEN or sign in with gh on the guest when needed.',
           ]
         : []),
+      ...(!input.gitIdentity
+        ? [
+            'Git identity is not configured; supply an author name/email or configure native Git/Jujutsu settings before making commits.',
+          ]
+        : []),
     ],
   };
 }

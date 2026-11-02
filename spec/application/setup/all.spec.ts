@@ -43,6 +43,7 @@ describe('fn:setupAll', () => {
       await using directory = await mkdtempDisposable(
         join(tmpdir(), 'open-agent-setup-all-'),
       );
+      const isGitConfigured = optionalSections || isReleaseChanged;
       const sprite = createFilesystemSprite({
         root: directory.path,
         execute: async (_file, args = []) => ({
@@ -67,6 +68,9 @@ describe('fn:setupAll', () => {
         ...workstationOf(sprite),
         options: {
           github: optionalSections ? undefined : false,
+          gitIdentity: isGitConfigured,
+          gitName: isGitConfigured ? 'Ada' : undefined,
+          gitEmail: isGitConfigured ? 'ada@example.test' : undefined,
           localCredentials: false,
           nonInteractive: true,
           withPairCode,
@@ -110,24 +114,20 @@ describe('fn:setupAll', () => {
           return result;
         },
       );
-      const configureHarness = registry.harnesses.claude.configure;
-      using _harness = vi
-        .spyOn(registry.harnesses.claude, 'configure')
-        .mockImplementation(async (target) => {
-          if (isReleaseChanged) {
-            lifecycle.push({
-              event: 'final section',
-              configured,
-              status: services.get(agentName)?.state?.status,
-            });
-          }
-          configured = true;
-          await configureHarness(target);
-        });
       const guest = {
         ...dependencies.guest,
         native: {
           ...dependencies.guest.native,
+          configureGit: async () => {
+            if (isReleaseChanged) {
+              lifecycle.push({
+                event: 'final section',
+                configured,
+                status: services.get(agentName)?.state?.status,
+              });
+            }
+            configured = true;
+          },
           inspectAgentEnvironment: async () => ({
             ok: true as const,
             serverVersion: '',
@@ -173,7 +173,9 @@ describe('fn:setupAll', () => {
       ).resolves.toMatchObject({
         tools: 'updated',
         ...(withPairCode ? { pairing: { status: 'created' } } : {}),
-        ...(optionalSections ? { github: 'skipped' } : {}),
+        ...(optionalSections
+          ? { github: 'skipped', gitIdentity: 'configured' }
+          : {}),
       });
 
       expect(
@@ -215,6 +217,9 @@ describe('fn:setupAll', () => {
       ...workstationOf(sprite),
       options: {
         github: false,
+        gitIdentity: true,
+        gitName: 'Ada',
+        gitEmail: 'ada@example.test',
         localCredentials: false,
         nonInteractive: true,
       },
@@ -227,20 +232,27 @@ describe('fn:setupAll', () => {
     const channel = await context.connection.guest();
     const agentName = registry.agents[profile.agent].service.name;
     await channel.services.ensure(agentService(registry, profile));
-    const failure = new Error('The harness configuration could not be written');
-    const observed: Array<{ status: string | undefined }> = [];
-    using _harness = vi
-      .spyOn(registry.harnesses.claude, 'configure')
-      .mockImplementation(async () => {
-        observed.push({ status: services.get(agentName)?.state?.status });
-        throw failure;
-      });
+    const failure = new Error('The Git identity could not be written');
+    const observed: Array<{ status: string | undefined; author: string }> = [];
+    const wired = dependenciesWith({
+      guest: {
+        ...dependencies.guest,
+        native: {
+          ...dependencies.guest.native,
+          configureGit: async (_guest, identity) => {
+            observed.push({
+              status: services.get(agentName)?.state?.status,
+              author: identity.authorName,
+            });
+            throw failure;
+          },
+        },
+      },
+    });
 
-    await expect(setupAll(dependencies, channel, context)).rejects.toBe(
-      failure,
-    );
+    await expect(setupAll(wired, channel, context)).rejects.toBe(failure);
 
-    expect(observed).toEqual([{ status: 'running' }]);
+    expect(observed).toEqual([{ status: 'running', author: 'Ada' }]);
     expect(services.get(agentName)?.state?.status).toBe('running');
     expect(
       JSON.parse(

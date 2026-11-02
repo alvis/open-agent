@@ -395,8 +395,8 @@ describe('fn:execute', () => {
       options: {
         ...request.options,
         credentialFile: 'credentials.env',
-        github: false,
-        githubTokenSource: 'env:TEST_GITHUB_TOKEN',
+        gitIdentity: false,
+        gitName: 'Alice',
       },
     };
 
@@ -413,7 +413,7 @@ describe('fn:execute', () => {
         ok: false,
         error: {
           code: 'USAGE',
-          message: expect.stringContaining('--no-github'),
+          message: expect.stringContaining('--no-git-identity'),
         },
       },
       stderr: '',

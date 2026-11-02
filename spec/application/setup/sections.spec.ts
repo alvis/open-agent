@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   setupAgent,
+  setupGit,
   setupGithub,
   stopService,
 } from '#application/setup/sections';
@@ -165,6 +166,30 @@ async function quietSetup(
 
   return { context, guest: await context.connection.guest() };
 }
+
+describe('fn:setupGit', () => {
+  it('should name every source of a missing Git identity before changing the guest', async () => {
+    vi.stubEnv('GIT_AUTHOR_NAME', undefined);
+    vi.stubEnv('GIT_AUTHOR_EMAIL', undefined);
+    vi.stubEnv('GIT_COMMITTER_NAME', undefined);
+    vi.stubEnv('GIT_COMMITTER_EMAIL', undefined);
+    const { context, guest } = await quietSetup({
+      nonInteractive: true,
+      localCredentials: false,
+    });
+
+    await expect(setupGit(dependencies, guest, context)).rejects.toMatchObject({
+      code: 'INPUT',
+      message: 'Required setup inputs are missing',
+      details: [
+        'Git author identity is not set. Set GIT_AUTHOR_NAME and GIT_AUTHOR_EMAIL or pass --credential-file FILE ' +
+          'containing GIT_AUTHOR_NAME and GIT_AUTHOR_EMAIL; use --git-name NAME and --git-email EMAIL; ' +
+          'or run in a TTY to enter it when prompted. Or pass --no-git-identity to leave it unset.',
+      ],
+    });
+    expect(context.mutation.started).toBe(false);
+  });
+});
 
 describe('fn:setupGithub', () => {
   it.each([

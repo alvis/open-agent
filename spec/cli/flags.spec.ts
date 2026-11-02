@@ -40,6 +40,7 @@ describe('cmd:setup', () => {
     ['color', 'color'],
     ['local-credentials', 'localCredentials'],
     ['github', 'github'],
+    ['git-identity', 'gitIdentity'],
   ] as const)(
     'should preserve omitted, positive and negative values for --%s',
     async (flag, property) => {

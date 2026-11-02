@@ -1,9 +1,10 @@
 #!/bin/sh
 # T3 Code's launcher, run as the agent by the t3-code service: it starts the
 # agent's t3 on the port environment.json records, with every selected
-# harness's spawn environment, then replaces itself with t3. T3 can mint
-# startup credentials on stdout even with the browser disabled, so its output
-# is never kept or logged: both streams are discarded
+# harness's spawn environment and the committer the agent configured, then
+# replaces itself with t3. T3 can mint startup credentials on stdout even with
+# the browser disabled, so its output is never kept or logged: both streams are
+# discarded
 
 set -u
 
@@ -91,6 +92,14 @@ eval "$oa_harnesses"
 # the agent's PATH: its own commands, then Homebrew's ahead of the system's
 PATH=$OA_AGENT_PATH
 export PATH
+if test -e "$OA_COMMITTER_PATH"; then
+  oa_committer=$(jq -c 'if type == "object" then
+        {GIT_COMMITTER_NAME: .name, GIT_COMMITTER_EMAIL: .email}
+          | with_entries(select(.value | type == "string"))
+      else error("malformed") end' "$OA_COMMITTER_PATH" 2>/dev/null |
+    oa_exports "the agent's committer") || exit 1
+  eval "$oa_committer"
+fi
 
 cd "$OA_AGENT_HOME" || oa_fail "$OA_AGENT_HOME is missing"
 # the free space the agent itself can use (df's available column excludes the

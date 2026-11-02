@@ -61,6 +61,17 @@ export function validateCommandRequest(
  * @param options parsed flags common to every command
  */
 function validateCommonOptions(options: CommandOptions): void {
+  if (
+    options.gitIdentity === false &&
+    (options.gitName ||
+      options.gitEmail ||
+      options.gitCommitterName ||
+      options.gitCommitterEmail)
+  ) {
+    throw new CommandValidationError({
+      message: '--no-git-identity conflicts with explicit Git identity',
+    });
+  }
   if (options.github === false && options.githubTokenSource) {
     throw new CommandValidationError({
       message: '--no-github conflicts with a GitHub token source',

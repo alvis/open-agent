@@ -587,7 +587,7 @@ export function createNativeCommandExecutor(
 
   return vi.fn<Sprite['execFile']>(async (file, args = []) => {
     const harnessIndex = args.findIndex((argument) =>
-      ['claude', HOMEBREW_GH].includes(argument),
+      ['claude', 'git', 'jj', HOMEBREW_GH].includes(argument),
     );
     if (file === SUDO && harnessIndex >= 0) {
       const expected = pending.shift();

@@ -35,6 +35,12 @@ describe('fn:createPreflightSummary', () => {
     const supplied = createPreflightSummary(dependencies, {
       ...baseInput,
       githubToken: 'github-secret',
+      gitIdentity: {
+        authorName: 'Author',
+        authorEmail: 'author@example.test',
+        committerName: 'Committer',
+        committerEmail: 'committer@example.test',
+      },
     });
 
     expect(native).toEqual({
@@ -46,6 +52,7 @@ describe('fn:createPreflightSummary', () => {
         expect.stringMatching(/hourly.*a day has passed/),
         expect.stringMatching(/native sign-in/),
         expect.stringMatching(/Private GitHub access/),
+        expect.stringMatching(/Git identity/),
       ],
     });
     expect(supplied).toEqual({

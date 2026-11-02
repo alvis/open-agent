@@ -113,6 +113,11 @@ export interface GithubSetupData {
   github: 'configured' | 'preserved' | 'skipped';
 }
 
+/** native Git identity outcome */
+export interface GitSetupData {
+  gitIdentity: 'configured' | 'preserved';
+}
+
 /** how many tools an update left current, did not run for, and failed */
 export interface ComponentCounts {
   /** tools current after the update */
@@ -147,6 +152,7 @@ export interface AllSetupData
   extends
     Partial<AgentSetupData>,
     Partial<GithubSetupData>,
+    Partial<GitSetupData>,
     NetworkSetupData,
     ToolsSetupData {}
 
@@ -156,6 +162,7 @@ interface SetupSectionData {
   agent: AgentSetupData;
   network: NetworkSetupData;
   github: GithubSetupData;
+  git: GitSetupData;
   tools: ToolsSetupData;
 }
 

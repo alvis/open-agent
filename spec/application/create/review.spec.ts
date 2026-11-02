@@ -69,6 +69,12 @@ describe('fn:reviewCreatePlan', () => {
           ...input,
           profile,
           githubToken: 'github-token',
+          gitIdentity: {
+            authorName: 'Author',
+            authorEmail: 'author@example.test',
+            committerName: 'Author',
+            committerEmail: 'author@example.test',
+          },
         },
         preflight: { checks: [], reminders: [] },
       }),

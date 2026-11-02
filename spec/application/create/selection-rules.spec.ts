@@ -37,6 +37,7 @@ const request = {
     yes: true,
     localCredentials: false,
     github: false,
+    gitIdentity: false,
     harness: ['claude'],
     network: 'none',
   },

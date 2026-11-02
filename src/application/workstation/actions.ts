@@ -76,7 +76,7 @@ function workstationActions(
     {
       label: 'Configure a section',
       value: 'setup',
-      description: 'Choose network, tools or another setup area',
+      description: 'Choose network, Git, tools or another setup area',
     },
     { label: `Copy ${agent.displayName} URL`, value: 'copy' },
     { label: 'Permanently terminate', value: 'terminate' },

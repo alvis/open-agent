@@ -14,6 +14,7 @@ import type { ProviderDriver } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { Interaction } from '#application/ports/interaction';
 import type { SetupSession } from '#application/ports/session';
+import type { GitIdentity } from '#domain/git';
 import type { WorkstationProfile } from '#domain/profile';
 
 interface NewWorkstationConfiguration {
@@ -23,6 +24,7 @@ interface NewWorkstationConfiguration {
   profile: WorkstationProfile;
   githubToken?: string;
   githubHost?: string;
+  gitIdentity?: GitIdentity;
 }
 
 /** the named inputs of configure new workstation */
@@ -40,7 +42,8 @@ export interface ConfigureNewWorkstationParams {
 /**
  * installs the workstation through its setup plan, enrolling the network and
  * writing the native harness and account configuration before the services
- * start, then records the installation as ready
+ * start, since the agent's launcher reads its committer only as it
+ * starts, then records the installation as ready
  * @param dependencies the registered drivers, the guest mechanics
  * @param params the call's inputs: provider, connection, interaction, configuration
  * @returns the guest channel the configuration ran over
@@ -139,6 +142,12 @@ async function configureNative(
         shellAccounts:
           dependencies.registry.providers[profile.provider].shellAccounts,
       },
+    );
+  }
+  if (configuration.gitIdentity) {
+    await dependencies.guest.native.configureGit(
+      guest,
+      configuration.gitIdentity,
     );
   }
   await configureHarnesses(guest, {

@@ -129,7 +129,7 @@ describe('scoped setup', () => {
     }
   }, 15_000);
 
-  it('should return from tools to sections, then preserves GitHub without mutation', async () => {
+  it('should return from tools to sections, then skips Git identity without mutation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'open-agent-setup-'));
     vi.stubEnv('HOME', root);
     try {
@@ -156,6 +156,8 @@ describe('scoped setup', () => {
                 section: 'tools',
                 localCredentials: false,
                 github: false,
+                gitName: 'Ada',
+                gitEmail: 'ada@example.test',
               },
             },
             provider: providerOf(client),
@@ -163,19 +165,63 @@ describe('scoped setup', () => {
           }),
         [
           { waitFor: 'Managed tools', input: '\x1b' },
-          { waitFor: 'Choose setup section', input: 'GitHub' },
-          { waitFor: 'Search: GitHub', input: '\r' },
+          { waitFor: 'Choose setup section', input: 'Git / Jujutsu' },
+          { waitFor: 'Search: Git / Jujutsu', input: '\r' },
+          { waitFor: 'Git commit identity', input: 'Skip Git' },
+          { waitFor: 'Search: Skip Git', input: '\r' },
         ],
       );
 
-      expect(observed.matchedSteps, observed.output).toBe(3);
+      expect(observed.matchedSteps, observed.output).toBe(5);
       expect(observed.result).toMatchObject({
         ok: true,
-        data: { section: 'github', github: 'preserved' },
+        data: { section: 'git', gitIdentity: 'preserved' },
       });
       expect(writtenPaths(sprite)).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   }, 15_000);
+
+  it('should preserve Git identity when explicitly skipped without guest mutation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'open-agent-setup-'));
+    vi.stubEnv('HOME', root);
+    try {
+      const sprite = Object.assign(createFilesystemSprite({ root }), {
+        id: 'sprite-temporary',
+        organizationName: 'test',
+        // set up by this release, so a section run leaves its labels as they are
+        labels: mergeMetadataLabels([MANAGED_LABEL, SCHEMA_LABEL], {
+          setup: 'ready',
+          profile: summarizeProfile(PROFILE),
+          version: OPEN_AGENT_VERSION,
+        }),
+      });
+      const client = new SpritesClient('test-token');
+      vi.spyOn(client, 'getSprite').mockResolvedValue(sprite);
+      await recordEnvironment(sprite);
+
+      const result = await setupWorkstation(dependencies, {
+        request: {
+          command: 'setup',
+          machine: 'temporary',
+          options: {
+            section: 'git',
+            localCredentials: false,
+            github: false,
+            gitIdentity: false,
+          },
+        },
+        provider: providerOf(client),
+      });
+
+      expect(result).toMatchObject({
+        ok: true,
+        data: { section: 'git', gitIdentity: 'preserved' },
+      });
+      expect(writtenPaths(sprite)).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

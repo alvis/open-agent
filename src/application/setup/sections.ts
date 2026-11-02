@@ -6,9 +6,14 @@ import { PairingSecret } from '#kernel/pairing-secret';
 import { Secret } from '#kernel/secret';
 
 import { installSetupPlan } from './installation';
+import { missingSetupInputs } from './preparation';
 import { exposeWhenServing } from './serving';
 
-import type { AgentSetupData, GithubSetupData } from '#application/data';
+import type {
+  AgentSetupData,
+  GithubSetupData,
+  GitSetupData,
+} from '#application/data';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { GuestChannel } from '#application/ports/guest-channel';
 
@@ -141,4 +146,37 @@ export async function setupGithub(
   );
 
   return { github: 'configured' };
+}
+
+/**
+ * sets author and committer identity in the guest's Git configuration
+ * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
+ * @param guest guest channel of the managed workstation
+ * @param context Git identity options, prompts, and mutation state
+ * @returns git configuration outcome
+ */
+export async function setupGit(
+  dependencies: ApplicationDependencies,
+  guest: GuestChannel,
+  context: SetupContext,
+): Promise<GitSetupData> {
+  const { options, interaction, mutation } = context;
+  if (options.gitIdentity === false) {
+    return { gitIdentity: 'preserved' };
+  }
+  const input = await resolveInputs(dependencies, {
+    options,
+    interaction,
+    requirementSelection: ['gitIdentity'],
+  });
+  if (!input.gitIdentity && interaction && !input.missing.length) {
+    return { gitIdentity: 'preserved' };
+  }
+  if (input.missing.length || !input.gitIdentity) {
+    throw missingSetupInputs(input.missing);
+  }
+  mutation.started = true;
+  await dependencies.guest.native.configureGit(guest, input.gitIdentity);
+
+  return { gitIdentity: 'configured' };
 }

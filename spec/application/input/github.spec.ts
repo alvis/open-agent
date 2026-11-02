@@ -170,6 +170,7 @@ describe('fn:GitHub credential provenance', () => {
       githubHost: endpoint.hostname,
       localCredentials: false,
       nonInteractive: true,
+      gitIdentity: false,
     };
     const resolution = (sources: typeof emptySources) => ({
       required: ['githubToken'],
@@ -226,7 +227,7 @@ describe('fn:GitHub credential provenance', () => {
     ).toBe(true);
   });
 
-  it('should drop only a token discovered by real gh and keep a verified one', async () => {
+  it('should drop only a token discovered by real gh and reuses a verified account for Git identity', async () => {
     await using endpoint = await githubServer();
     const config = join(endpoint.directory.path, 'gh-config');
     await mkdir(config, { mode: 0o700 });
@@ -249,6 +250,7 @@ describe('fn:GitHub credential provenance', () => {
       GH_CONFIG_DIR: config,
       GH_TOKEN: undefined,
       GITHUB_TOKEN: undefined,
+      GIT_CONFIG_GLOBAL: join(endpoint.directory.path, 'absent-gitconfig'),
     };
     const dropped = await runResolver(
       endpoint,
@@ -290,7 +292,7 @@ describe('fn:GitHub credential provenance', () => {
         {
           options,
           resolution: {
-            required: ['githubToken'],
+            required: ['githubToken', 'gitIdentity'],
             sources: emptySources,
             credentialStore: location,
             discoverGithub: true,
@@ -303,6 +305,12 @@ describe('fn:GitHub credential provenance', () => {
       {
         ok: true,
         githubToken: endpoint.acceptedToken,
+        gitIdentity: {
+          authorName: 'Verified Name',
+          authorEmail: 'verified@example.test',
+          committerName: 'Verified Name',
+          committerEmail: 'verified@example.test',
+        },
         missing: [],
       },
     ]);

@@ -13,7 +13,7 @@ import { setupFailure } from './setup/failure';
 import { recordSetupMetadata } from './setup/metadata';
 import { setupNetwork } from './setup/network';
 import { prepareGuestSection } from './setup/preparation';
-import { setupGithub, setupAgent } from './setup/sections';
+import { setupGit, setupGithub, setupAgent } from './setup/sections';
 import { selectSetupSection } from './setup/selection';
 import { setupTools } from './setup/tools';
 
@@ -290,6 +290,10 @@ async function applySection(
     github: async (): Promise<AppliedSetupSection> => ({
       section: 'github',
       ...(await setupGithub(dependencies, guest, context)),
+    }),
+    git: async (): Promise<AppliedSetupSection> => ({
+      section: 'git',
+      ...(await setupGit(dependencies, guest, context)),
     }),
     tools: async (): Promise<AppliedSetupSection> => ({
       section: 'tools',

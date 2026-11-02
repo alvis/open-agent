@@ -32,7 +32,7 @@ type BooleanKeys<T> = {
   [K in keyof T]-?: NonNullable<T[K]> extends boolean ? K : never;
 }[keyof T];
 type OptionalBooleanKey =
-  'withPairCode' | 'github' | 'localCredentials' | 'color';
+  'withPairCode' | 'github' | 'gitIdentity' | 'localCredentials' | 'color';
 type RequiredBooleanFields<T> = Omit<T, BooleanKeys<T>> &
   Required<Pick<T, Exclude<BooleanKeys<T>, OptionalBooleanKey>>> &
   Pick<T, Extract<BooleanKeys<T>, OptionalBooleanKey>>;

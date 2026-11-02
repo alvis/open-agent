@@ -2,9 +2,11 @@ import { validateProfile } from '#domain/profile';
 import { CommandFault } from '#kernel/faults';
 
 import { resolveBaseInputs } from './input/base';
+import { resolveGitIdentity } from './input/git-identity';
 import { selectGithubToken } from './input/github';
 import { discoverGithubToken } from './input/github-discovery';
 import {
+  MISSING_GIT_IDENTITY,
   MISSING_GITHUB_TOKEN,
   missingProvisioningInputs,
 } from './input/missing';
@@ -27,7 +29,11 @@ import type { SuppliedSelection } from './input/selection/supplied';
 import type { InputSources } from './input/sources';
 import type { ResolvedInputs, RequiredInput } from './input/types';
 
-const BASE_CREATE_INPUTS: readonly RequiredInput[] = ['name', 'providerToken'];
+const BASE_CREATE_INPUTS: readonly RequiredInput[] = [
+  'name',
+  'providerToken',
+  'gitIdentity',
+];
 
 interface ResolveInputsOptions {
   credentialStore?: CredentialStoreLocation;
@@ -84,18 +90,57 @@ export async function resolveInputs(
   });
   const missingBeforeRemote = [...missingProvisioningInputs(input, required)];
   if (options.nonInteractive && missingBeforeRemote.length > 0) {
-    return { ...input, missing: missingBeforeRemote };
+    return withLocalIdentity(dependencies, {
+      options,
+      required,
+      sources,
+      input,
+      githubCandidate,
+      missingBeforeRemote,
+    });
   }
 
   return completeAccountInputs(dependencies, {
     options,
     interaction,
     required,
+    sources,
     input,
     githubCandidate,
     missingBeforeRemote,
     discoverGithub: resolution.discoverGithub,
   });
+}
+
+/**
+ * reports what is missing without any remote account call
+ * @param dependencies what this computer provides
+ * @param context inputs resolved so far and the problems already found
+ * @returns the inputs with only the local Git identity resolved
+ */
+async function withLocalIdentity(
+  dependencies: Pick<ApplicationDependencies, 'host'>,
+  context: Omit<AccountResolutionContext, 'interaction' | 'discoverGithub'>,
+): Promise<ResolvedInputs> {
+  const { options, required, sources, input, githubCandidate } = context;
+  const localIdentity =
+    required.includes('gitIdentity') && options.gitIdentity !== false
+      ? await resolveGitIdentity(dependencies, { options, sources })
+      : undefined;
+
+  return {
+    ...input,
+    gitIdentity: localIdentity,
+    missing: [
+      ...context.missingBeforeRemote,
+      ...(!localIdentity &&
+      !githubCandidate &&
+      required.includes('gitIdentity') &&
+      options.gitIdentity !== false
+        ? MISSING_GIT_IDENTITY
+        : []),
+    ],
+  };
 }
 
 /**
@@ -217,6 +262,7 @@ interface AccountResolutionContext {
   options: CommandOptions;
   interaction?: Interaction;
   required: readonly RequiredInput[];
+  sources: InputSources;
   input: ResolvedInputs;
   githubCandidate?: string;
   missingBeforeRemote: string[];
@@ -224,7 +270,7 @@ interface AccountResolutionContext {
 }
 
 /**
- * resolves optional GitHub access after mandatory inputs are known
+ * resolves optional GitHub and Git identity after mandatory inputs are known
  * @param dependencies what this computer provides
  * @param context initial inputs and selected workflow requirements
  * @returns completed account values and remaining missing inputs
@@ -237,6 +283,7 @@ async function completeAccountInputs(
     options,
     interaction,
     required,
+    sources,
     input,
     githubCandidate,
     missingBeforeRemote,
@@ -258,11 +305,25 @@ async function completeAccountInputs(
     ? await selectGithubToken(candidate, options, interaction)
     : undefined;
   input.githubToken = selectedGithub?.token;
+  input.gitIdentity = required.includes('gitIdentity')
+    ? await resolveGitIdentity(dependencies, {
+        options,
+        sources,
+        verifiedAccount: selectedGithub?.account,
+        interaction,
+      })
+    : undefined;
 
   return {
     ...input,
     missing: [
       ...missingBeforeRemote,
+      ...(required.includes('gitIdentity') &&
+      options.gitIdentity !== false &&
+      (!interaction || options.nonInteractive) &&
+      !input.gitIdentity
+        ? MISSING_GIT_IDENTITY
+        : []),
       ...(required.includes('githubToken') &&
       options.github !== false &&
       !input.githubToken
