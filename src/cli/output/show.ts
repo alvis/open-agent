@@ -1,5 +1,5 @@
 import { projectEnvironment } from './environment';
-import { each, projectFields } from './fields';
+import { each, projectFields, same } from './fields';
 import {
   projectGuestService,
   projectNative,
@@ -19,10 +19,11 @@ export interface ShowInspectionOutput extends InspectionOutput {
   readiness?: ReadinessOutput;
 }
 
-/** the selected workstation and any inspection requested */
+/** the selected workstation and any inspection or local action requested */
 export interface ShowDataOutput {
   machine: MachineOutput;
   inspection?: ShowInspectionOutput;
+  action?: 'copy';
 }
 
 type ShownInspection = NonNullable<ShowData['inspection']>;
@@ -54,5 +55,6 @@ export function projectShow(data: ShowData): ShowDataOutput {
   return projectFields<ShowData, ShowDataOutput>(data, {
     machine: projectMachine,
     inspection: projectShownInspection,
+    action: same,
   });
 }

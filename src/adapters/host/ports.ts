@@ -1,6 +1,7 @@
+import { copyUrl } from './clipboard';
 import { environmentVariables } from './environment';
 import { readInputFile } from './input-file';
-import { runLocal } from './process';
+import { runLocal, sendLocalInput } from './process';
 import { findTool } from './tools';
 
 import type { HostPorts } from '#application/ports/host';
@@ -12,7 +13,9 @@ import type { HostPorts } from '#application/ports/host';
 export function createHostPorts(): HostPorts {
   return {
     run: runLocal,
+    sendInput: sendLocalInput,
     readInputFile,
+    clipboard: { copyUrl },
     tools: { findTool },
     environment: { variables: environmentVariables },
   };

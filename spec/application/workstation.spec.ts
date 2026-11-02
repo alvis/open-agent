@@ -345,6 +345,46 @@ describe('fn:runCommand', () => {
     expect(deletion).not.toHaveBeenCalled();
   });
 
+  it('should offer every workstation action', async () => {
+    spriteCredential();
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-command-actions-'),
+    );
+    await managedSprite(directory.path);
+    const selections: string[] = [];
+    const actions: string[][] = [];
+
+    const result = await runCommand(
+      dependencies,
+      {
+        command: 'show',
+        machine: 'workstation',
+        options: { provider: 'sprite' },
+      },
+      {
+        interaction: {
+          ...interaction,
+          select: async (_prompt, choices) => {
+            selections.push(_prompt.message);
+            actions.push(choices.map((choice) => choice.value));
+
+            return choices[0]!.value;
+          },
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      command: 'show',
+      ok: true,
+      data: { machine: { id: 'sprite-workstation', name: 'workstation' } },
+    });
+    expect({ selections, actions }).toEqual({
+      selections: ['Workstation action'],
+      actions: [['details', 'inspect', 'setup', 'copy', 'terminate']],
+    });
+  });
+
   it('should retain known identity and recovery guidance when its caller cancels', async () => {
     const controller = new AbortController();
     const operation = new OperationContext({ signal: controller.signal });

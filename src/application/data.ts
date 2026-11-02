@@ -47,10 +47,11 @@ export interface ListData {
   unavailable: UnavailableProvider[];
 }
 
-/** selected workstation and explicitly requested inspection */
+/** selected workstation and explicitly requested inspection or local action */
 export interface ShowData {
   machine: MachineSummary;
   inspection?: GuestInspection & { readiness?: ReadinessAssessment };
+  action?: 'copy';
 }
 
 /** readiness evidence retained even when the workstation is not ready */
