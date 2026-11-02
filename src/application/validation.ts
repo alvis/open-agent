@@ -104,6 +104,8 @@ function validateCommonOptions(options: CommandOptions): void {
     options.localCredentials === false &&
     [
       options.providerTokenSource,
+      options.networkKeySource,
+      options.networkAuthKeySource,
       options.githubTokenSource,
       options.proxyApiKeySource,
     ].some((source) => source?.startsWith('keychain:'))

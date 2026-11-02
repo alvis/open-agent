@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { commandError } from '#application/failures';
 import { resolveSecret } from '#application/input/sources';
 import { prepareResult, writePreparedResult } from '#cli/output';
+import { projectResult } from '#cli/output/project';
+import { serializeResult } from '#cli/serialization';
 
 import { PairingSecret } from '#kernel/pairing-secret';
 
@@ -383,6 +385,45 @@ describe('fn:prepareResult', () => {
     expect(failure).toEqual({ stdout: '', stderr: 'List unavailable\n' });
   });
 
+  it('should keep a successful shared local-credential change machine-free in human and JSON output', () => {
+    const result: CommandResult = {
+      command: 'setup',
+      ok: true,
+      data: {
+        localCredential: {
+          status: 'replaced',
+          scope: 'this computer; all workstations',
+          storage: 'protected-file',
+        },
+      },
+    };
+    const human = captureResult(result, {});
+    const json = captureResult(result, { json: true });
+    const serialized = serializeResult(projectResult(result));
+
+    expect(Object.keys(serialized.data ?? {})).toEqual(['localCredential']);
+    expect(human.stderr).toBe('');
+    expect(human.stdout).toContain('replaced');
+    expect(human.stdout).toContain('protected-file');
+    expect(json.stderr).toBe('');
+    expect(json.stdout.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      schemaVersion: 1,
+      command: 'setup',
+      ok: true,
+      data: {
+        localCredential: {
+          status: 'replaced',
+          scope: 'this computer; all workstations',
+          storage: 'protected-file',
+        },
+      },
+    });
+    expect(Object.keys(JSON.parse(json.stdout).data)).toEqual([
+      'localCredential',
+    ]);
+  });
+
   it('should render successful current readiness on stdout with a versioned JSON alternative', () => {
     const result: CommandResult = {
       command: 'doctor',
@@ -392,7 +433,7 @@ describe('fn:prepareResult', () => {
         currentReadiness: {
           ready: true,
           failures: [],
-          skipped: ['private network'],
+          skipped: ['Tailscale connectivity'],
           probeFailures: [],
           network: inspection.network,
           hub: inspection.hub,
@@ -407,7 +448,7 @@ describe('fn:prepareResult', () => {
     const json = captureResult(result, { json: true });
 
     expect(human.stdout).toContain('Ready: Yes');
-    expect(human.stdout).toContain('private network');
+    expect(human.stdout).toContain('Tailscale connectivity');
     expect(human.stderr).toBe('');
     expect(json.stderr).toBe('');
     expect(JSON.parse(json.stdout)).toMatchObject({
@@ -706,7 +747,7 @@ describe('fn:prepareResult', () => {
       skipped: [],
       probeFailures: [],
       services: [{ name: 't3-code', state: 'running' }],
-      network: inspection.network,
+      network: { ...inspection.network, deviceId: 'node-1234' },
       hub: inspection.hub,
       native: inspection.native,
       environment: inspection.environment,
@@ -725,6 +766,49 @@ describe('fn:prepareResult', () => {
     expect(output.stdout).toBe('');
     expect(output.stderr).toContain('Readiness check failed');
     expect(output.stderr).toContain('T3 environment endpoint');
+    expect(output.stderr).toContain('node-1234');
+  });
+
+  it('should keep retained identity and partial cleanup facts on stderr', () => {
+    const output = captureResult(
+      {
+        command: 'terminate',
+        ok: false,
+        error: {
+          code: 'PROVIDER',
+          message: 'Tailnet cleanup required',
+          machine: 'retained-machine',
+          machineId: 'sprite-retained',
+          setupIncomplete: true,
+          details: ['Retry setup after checking the managed device'],
+        },
+        data: {
+          machine: {
+            ...machine,
+            name: 'retained-machine',
+            agentUrl: 'https://retained.sprites.app/',
+          },
+          workstation: {
+            status: 'deleted',
+            id: 'sprite-retained',
+            name: 'retained-machine',
+          },
+          network: { status: 'cleanup required', deviceId: 'managed-node' },
+        },
+      },
+      {},
+    );
+
+    expect(output.stdout).toBe('');
+    expect(output.stderr).toContain('Tailnet cleanup required');
+    expect(output.stderr).toContain('Workstation: retained-machine');
+    expect(output.stderr).toContain('Workstation ID: sprite-retained');
+    expect(output.stderr).toContain('Setup is incomplete');
+    expect(output.stderr).toContain(
+      'Retry setup after checking the managed device',
+    );
+    expect(output.stderr).toContain('managed-node');
+    expect(output.stderr).toContain('Agent URL: https://retained.sprites.app/');
   });
 
   it('should write a human cancellation only to stderr', () => {
@@ -815,7 +899,7 @@ describe('fn:prepareResult', () => {
           ...inspection,
           network: {
             ...inspection.network,
-            reason: `the network rejected ${secret} twice: ${secret}`,
+            reason: `Tailscale rejected ${secret} twice: ${secret}`,
           },
           updates: {
             tools: [

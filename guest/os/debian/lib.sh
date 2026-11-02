@@ -1,8 +1,8 @@
-# open-agent's debian family library: the package, account, kernel and
-# service helpers that setup and the updater source as root. Every function
-# is safe to rerun, reports why it failed on stderr and returns non-zero;
-# none exits the shell or sets a trap in it, and each keeps its variables
-# under its own oa_ prefix since sh has no locals
+# open-agent's debian family library: the package, repository, account,
+# kernel and service helpers that setup and the updater source
+# as root. Every function is safe to rerun, reports why it failed on stderr
+# and returns non-zero; none exits the shell or sets a trap in it, and each
+# keeps its variables under its own oa_ prefix since sh has no locals
 
 # seconds apt and dpkg wait for another package manager to let go of its lock
 OA_LOCK_SECONDS=300
@@ -11,6 +11,9 @@ OA_LISTS_MAX_MINUTES=1440
 # written whenever open-agent refreshed apt's lists; it sits in apt's periodic
 # directory because apt-get update deletes what it does not know in the lists
 OA_LISTS_STAMP=/var/lib/apt/periodic/open-agent-update-success-stamp
+# where the keyrings and sources of added repositories go
+OA_KEYRINGS=/etc/apt/keyrings
+OA_SOURCES=/etc/apt/sources.list.d
 # the services whose vendor units are masked, one init script name a line
 OA_MASKED_SERVICES=/etc/open-agent/masked-services
 OA_POLICY_RC=/usr/sbin/policy-rc.d
@@ -85,7 +88,8 @@ oa_dpkg_repair() {
   done
 }
 
-# tells whether apt's lists are missing or older than open-agent keeps them
+# tells whether apt's lists are missing, older than open-agent keeps them, or
+# invalidated by a repository just added
 oa_lists_stale() {
   test -f "$OA_LISTS_STAMP" || return 0
   test -n "$(find "$OA_LISTS_STAMP" -mmin "-$OA_LISTS_MAX_MINUTES")" || return 0
@@ -152,6 +156,137 @@ oa_pkg_version() {
   oa_pkg_names "$1" || return 1
   oa_pkg_installed "$1" || return 1
   dpkg-query -W -f="\${Version}\n" "$1"
+}
+
+# reads the release codename /etc/os-release names
+oa_codename() {
+  sed -n 's/^VERSION_CODENAME=["'\'']\{0,1\}\([a-z0-9]*\)["'\'']\{0,1\}$/\1/p' /etc/os-release |
+    sed -n 1p
+}
+
+# downloads a repository's signing key and keeps, of the primary keys it
+# holds, only those whose fingerprint is pinned, with their subkeys
+# arguments: work directory, key URL, pinned fingerprints separated by blanks
+oa_repo_key() {
+  curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --max-time 120 \
+    -o "$1/key" "$2" || return 1
+  install -d -m 0700 "$1/gnupg" || return 1
+  if ! gpg --homedir "$1/gnupg" --batch --no-autostart --quiet --import "$1/key" 2>"$1/import.log"; then
+    cat "$1/import.log" >&2
+    echo "The key at $2 is not a readable OpenPGP key" >&2
+    return 1
+  fi
+  gpg --homedir "$1/gnupg" --batch --no-autostart --with-colons --list-keys 2>/dev/null |
+    awk -F: '$1 == "pub" { primary = 1; next }
+      $1 == "fpr" && primary { print $10; primary = 0 }
+      $1 == "sub" { primary = 0 }' >"$1/primaries" || return 1
+  : >"$1/keyring"
+  for oa_key_pin in $3; do
+    case $oa_key_pin in
+      ????????????????????????????????????????) ;;
+      *)
+        echo "Refusing the pinned fingerprint $oa_key_pin: it is not 40 digits" >&2
+        return 1
+        ;;
+    esac
+    case $oa_key_pin in
+      *[!0-9A-F]*)
+        echo "Refusing the pinned fingerprint $oa_key_pin: it is not upper-case hex" >&2
+        return 1
+        ;;
+    esac
+    if grep -qxF -- "$oa_key_pin" "$1/primaries"; then
+      gpg --homedir "$1/gnupg" --batch --no-autostart --export "$oa_key_pin" >>"$1/keyring" || return 1
+    fi
+  done
+  if ! test -s "$1/keyring"; then
+    echo "Refusing the key at $2: it carries none of the pinned fingerprints $3" >&2
+    return 1
+  fi
+}
+
+# writes a repository's files atomically
+# arguments: work directory holding keyring and list, repository id
+oa_repo_install() {
+  install -d -m 0755 "$OA_KEYRINGS" "$OA_SOURCES" || return 1
+  install -m 0644 "$1/keyring" "$OA_KEYRINGS/open-agent-$2.gpg.new" &&
+    mv -f "$OA_KEYRINGS/open-agent-$2.gpg.new" "$OA_KEYRINGS/open-agent-$2.gpg" || return 1
+  install -m 0644 "$1/list" "$OA_SOURCES/open-agent-$2.list.new" &&
+    mv -f "$OA_SOURCES/open-agent-$2.list.new" "$OA_SOURCES/open-agent-$2.list" || return 1
+  rm -f "$OA_LISTS_STAMP"
+}
+
+# adds a signed apt repository: its key is refused unless it carries a pinned
+# fingerprint, only the pinned keys go into its own keyring under
+# /etc/apt/keyrings, and its source names that keyring alone. A repository
+# already added the same way is left as it is; adding or changing one makes
+# the next install refresh apt's lists
+# arguments: repository id, key URL, pinned fingerprints separated by blanks,
+# repository URI, suite (`{codename}` stands for the release codename), components
+oa_repo_add() {
+  if test "$#" -lt 6; then
+    echo "oa_repo_add needs an id, a key, its fingerprints, a URI, a suite and a component" >&2
+    return 1
+  fi
+  oa_repo_id=$1
+  oa_repo_key_url=$2
+  oa_repo_pins=$3
+  oa_repo_uri=$4
+  oa_repo_suite=$5
+  shift 5
+  case $oa_repo_id in
+    '' | [!a-z0-9]* | *[!a-z0-9-]*)
+      echo "Refusing the repository id $oa_repo_id" >&2
+      return 1
+      ;;
+  esac
+  for oa_repo_word in "$oa_repo_key_url" "$oa_repo_uri"; do
+    case $oa_repo_word in
+      https://*) ;;
+      *)
+        echo "Refusing $oa_repo_word: a repository is fetched over https only" >&2
+        return 1
+        ;;
+    esac
+  done
+  for oa_repo_word in "$oa_repo_key_url" "$oa_repo_uri" "$oa_repo_suite" "$@"; do
+    case $oa_repo_word in
+      '' | *[!A-Za-z0-9:/._~%+{}-]*)
+        echo "Refusing the repository word $oa_repo_word" >&2
+        return 1
+        ;;
+    esac
+  done
+  case $oa_repo_suite in
+    *'{codename}'*)
+      oa_repo_codename=$(oa_codename)
+      if test -z "$oa_repo_codename"; then
+        echo "The release names no codename for the repository $oa_repo_id" >&2
+        return 1
+      fi
+      oa_repo_suite=$(printf '%s' "$oa_repo_suite" | sed "s/{codename}/$oa_repo_codename/g")
+      ;;
+  esac
+  oa_repo_arch=$(dpkg --print-architecture) || return 1
+  oa_repo_keyring=$OA_KEYRINGS/open-agent-$oa_repo_id.gpg
+  oa_repo_list=$OA_SOURCES/open-agent-$oa_repo_id.list
+  oa_repo_entry=$(printf '# open-agent repository %s, pinned to %s\ndeb [arch=%s signed-by=%s] %s %s %s' \
+    "$oa_repo_id" "$oa_repo_pins" "$oa_repo_arch" "$oa_repo_keyring" \
+    "$oa_repo_uri" "$oa_repo_suite" "$*")
+  if test -s "$oa_repo_keyring" && test -f "$oa_repo_list" &&
+    test "$(cat "$oa_repo_list")" = "$oa_repo_entry"; then
+    return 0
+  fi
+  if ! command -v gpg >/dev/null 2>&1; then
+    oa_pkg_install gpg || return 1
+  fi
+  oa_repo_work=$(mktemp -d) || return 1
+  printf '%s\n' "$oa_repo_entry" >"$oa_repo_work/list" &&
+    oa_repo_key "$oa_repo_work" "$oa_repo_key_url" "$oa_repo_pins" &&
+    oa_repo_install "$oa_repo_work" "$oa_repo_id"
+  oa_repo_status=$?
+  rm -rf "$oa_repo_work"
+  return "$oa_repo_status"
 }
 
 # creates an account with the given ids unless it exists; an existing one
@@ -307,7 +442,7 @@ oa_sysctl() {
 # daemon itself: masks the vendor units and, through a policy-rc.d that
 # refuses them alone, keeps a postinst from starting them where systemd is
 # not running. A policy-rc.d another tool wrote is left as it is
-# arguments: service units, such as cron.service
+# arguments: service units, such as tailscaled.service
 oa_mask_service() {
   for oa_mask_unit; do
     case $oa_mask_unit in

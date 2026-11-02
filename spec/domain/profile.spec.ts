@@ -29,6 +29,7 @@ vi.mock('#composition/registry', async (importOriginal) => {
     displayName: 'Sprite',
     capabilities: {
       guestChannel: 'provider-exec',
+      transportNetworks: [],
       keepAwakeMode: 'native-deadline',
       idleForms: ['provider-managed'],
       wakeMode: 'url-traffic',
@@ -43,9 +44,9 @@ vi.mock('#composition/registry', async (importOriginal) => {
     incompatibilities: [
       {
         reason:
-          'Fixture provider cannot host a codex-only workstation without the proxy',
-        appliesTo: ({ options, harnesses }) =>
-          !options.isProxyEnabled &&
+          'Fixture provider cannot reach a codex-only workstation offline',
+        appliesTo: ({ network, harnesses }) =>
+          network === 'none' &&
           harnesses.length === 1 &&
           harnesses[0] === 'codex',
       },
@@ -130,6 +131,11 @@ vi.mock('#composition/registry', async (importOriginal) => {
     kind: 'networks',
     displayName: 'None',
   };
+  const tailscale: NetworkDeclaration<'tailscale'> = {
+    id: 'tailscale',
+    kind: 'networks',
+    displayName: 'Tailscale',
+  };
 
   const cliproxyapi: GatewayDeclaration<'cliproxyapi'> = {
     id: 'cliproxyapi',
@@ -176,6 +182,7 @@ vi.mock('#composition/registry', async (importOriginal) => {
     networks: {
       ...original.registry.networks,
       none: { ...original.registry.networks.none, ...none },
+      tailscale: { ...original.registry.networks.tailscale, ...tailscale },
     },
   };
 
@@ -188,7 +195,7 @@ const valid: ProfileCandidate = {
   provider: 'sprite',
   agent: 't3',
   harnesses: ['claude', 'codex'],
-  network: 'none',
+  network: 'tailscale',
   options: { ...defaults.options },
 };
 
@@ -212,12 +219,12 @@ function violationCodes(
 }
 
 describe('fn:defaultProfile', () => {
-  it('should reproduce the default workstation', () => {
-    expect(defaultProfile(defaults)).toEqual({
+  it('should reproduce the default workstation with the network chosen by Tailscale inputs', () => {
+    expect(defaultProfile(defaults, 'tailscale')).toEqual({
       provider: 'sprite',
       agent: 't3',
       harnesses: ['claude', 'codex'],
-      network: 'none',
+      network: 'tailscale',
       options: {
         isProxyEnabled: false,
         minCpus: 2,
@@ -227,6 +234,7 @@ describe('fn:defaultProfile', () => {
         updateDueIntervalDays: 1,
       },
     });
+    expect(defaultProfile(defaults, 'none').network).toBe('none');
   });
 });
 
@@ -416,7 +424,7 @@ describe('fn:validateProfile', () => {
     ],
     [
       'a profile the provider declares incompatible',
-      { harnesses: ['codex'] },
+      { network: 'none', harnesses: ['codex'] },
       ['incompatible'],
     ],
   ])('should reject %s', (_, candidate, expected) => {

@@ -4,8 +4,8 @@ import type { GuestMechanics } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
 
 /**
- * records a finished installation as ready: the record is read back so what
- * was recorded since the plan wrote it is kept
+ * records a finished installation as ready: the record is read back so a
+ * device identity enrolment recorded since the plan wrote it is kept
  * @param mechanics the guest's recorded environment
  * @param guest target guest
  */

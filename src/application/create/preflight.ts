@@ -2,6 +2,10 @@ import { networkDriver } from '#application/catalog/networks';
 import { bindProvider } from '#application/catalog/providers';
 import { commandError } from '#application/failures';
 import { resolveCreateInputs } from '#application/input';
+import {
+  networkManagement,
+  resolveEnrollmentKey,
+} from '#application/input/management';
 import { retainEnteredProviderToken } from '#application/input/prompts';
 import {
   resolvePluginActions,
@@ -207,7 +211,7 @@ function marketplaceToken(
 }
 
 /**
- * presents verified inputs and confirms the operation
+ * presents verified inputs, confirms the operation, and obtains enrolment authorisation
  * @param dependencies the registered drivers
  * @param context caller-side preflight evidence, selected native code, and operation
  * @returns authorised provisioning context or cancellation result
@@ -227,6 +231,10 @@ async function authorizeCreate(
   if (declined) {
     return blockedPreparation('CANCELLED', declined);
   }
+  const network = networkDriver(dependencies.registry, input.profile.network);
+  const authKey = network.inputs
+    ? await resolveEnrollmentKey(network, input)
+    : undefined;
 
   return {
     kind: 'ready',
@@ -235,6 +243,7 @@ async function authorizeCreate(
       input,
       name: values.name,
       token: values.token,
+      authKey,
       plugins,
       preflight,
       provider,
@@ -248,7 +257,7 @@ interface CheckProviderAndNetworkParams {
   provider: ProviderDriver;
   /** required create inputs */
   values: RequiredCreateValues;
-  /** resolved inputs, whose profile selects the network */
+  /** caller-side network management credential, if available */
   input: ResolvedInputs;
 }
 
@@ -267,7 +276,10 @@ async function checkProviderAndNetwork(
   const [taken, preflight] = await runOperation(async () =>
     Promise.allSettled([
       provider.isNameTaken(values.name),
-      network.preflight({ hostname: values.name }),
+      network.preflight({
+        hostname: values.name,
+        management: networkManagement(input),
+      }),
     ]),
   );
 

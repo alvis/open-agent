@@ -1,6 +1,12 @@
-import type { IdleForm, KeepAwakeMode, WakeMode } from '#domain/declarations';
+import type {
+  IdleForm,
+  KeepAwakeMode,
+  NetworkLauncher,
+  WakeMode,
+} from '#domain/declarations';
 import type { OsFamilyId } from '#domain/guest';
 import type { GuestAccount, GuestCommand } from '#domain/guest-command';
+import type { GuestNetworkIdentity } from '#domain/observations/network';
 import type { WorkstationProfile } from '#domain/profile';
 import type { PeriodicJob, ServiceDefinition } from '#domain/services';
 import type { ToolOwner, ToolSource } from '#domain/tools';
@@ -49,6 +55,8 @@ export interface EnvironmentProvider {
   supportsCliWakeSleep: boolean;
   /** furthest ahead, in minutes, one deadline keeps the workstation awake; null when unlimited */
   maxAwakeDeadlineMinutes: number | null;
+  /** CIDR prefixes of the provider's transport, which a network tunnel must never route */
+  transportNetworks: readonly string[];
   /** minutes without heartbeat or hold before sleep, capped at the deadline limit; 0 never sleeps */
   idleTimeoutMinutes: number;
   /** minutes a turn hold lasts after its last refresh, capped at the deadline limit */
@@ -92,6 +100,16 @@ interface EnvironmentAgent {
   harnesses: readonly EnvironmentHarness[];
 }
 
+/** the selected private network, as its launcher runs it */
+export interface EnvironmentNetwork {
+  /** network identifier */
+  id: string;
+  /** name of the network's daemon in `services` */
+  daemon: string;
+  /** where the daemon keeps its state, socket and tunnel, as its launcher reads them */
+  launcher: Omit<NetworkLauncher, 'asset'>;
+}
+
 /** the record setup leaves at `/opt/open-agent/environment.json` */
 export interface GuestEnvironment {
   /** format version */
@@ -128,8 +146,12 @@ export interface GuestEnvironment {
   provider: EnvironmentProvider;
   /** the agent's launch facts */
   agent: EnvironmentAgent;
-  /** the services the provider runs, the agent's included */
+  /** the selected network's launch facts; null when it runs no daemon */
+  network: EnvironmentNetwork | null;
+  /** the services the provider runs, the agent's and the network daemon's included */
   services: readonly ServiceDefinition[];
   /** the commands the provider runs on a schedule */
   jobs: readonly PeriodicJob[];
+  /** the retained network device identity, for cleanup; absent until a device enrolls */
+  networkIdentity?: GuestNetworkIdentity;
 }

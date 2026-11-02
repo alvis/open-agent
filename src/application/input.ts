@@ -82,6 +82,7 @@ export async function resolveInputs(
     sources,
     selection: {
       profile: resolution.profile,
+      networkEnrollment: required.includes('networkEnrollment'),
       credentialStore: resolution.credentialStore,
     },
   });

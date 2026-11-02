@@ -180,14 +180,18 @@ type ProfileValidation = ValidProfile | InvalidProfile;
 /**
  * builds the default profile
  * @param defaults the drivers and options chosen when nothing else chooses them
+ * @param network network chosen by the caller's inputs; the default network otherwise
  * @returns today's default workstation profile
  */
-export function defaultProfile(defaults: ProfileDefaults): WorkstationProfile {
+export function defaultProfile(
+  defaults: ProfileDefaults,
+  network: NetworkId = defaults.selection.network,
+): WorkstationProfile {
   return {
     provider: defaults.selection.provider,
     agent: defaults.selection.agent,
     harnesses: [...defaults.selection.harnesses],
-    network: defaults.selection.network,
+    network,
     options: { ...defaults.options },
   };
 }

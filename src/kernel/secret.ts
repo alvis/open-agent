@@ -7,7 +7,12 @@ import { rememberSecret } from '#kernel/redaction';
  * guest file contents that hold one
  */
 type HostCredentialSource =
-  'credential-store' | 'prompt' | 'github' | 'embedded';
+  | 'credential-store'
+  | 'credential-file'
+  | 'prompt'
+  | 'provider-api'
+  | 'github'
+  | 'embedded';
 
 /** source and registered value held by one secret */
 interface SecretParams {

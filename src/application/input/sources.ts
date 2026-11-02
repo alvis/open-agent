@@ -2,6 +2,7 @@ import { join } from 'node:path';
 
 import { parse } from 'dotenv';
 
+import { networksWithInputs } from '#application/catalog/networks';
 import { harnessEnvironmentNames } from '#domain/environment-names';
 import { HARNESS_IDS } from '#domain/ids';
 import { selectionInputs } from '#domain/selection-inputs';
@@ -37,6 +38,9 @@ function reservedEnv(
     ...Object.values(dependencies.registry.providers).map(
       ({ prerequisites }) => prerequisites.credential.environment,
     ),
+    ...networksWithInputs(dependencies.registry).flatMap(({ inputs }) =>
+      Object.values(inputs).map(({ environment }) => environment),
+    ),
     ...Object.values(selectionInputs(dependencies.registry)).map(
       ({ environment }) => environment,
     ),
@@ -64,6 +68,9 @@ function profileKeys(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
 ): Set<string> {
   return new Set([
+    ...networksWithInputs(dependencies.registry).map(
+      ({ inputs }) => inputs.account.environment,
+    ),
     dependencies.registry.gateways.cliproxyapi.inputs.baseUrl.environment,
   ]);
 }

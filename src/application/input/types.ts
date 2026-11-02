@@ -12,6 +12,12 @@ export interface ResolvedInputs {
   providerToken?: string;
   /** the provider credential was entered at a prompt in this run and is not saved yet */
   isProviderTokenEntered?: boolean;
+  /** management credential of the selected network */
+  networkKey?: string;
+  /** account or network the network management credential manages */
+  networkAccount?: string;
+  /** single-use network enrollment credential */
+  enrollmentKey?: string;
   proxyUrl?: string;
   proxyApiKey?: string;
   githubToken?: string;
@@ -32,6 +38,8 @@ export interface ResolvedInputs {
 export type RequiredInput =
   | 'name'
   | 'providerToken'
+  | 'networkEnrollment'
+  | 'networkAccount'
   | 'proxyUrl'
   | 'proxyApiKey'
   | 'gitIdentity'

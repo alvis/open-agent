@@ -8,7 +8,7 @@ import { dependencies } from '../../mocks/dependencies';
 
 import type { ResolvedInputs } from '#application/input/types';
 
-const disabled = { cliproxyapi: false };
+const disabled = { network: false, cliproxyapi: false };
 
 const baseInput: ResolvedInputs = {
   profile: profileWith(disabled),
@@ -18,18 +18,25 @@ const baseInput: ResolvedInputs = {
 };
 
 describe('fn:createPreflightSummary', () => {
-  it('should describe a longer maintenance interval', () => {
-    const profile = profileWith(disabled);
+  it('should describe a longer maintenance interval without claiming an unsupplied enrollment key', () => {
+    const profile = profileWith({
+      network: true,
+      cliproxyapi: false,
+    });
     const summary = createPreflightSummary(dependencies, {
       ...baseInput,
       profile: {
         ...profile,
         options: { ...profile.options, updateDueIntervalDays: 3 },
       },
+      networkKey: 'management-secret',
     });
 
     expect(summary.reminders).toEqual(
       expect.arrayContaining([expect.stringMatching(/3 days have passed/)]),
+    );
+    expect(summary.reminders.join(' ')).not.toMatch(
+      /supplied.*enrolment key|Without TAILSCALE_API_KEY/,
     );
   });
 
@@ -37,7 +44,12 @@ describe('fn:createPreflightSummary', () => {
     const native = createPreflightSummary(dependencies, baseInput);
     const enabled = createPreflightSummary(dependencies, {
       ...baseInput,
-      profile: profileWith({ cliproxyapi: true }),
+      profile: profileWith({
+        network: true,
+        cliproxyapi: true,
+      }),
+      networkKey: 'management-secret',
+      enrollmentKey: 'enrollment-secret',
       githubToken: 'github-secret',
       gitIdentity: {
         authorName: 'Author',
@@ -45,6 +57,14 @@ describe('fn:createPreflightSummary', () => {
         committerName: 'Committer',
         committerEmail: 'committer@example.test',
       },
+    });
+    const enrollmentOnly = createPreflightSummary(dependencies, {
+      ...baseInput,
+      profile: profileWith({
+        network: true,
+        cliproxyapi: false,
+      }),
+      enrollmentKey: 'enrollment-secret',
     });
 
     expect(native).toEqual({
@@ -63,12 +83,34 @@ describe('fn:createPreflightSummary', () => {
       checks: [
         expect.stringMatching(/Required inputs/),
         expect.stringMatching(/Sprite prerequisites/),
+        expect.stringMatching(/Tailscale access/),
       ],
       reminders: [
         expect.stringMatching(/hourly.*a day has passed/),
+        expect.stringMatching(/Guest TUN/),
+        expect.stringMatching(/network policy/),
+        expect.stringMatching(/enrolment key/),
         expect.stringMatching(/CLIProxyAPI authentication/),
       ],
     });
-    expect(JSON.stringify(enabled)).not.toMatch(/github-secret/);
+    expect(enrollmentOnly).toEqual({
+      checks: [
+        expect.stringMatching(/Required inputs/),
+        expect.stringMatching(/Sprite prerequisites/),
+      ],
+      reminders: [
+        expect.stringMatching(/hourly.*a day has passed/),
+        expect.stringMatching(/Guest TUN/),
+        expect.stringMatching(/network policy/),
+        expect.stringMatching(/enrolment key/),
+        expect.stringMatching(/device deletion.*authorisation/),
+        expect.stringMatching(/native sign-in/),
+        expect.stringMatching(/Private GitHub access/),
+        expect.stringMatching(/Git identity/),
+      ],
+    });
+    expect(JSON.stringify(enabled)).not.toMatch(
+      /management-secret|enrollment-secret|github-secret/,
+    );
   });
 });

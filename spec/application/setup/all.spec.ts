@@ -73,6 +73,7 @@ describe('fn:setupAll', () => {
       const services = holdServiceDefinitions(sprite);
       vi.spyOn(sprite, 'updateURLSettings').mockResolvedValue(undefined);
       const integrations = {
+        network: false,
         cliproxyapi: false,
       };
       const profile = profileWith(integrations);
@@ -106,6 +107,7 @@ describe('fn:setupAll', () => {
         profile,
         persistsProfile: false,
         isReleaseChanged,
+        networkEnrolled: false,
         mutation: { started: false },
       };
       const channel = await context.connection.guest();
@@ -250,6 +252,7 @@ describe('fn:setupAll', () => {
       .spyOn(sprite, 'updateURLSettings')
       .mockResolvedValue(undefined);
     const profile = profileWith({
+      network: false,
       cliproxyapi: false,
     });
     const context: SetupContext = {
@@ -266,6 +269,7 @@ describe('fn:setupAll', () => {
       profile,
       persistsProfile: false,
       isReleaseChanged: true,
+      networkEnrolled: false,
       mutation: { started: false },
     };
     const channel = await context.connection.guest();
@@ -319,6 +323,7 @@ describe('fn:setupAll', () => {
     const services = vi.spyOn(sprite, 'listServices');
     const exposure = vi.spyOn(sprite, 'updateURLSettings');
     const integrations = {
+      network: false,
       cliproxyapi: true,
     };
     const context: SetupContext = {
@@ -342,6 +347,7 @@ describe('fn:setupAll', () => {
       profile: profileWith(integrations),
       persistsProfile: false,
       isReleaseChanged: false,
+      networkEnrolled: false,
       mutation: { started: false },
     };
 

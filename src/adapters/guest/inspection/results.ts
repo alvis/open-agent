@@ -27,12 +27,15 @@ export function settleInspectionResults(
   recorded: Pick<GuestInspection, 'environment' | 'updates'>,
   results: InspectionResults,
 ): Omit<GuestInspection, 'governor'> {
+  const { environment } = recorded;
   checkOperation();
   const [serviceProbe, networkProbe, nativeProbe, proxyProbe] = results;
   const probeFailures: InspectionProbeFailure[] = [];
   const services =
     inspectionValue(serviceProbe, 'services', probeFailures) ?? [];
   const network = inspectionValue(networkProbe, 'network', probeFailures) ?? {
+    deviceId: environment.networkIdentity?.deviceId,
+    ip: environment.networkIdentity?.ip,
     online: false,
     skipped: false,
     reason: probeFailures.find((failure) => failure.probe === 'network')

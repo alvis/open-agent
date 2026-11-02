@@ -167,7 +167,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
     expect(() =>
       validateSetupIntegrationOptions(
         {
-          network: 'none',
+          network: 'tailscale',
           proxy: false,
           harness: ['claude'],
           idleMinutes: 0,

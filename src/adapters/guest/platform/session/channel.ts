@@ -50,6 +50,7 @@ export function sessionGuest(
     spawn: (command: GuestCommand): GuestProcess => channel.spawn(command),
     exists: async (path) => channel.exists(path),
     read: async (path) => channel.read(path),
+    assertUnrestrictedNetwork: async () => channel.assertUnrestrictedNetwork(),
   };
 }
 

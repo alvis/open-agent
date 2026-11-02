@@ -13,7 +13,10 @@ import { registry } from '#composition/registry';
 import { Secret } from '#kernel/secret';
 
 import { environmentOf } from '../../fixtures/environment';
-import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
+import {
+  DISABLED_NETWORK_PROFILE,
+  TAILSCALE_PROFILE,
+} from '../../fixtures/profile';
 
 import { dependencies } from '../../mocks/dependencies';
 import { standInSession } from '../../mocks/session';
@@ -27,6 +30,7 @@ import type { Sprite } from '@fly/sprites';
 
 import type { ConfigureNewWorkstationParams } from '#application/create/configuration';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { Interaction } from '#application/ports/interaction';
 import type { SetupSession } from '#application/ports/session';
 import type { WorkstationProfile } from '#domain/profile';
 
@@ -80,6 +84,31 @@ function connectionOf(sprite: Sprite): SetupSession {
     close: async () => undefined,
     guest: async () => channel,
   } satisfies SetupSession;
+}
+
+/**
+ * records progress from the configuration workflow
+ * @param messages selected progress updates
+ * @returns a prompt boundary that rejects unexpected prompts
+ */
+function progressOf(messages: string[]): Interaction {
+  const unexpected = async (): Promise<never> => {
+    throw new Error('Configuration unexpectedly requested a prompt');
+  };
+
+  return {
+    input: unexpected,
+    secret: unexpected,
+    select: unexpected,
+    multiselect: unexpected,
+    confirm: unexpected,
+    progress: ({ stage, message }) => {
+      if (stage === 'network') {
+        messages.push(message);
+      }
+    },
+    status: () => undefined,
+  } satisfies Interaction;
 }
 
 /**
@@ -150,19 +179,20 @@ describe('fn:configureNewWorkstation', () => {
     expect(calls).toEqual(['configureNative']);
   });
 
-  it('should enroll the selected network under the workstation hostname', async () => {
+  it('should enroll Tailscale with connectivity progress', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-configure-network-'),
     );
     const sprite = createFilesystemSprite({ root: directory.path });
     const calls: string[] = [];
+    const messages: string[] = [];
     const profile = {
-      ...DISABLED_NETWORK_PROFILE,
+      ...TAILSCALE_PROFILE,
       harnesses: [],
     } satisfies WorkstationProfile;
     const connection = connectionOf(sprite);
     using enroll = vi
-      .spyOn(registry.networks.none, 'enroll')
+      .spyOn(registry.networks.tailscale, 'enroll')
       .mockImplementation(async () => {
         calls.push('network enrolled');
       });
@@ -170,9 +200,11 @@ describe('fn:configureNewWorkstation', () => {
     const guest = await configureNewWorkstation(recordingDependencies(calls), {
       provider: providerOf(sprite.client),
       connection,
+      interaction: progressOf(messages),
       configuration: {
         hostname: 'box',
         profile,
+        authKey: Secret.fromHost('provider-api', 'selected-auth-key'),
         runtimeEnv: {},
         plugins,
       },
@@ -180,10 +212,12 @@ describe('fn:configureNewWorkstation', () => {
 
     expect({
       guest,
+      messages,
       calls,
       enrollment: enroll.mock.calls,
     }).toEqual({
       guest: await connection.guest(),
+      messages: [expect.stringContaining('connectivity')],
       calls: ['network enrolled', 'configureNative'],
       enrollment: [
         [expect.anything(), expect.objectContaining({ hostname: 'box' })],

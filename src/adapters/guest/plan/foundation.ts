@@ -122,7 +122,7 @@ export async function foundationSteps(
  * lists the guest programs setup installs before any step sources one: the
  * family's library and update fragment, the tool libraries, cron's, the
  * governor and the provider's awake adapter, the update gate
- * and updater, and the agent's launcher
+ * and updater, and the agent's and network's launchers
  * @param context the provider, the selection and the family
  * @returns each asset once
  */
@@ -133,6 +133,7 @@ function guestAssets(
   >,
 ): GuestAsset[] {
   const { registry, provider, profile, family } = context;
+  const launcher = registry.networks[profile.network].launcher;
   const assets = [
     family.library,
     family.updaterFragment,
@@ -147,6 +148,7 @@ function guestAssets(
     UPDATE_GATE_ASSET,
     UPDATER_ASSET,
     registry.agents[profile.agent].launcher,
+    ...(launcher ? [launcher.asset] : []),
   ];
 
   return [...new Map(assets.map((asset) => [asset.path, asset])).values()];

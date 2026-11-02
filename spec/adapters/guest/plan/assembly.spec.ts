@@ -6,7 +6,10 @@ import { registry } from '#composition/registry';
 import { CommandFault } from '#kernel/faults';
 import { OPEN_AGENT_VERSION } from '#kernel/version';
 
-import { DISABLED_NETWORK_PROFILE } from '../../../fixtures/profile';
+import {
+  DISABLED_NETWORK_PROFILE,
+  TAILSCALE_PROFILE,
+} from '../../../fixtures/profile';
 
 import type { DriverRegistry } from '#application/ports/drivers';
 import type { SetupStep, StepOutcome } from '#application/ports/plan';
@@ -85,6 +88,29 @@ async function runToolStep(
 }
 
 describe('fn:assemblePlan', () => {
+  it('should record the network daemon and its launcher for a connected Sprite', async () => {
+    const assembly = await assemblePlan(registry, {
+      provider: registry.providers.sprite,
+      profile: { ...TAILSCALE_PROFILE, provider: 'sprite' },
+      release: RELEASE,
+      version: OPEN_AGENT_VERSION,
+      setupAt: '2026-10-25T00:00:00Z',
+    });
+
+    expect(assembly.environment).toMatchObject({
+      network: {
+        id: 'tailscale',
+        daemon: 'tailscaled',
+        launcher: {
+          stateDirectory: '/opt/open-agent/state/tailscale',
+          socket: '/var/run/tailscale/tailscaled.sock',
+          tun: 'tailscale0',
+        },
+      },
+      services: expect.arrayContaining([registry.networks.tailscale.daemon]),
+    });
+  });
+
   it('should record an unavailable optional tool without planning its installation', async () => {
     const optionalTool = {
       ...CLAUDE_TOOL,
@@ -151,7 +177,7 @@ describe('fn:assemblePlan', () => {
     );
   });
 
-  it('should keep the first shared tool and install an ACP adapter', async () => {
+  it('should keep the first shared tool, install an ACP adapter, and retain network identity', async () => {
     const originalTool = {
       ...CLAUDE_TOOL,
       sources: [
@@ -186,6 +212,7 @@ describe('fn:assemblePlan', () => {
         },
       },
     } satisfies DriverRegistry;
+    const networkIdentity = { network: 'none' as const, deviceId: 'retained' };
 
     const assembly = await assemblePlan(selectedRegistry, {
       provider: registry.providers.sprite,
@@ -193,12 +220,14 @@ describe('fn:assemblePlan', () => {
       release: RELEASE,
       version: OPEN_AGENT_VERSION,
       setupAt: '2026-10-25T00:00:00Z',
+      networkIdentity,
     });
 
     expect(assembly).toEqual(
       expect.objectContaining({
         tools: expect.arrayContaining([originalTool, adapterTool]),
         environment: expect.objectContaining({
+          networkIdentity,
           agent: expect.objectContaining({
             harnesses: expect.arrayContaining([
               expect.objectContaining({

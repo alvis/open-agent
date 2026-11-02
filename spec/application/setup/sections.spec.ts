@@ -112,6 +112,7 @@ describe('fn:setupAgent', () => {
       profile: DISABLED_NETWORK_PROFILE,
       persistsProfile: false,
       isReleaseChanged: false,
+      networkEnrolled: false,
       mutation: { started: false },
     };
 
@@ -194,6 +195,7 @@ async function quietSetup(
     profile: DISABLED_NETWORK_PROFILE,
     persistsProfile: false,
     isReleaseChanged: false,
+    networkEnrolled: false,
     mutation: { started: false },
   };
 

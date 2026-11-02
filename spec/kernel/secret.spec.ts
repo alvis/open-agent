@@ -41,7 +41,7 @@ describe('host secrets', () => {
   });
 
   it('should reject a secret wrapper that was not registered for guest delivery', () => {
-    const secret = Secret.fromHost('prompt', 'kernel-secret-proxy-value');
+    const secret = Secret.fromHost('provider-api', 'kernel-secret-proxy-value');
     const wrapper = new Proxy(secret, {});
 
     expect(() => revealSecret(wrapper)).toThrowError();

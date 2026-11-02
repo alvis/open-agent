@@ -10,7 +10,7 @@ export const HARNESS_IDS = ['claude', 'codex'] as const;
 export const AGENT_IDS = ['t3'] as const;
 
 /** every registered network driver, in catalog order */
-export const NETWORK_IDS = ['none'] as const;
+export const NETWORK_IDS = ['none', 'tailscale'] as const;
 
 /** every registered model-gateway driver, in catalog order */
 export const GATEWAY_IDS = ['cliproxyapi'] as const;

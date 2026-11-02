@@ -1,5 +1,9 @@
+import { networksWithDaemon } from '#application/catalog/networks';
 import { sectionFields } from '#application/input/selection';
+import { disableNetwork } from '#application/setup/network';
+import { NO_NETWORK } from '#domain/ids';
 
+import type { NetworkWithDaemon } from '#application/catalog/networks';
 import type { SetupSection } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { GuestChannel } from '#application/ports/guest-channel';
@@ -13,26 +17,43 @@ export interface PersistSetupProfileParams {
   guest: GuestChannel;
   /** validated selection this run applies */
   profile: WorkstationProfile;
-  /** recorded selection and mutation tracking */
-  context: Pick<SetupContext, 'mutation'> & { expected: WorkstationProfile };
+  /** recorded selection, targeted section and mutation tracking */
+  context: Pick<SetupContext, 'mutation'> & {
+    expected: WorkstationProfile;
+    section: SetupSection;
+  };
 }
 
 /**
- * persists a validated selection; the update gate reads the tools section's
- * due interval from environment.json, so storing it is the whole change. The
- * setup session holds the guest's setup lock, so nothing else changes the
- * record meanwhile
- * @param dependencies the guest mechanics
+ * persists a validated selection and stops every daemon the selection no
+ * longer runs, including a stray daemon left on a workstation without a network;
+ * the update gate reads the tools section's due interval from environment.json,
+ * so storing it is the whole change. The setup session holds the guest's
+ * setup lock, so nothing else changes the record meanwhile
+ * @param dependencies the registered drivers, the guest mechanics
  * @param params the call's inputs: guest, profile, context
  */
 export async function persistSetupProfile(
-  dependencies: Pick<ApplicationDependencies, 'guest'>,
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'guest'>,
   params: PersistSetupProfileParams,
 ): Promise<void> {
   const { guest, profile, context } = params;
-  const { mutation, expected } = context;
+  const { mutation, expected, section } = context;
   await dependencies.guest.environment.assertProfile(guest, expected);
   mutation.started = true;
+  const deselected = sectionFields(section).includes('network')
+    ? await deselectedNetworks(dependencies, guest, { profile, expected })
+    : [];
+  for (const network of deselected) {
+    await disableNetwork(
+      {
+        declarations: dependencies.registry,
+        environment: dependencies.guest.environment,
+      },
+      guest,
+      network,
+    );
+  }
   await dependencies.guest.environment.writeProfile(guest, profile);
 }
 
@@ -100,19 +121,54 @@ function isMachineChanged(
  * limits preflight credentials to the parts of the selection this run applies
  * @param section selected setup area
  * @param profile validated selection
- * @returns the profile with an untargeted gateway choice cleared
+ * @returns the profile with untargeted network and gateway choices cleared
  */
 export function targetedProfile(
   section: SetupSection,
   profile: WorkstationProfile,
 ): WorkstationProfile {
-  const isProxyTargeted = sectionFields(section).includes('isProxyEnabled');
+  const fields = sectionFields(section);
+  const isNetworkTargeted = fields.includes('network');
+  const isProxyTargeted = fields.includes('isProxyEnabled');
 
   return {
     ...profile,
+    network: isNetworkTargeted ? profile.network : NO_NETWORK,
     options: {
       ...profile.options,
       isProxyEnabled: isProxyTargeted && profile.options.isProxyEnabled,
     },
   };
+}
+
+/**
+ * lists the network daemons a selection stops: those of the networks the
+ * selection does not run that the workstation recorded or still has registered,
+ * so a workstation that never ran a network has nothing to release
+ * @param dependencies the registered drivers
+ * @param guest selected managed guest
+ * @param selections the validated selection this run applies and the one the workstation recorded
+ * @param selections.profile validated selection this run applies
+ * @param selections.expected selection the workstation recorded
+ * @returns network drivers whose daemon must be released
+ */
+async function deselectedNetworks(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  guest: GuestChannel,
+  selections: { profile: WorkstationProfile; expected: WorkstationProfile },
+): Promise<NetworkWithDaemon[]> {
+  const { profile, expected } = selections;
+  const others = networksWithDaemon(dependencies.registry).filter(
+    ({ id }) => id !== profile.network,
+  );
+  if (others.length === 0) {
+    return [];
+  }
+  const services = await guest.services.list();
+
+  return others.filter(
+    ({ id, daemon }) =>
+      id === expected.network ||
+      services.some(({ name }) => name === daemon.name),
+  );
 }

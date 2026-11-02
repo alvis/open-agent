@@ -200,7 +200,10 @@ function expectSuccessJson(result: CommandSuccess, output: unknown): void {
       break;
     case 'terminate':
       expect(output).toMatchObject({
-        data: { workstation: result.data.workstation },
+        data: {
+          workstation: result.data.workstation,
+          network: { status: result.data.network.status },
+        },
       });
       break;
     default:
@@ -297,6 +300,19 @@ function expectSetupJson(
   data: Extract<CommandSuccess, { command: 'setup' }>['data'],
   output: unknown,
 ): void {
+  if ('localCredential' in data) {
+    expect(output).toMatchObject({
+      data: {
+        localCredential: {
+          status: data.localCredential.status,
+          scope: data.localCredential.scope,
+          ...(data.localCredential.storage && {
+            storage: data.localCredential.storage,
+          }),
+        },
+      },
+    });
+  }
   if ('runtimeEnvironment' in data && data.runtimeEnvironment) {
     expect(output).toMatchObject({
       data: { runtimeEnvironment: { status: data.runtimeEnvironment.status } },

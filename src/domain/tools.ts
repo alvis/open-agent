@@ -3,6 +3,28 @@ import type { OsConstraint, OsFamilyId } from '#domain/guest';
 /** the guest account that owns a tool's files: root for system packages, `linuxbrew` for Homebrew, the agent for its own */
 export type ToolOwner = 'root' | 'linuxbrew' | 'agent';
 
+/** a signed package repository a system source adds before installing */
+export interface SystemRepository {
+  /** identifier, used to name the repository's files on the guest */
+  id: string;
+  /** the signing key and the fingerprints it must carry */
+  key: {
+    /** where the public key is downloaded from */
+    url: string;
+    /** pinned fingerprints; the key is refused unless it carries one */
+    fingerprints: readonly string[];
+  };
+  /** the repository for the `debian` family */
+  debian?: {
+    /** repository URI */
+    uri: string;
+    /** suite; `{codename}` stands for the guest's release codename */
+    suite: string;
+    /** components */
+    components: readonly string[];
+  };
+}
+
 /** a Homebrew formula, owned by `linuxbrew` */
 export interface BrewToolSource {
   /** source discriminator */
@@ -25,6 +47,8 @@ export interface SystemToolSource {
   family: OsFamilyId;
   /** package names */
   packages: readonly string[];
+  /** signed repository added first; absent for the distribution's own */
+  repository?: SystemRepository;
   /** service units the packages ship that are masked, so only open-agent's own service runs */
   vendorServices?: readonly string[];
   /** where the source is usable */

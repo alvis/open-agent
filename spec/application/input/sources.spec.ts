@@ -25,6 +25,7 @@ describe('fn:readInputSources', () => {
     await writeFile(
       join(profileDirectory, 'profile.json'),
       JSON.stringify({
+        TAILSCALE_TAILNET: 'profile-tailnet',
         CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
         SPRITES_TOKEN: 'profile-secret-must-be-ignored',
         GH_TOKEN: 'profile-github-must-be-ignored',
@@ -54,6 +55,7 @@ describe('fn:readInputSources', () => {
           MULTILINE: 'first\nsecond',
         },
         profile: {
+          TAILSCALE_TAILNET: 'profile-tailnet',
           CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
         },
         token: 'process-secret-for-source-test',
@@ -103,7 +105,9 @@ describe('fn:runtimeEnvironment', () => {
   it('should forward dotenv runtime inputs while retaining management and CLI inputs locally', () => {
     const runtime = runtimeEnvironment(dependencies, {
       SPRITES_TOKEN: 'sprites-management',
-      OPEN_AGENT_NETWORK: 'none',
+      TAILSCALE_API_KEY: 'tailscale-management',
+      TAILSCALE_AUTH_KEY: 'transient-enrollment',
+      OPEN_AGENT_NETWORK: 'tailscale',
       OPEN_AGENT_IDLE_MINUTES: '0',
       CLIPROXYAPI_API_KEY: 'native-proxy-client',
       GH_TOKEN: 'native-github-client',

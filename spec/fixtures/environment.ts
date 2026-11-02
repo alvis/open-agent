@@ -8,7 +8,7 @@ import type { WorkstationProfile } from '#domain/profile';
 
 /**
  * builds the environment.json a finished setup of a profile records, with no
- * tools or jobs and only the agent's service
+ * tools, jobs or network and only the agent's service
  * @param profile the recorded profile
  * @param overrides fields that differ from a ready setup
  * @returns a complete environment record
@@ -32,6 +32,7 @@ export function environmentOf(
       wakeMode: 'url-traffic',
       supportsCliWakeSleep: false,
       maxAwakeDeadlineMinutes: null,
+      transportNetworks: [],
       idleTimeoutMinutes: profile.options.idleTimeoutMinutes,
       holdMaxMinutes: profile.options.holdMaxMinutes,
       awakeAdapter: null,
@@ -43,6 +44,7 @@ export function environmentOf(
       port: agentPort(registry, profile.agent),
       harnesses: [],
     },
+    network: null,
     services: [registry.agents[profile.agent].service],
     jobs: [],
     ...overrides,

@@ -32,12 +32,14 @@ describe('None network driver', () => {
     expect(registry.networks.none).toBe(none);
   });
 
-  it('should declare no tools', () => {
+  it('should declare no daemon, tools or inputs', () => {
     expect(none).toMatchObject({
       id: 'none',
       kind: 'networks',
       tools: [],
     });
+    expect(none.daemon).toBeUndefined();
+    expect(none.inputs).toBeUndefined();
   });
 
   it('should pass preflight without checking any caller input', async () => {
@@ -46,14 +48,26 @@ describe('None network driver', () => {
     });
   });
 
-  it('should enroll without touching the guest', async () => {
+  it('should refuse to issue a credential', async () => {
+    await expect(
+      none.issueCredential({ credential: 'unused' }),
+    ).rejects.toThrow('No private network is selected');
+  });
+
+  it('should enroll, release, and clean up without touching the guest or the caller accounts', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-none-driver-'),
     );
     const { guest, execute, sprite } = recordingGuest(directory.path);
+    const recordIdentity = vi.fn();
 
-    await none.enroll(guest, { hostname: 'workstation' });
+    await none.enroll(guest, { hostname: 'workstation', recordIdentity });
+    await none.release(guest, { service: undefined, recordIdentity });
 
+    await expect(
+      none.cleanup({ identity: await none.identify(guest, {}) }),
+    ).resolves.toEqual({ ok: true, status: 'no device identity recorded' });
+    expect(recordIdentity).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
     expect(sprite.spawn).not.toHaveBeenCalled();
   });

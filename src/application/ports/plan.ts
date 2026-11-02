@@ -1,5 +1,6 @@
 import type { OsRelease } from '#domain/guest';
 import type { GuestEnvironment } from '#domain/observations/environment';
+import type { GuestNetworkIdentity } from '#domain/observations/network';
 import type { WorkstationProfile } from '#domain/profile';
 import type {
   RefusedSource,
@@ -142,6 +143,8 @@ export interface AssemblyParams {
   version: string;
   /** when setup started, as an ISO 8601 timestamp */
   setupAt: string;
+  /** the retained network device identity of an earlier setup */
+  networkIdentity?: GuestNetworkIdentity;
 }
 
 /** a workstation's assembled setup plan */

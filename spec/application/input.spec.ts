@@ -131,11 +131,16 @@ describe('fn:resolveInputs', () => {
         required: [
           'name',
           'providerToken',
+          'networkEnrollment',
+          'networkAccount',
           'proxyUrl',
           'proxyApiKey',
           'gitIdentity',
         ],
-        profile: profileWith({ cliproxyapi: true }),
+        profile: profileWith({
+          network: true,
+          cliproxyapi: true,
+        }),
       },
     });
     const defaults = await resolveInputs(dependencies, {
@@ -153,6 +158,12 @@ describe('fn:resolveInputs', () => {
     expect([input.missing, defaults.missing]).toEqual([
       [
         expect.stringContaining('--name'),
+        'Tailscale management API key is not set. Set TAILSCALE_API_KEY or pass --credential-file FILE containing TAILSCALE_API_KEY; ' +
+          'use --network-key-source env:NAME, file:PATH, or keychain:SERVICE/ACCOUNT; or run in a TTY to enter it when prompted. ' +
+          'Or set TAILSCALE_AUTH_KEY (--network-auth-key-source SOURCE) to enrol with a single-use key.',
+        expect.stringMatching(
+          /^Tailscale tailnet .* is not set\. Set TAILSCALE_TAILNET or pass --credential-file FILE containing TAILSCALE_TAILNET; use --network-account ACCOUNT;/u,
+        ),
         expect.stringContaining(
           'Set CLIPROXYAPI_BASE_URL or pass --credential-file FILE containing CLIPROXYAPI_BASE_URL; use --proxy-url URL;',
         ),
@@ -327,6 +338,9 @@ describe('fn:resolveInputs', () => {
   it('should derive create preflight requirements from the selected integrations', async () => {
     for (const name of [
       'SPRITES_TOKEN',
+      'TAILSCALE_API_KEY',
+      'TAILSCALE_AUTH_KEY',
+      'TAILSCALE_TAILNET',
       'CLIPROXYAPI_BASE_URL',
       'CLIPROXYAPI_API_KEY',
     ]) {
@@ -337,7 +351,7 @@ describe('fn:resolveInputs', () => {
 
     try {
       const selected = await resolveCreateInputs(dependencies, {
-        network: 'none',
+        network: 'tailscale',
         proxy: true,
         nonInteractive: true,
         localCredentials: false,
@@ -350,10 +364,12 @@ describe('fn:resolveInputs', () => {
         options: selected.profile.options,
         missing: selected.missing,
       }).toEqual({
-        network: 'none',
+        network: 'tailscale',
         options: expect.objectContaining({ isProxyEnabled: true }),
         missing: [
           expect.stringContaining('--name'),
+          expect.stringContaining('TAILSCALE_API_KEY'),
+          expect.stringContaining('TAILSCALE_TAILNET'),
           expect.stringContaining('CLIPROXYAPI_BASE_URL'),
           expect.stringContaining('CLIPROXYAPI_API_KEY'),
         ],
@@ -380,7 +396,12 @@ describe('fn:resolveInputs', () => {
     );
     await writeFile(
       path,
-      ['SPRITES_TOKEN=file-provider-secret', 'GH_TOKEN=unused', ''].join('\n'),
+      [
+        'SPRITES_TOKEN=file-provider-secret',
+        'GH_TOKEN=unused',
+        'TAILSCALE_API_KEY=unused',
+        '',
+      ].join('\n'),
     );
     await writeFile(secretPath, 'explicit-provider-secret\n');
 

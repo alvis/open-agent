@@ -59,9 +59,10 @@ export const SYSTEM_PATH = '/usr/sbin:/usr/bin:/sbin:/bin';
 
 /**
  * the directories Homebrew links its formulae's executables into, which the
- * agent's PATH searches before the system's. Root runs a formula's binaries
- * only because the Homebrew account is a locked system account root alone
- * writes, acting as it; the agent account never writes anything root runs
+ * agent's PATH searches before the system's. Root runs a formula's binaries,
+ * such as tailscaled, only because the Homebrew account is a
+ * locked system account root alone writes, acting as it; the agent account
+ * never writes anything root runs
  */
 export const HOMEBREW_PATH = `${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin`;
 
@@ -106,7 +107,7 @@ export const LOGIN_PROFILE = [
  */
 export const SESSION_DIRECTORY = '/run/open-agent-session';
 
-/** the lock a setup session holds while it runs, which the update gate tests */
+/** the lock a setup session holds while it runs, which the update gate and the network launcher test */
 export const SESSION_LOCK = `${SESSION_DIRECTORY}/session.lock`;
 
 /** the memory-backed directory setup delivers its secrets in */

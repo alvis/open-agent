@@ -3,7 +3,11 @@ import {
   ENVIRONMENT_MODE,
   serializeEnvironment,
 } from '#adapters/guest/environment/contracts';
-import { guestJobs, guestServices } from '#adapters/guest/environment/services';
+import {
+  environmentNetwork,
+  guestJobs,
+  guestServices,
+} from '#adapters/guest/environment/services';
 import { idleStep, IDLE_STEP } from '#adapters/guest/governor';
 import { familyOf } from '#adapters/guest/os/families';
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
@@ -182,6 +186,7 @@ function assembleEnvironment(
 ): GuestEnvironment {
   const { tools, resolutions } = resolved;
   const { provider, profile, release } = params;
+  const network = registry.networks[profile.network];
   const agent = agentService(registry, profile);
 
   return buildEnvironment(registry, {
@@ -203,8 +208,10 @@ function assembleEnvironment(
         ...(driver.acpAdapter && { acpAdapter: driver.acpAdapter }),
       };
     }),
-    services: guestServices(agent),
+    network: environmentNetwork(network),
+    services: guestServices(agent, network.daemon),
     jobs: guestJobs(),
+    ...(params.networkIdentity && { networkIdentity: params.networkIdentity }),
   });
 }
 

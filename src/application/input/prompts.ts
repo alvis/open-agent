@@ -1,3 +1,4 @@
+import { networkDriver } from '#application/catalog/networks';
 import { machineNameProblem } from '#application/machine';
 import { enteredCredentialProblem } from '#domain/prerequisites';
 import { rememberSecret } from '#kernel/redaction';
@@ -130,6 +131,16 @@ async function promptPublicInputs(
       validate: machineNameProblem,
     });
   }
+  const network = networkDriver(
+    dependencies.registry,
+    input.profile.network,
+  ).inputs;
+  if (network && required.includes('networkAccount')) {
+    input.networkAccount ??= await interaction.input({
+      message: network.account.prompt,
+      required: true,
+    });
+  }
   if (required.includes('proxyUrl')) {
     input.proxyUrl ??= await interaction.input({
       message: dependencies.registry.gateways.cliproxyapi.inputs.baseUrl.prompt,
@@ -169,6 +180,26 @@ async function promptSecrets(
     // saved only after the provider accepts it; see retainEnteredProviderToken
     input.isProviderTokenEntered = true;
     input.sources[credential.environment] = 'the entered token';
+  }
+  const network = networkDriver(
+    dependencies.registry,
+    input.profile.network,
+  ).inputs;
+  if (
+    network &&
+    required.includes('networkEnrollment') &&
+    !input.networkKey &&
+    !input.enrollmentKey
+  ) {
+    input.networkKey = await interaction.secret({
+      message: network.management.prompt,
+      required: true,
+    });
+    await retainPromptedCredential(dependencies, {
+      input,
+      credential: { name: network.management.store, value: input.networkKey },
+      context,
+    });
   }
   if (required.includes('proxyApiKey')) {
     input.proxyApiKey ??= await interaction.secret({

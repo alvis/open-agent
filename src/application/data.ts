@@ -93,10 +93,19 @@ export interface DoctorData {
   currentReadiness: CurrentReadiness;
 }
 
-/** completed workstation deletion */
+/** completed workstation deletion and separately observed network cleanup */
 export interface TerminateData {
   machine: MachineSummary;
   workstation: { status: 'deleted'; id: string; name: string };
+  network: {
+    status:
+      | 'no device identity recorded'
+      | 'cleanup required'
+      | 'deleted'
+      | 'cleanup failed';
+    deviceId?: string;
+    address?: string;
+  };
 }
 
 /** native agent setup or explicitly requested pairing */
@@ -107,7 +116,8 @@ export interface AgentSetupData {
 
 /** selected native networking outcome */
 export interface NetworkSetupData {
-  network: { status: 'disabled'; readiness: 'skipped' };
+  network:
+    { status: 'configured' } | { status: 'disabled'; readiness: 'skipped' };
 }
 
 /** native GitHub authentication outcome */
@@ -204,13 +214,25 @@ export type AppliedSetupSection = {
   } & SetupSectionData[Section];
 }[keyof SetupSectionData];
 
-/** setup configures one guest */
-export type SetupData = AppliedSetupSection & {
-  machine: MachineSummary;
-  retainedCredentials?: Partial<
-    Record<ManagementCredentialName, CredentialSaveResult>
-  >;
-};
+/** caller-side credential storage has no workstation identity */
+export interface LocalCredentialData {
+  localCredential: {
+    status: 'unchanged' | 'replaced';
+    scope: 'this computer; all workstations';
+    storage?: CredentialSaveResult['storage'];
+    fallbackReason?: NonNullable<CredentialSaveResult['fallbackReason']>;
+  };
+}
+
+/** setup can configure one guest or replace the shared local credential */
+export type SetupData =
+  | (AppliedSetupSection & {
+      machine: MachineSummary;
+      retainedCredentials?: Partial<
+        Record<ManagementCredentialName, CredentialSaveResult>
+      >;
+    })
+  | LocalCredentialData;
 
 /** success payload for each executed command */
 export interface CommandData {

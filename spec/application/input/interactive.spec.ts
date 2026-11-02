@@ -13,14 +13,9 @@ import { defaultProfile } from '#domain/profile';
 import { driveInk } from '../../fixtures/ink';
 import { dependencies } from '../../mocks/dependencies';
 
-import type { WorkstationProfile } from '#domain/profile';
-
 describe('input source resolution', () => {
   it('should preserve the recorded and default selections under --yes without inventing features', async () => {
-    const recorded: WorkstationProfile = {
-      ...defaultProfile(defaults),
-      harnesses: ['claude'],
-    };
+    const recorded = defaultProfile(defaults, 'tailscale');
     const sources = { processEnv: {}, fileEnv: {}, profile: {} };
     const observed = await driveInk(async (interaction) => {
       const setup = await resolveSetupSelection(dependencies, {
@@ -46,7 +41,7 @@ describe('input source resolution', () => {
 
     expect(observed.matchedSteps).toBe(0);
     expect(observed.result.setup).toMatchObject({
-      network: 'none',
+      network: 'tailscale',
       harnesses: recorded.harnesses,
     });
     expect(observed.result.create).toMatchObject({
@@ -68,12 +63,13 @@ describe('input source resolution', () => {
         { waitFor: 'Minimum memory (GB)', input: '\r' },
         { waitFor: 'Release channel', input: '\r' },
         { waitFor: 'Harnesses', input: '\r' },
+        { waitFor: 'Network', input: '\r' },
         { waitFor: 'Route harnesses through CLIProxyAPI?', input: '\r' },
         { waitFor: 'Suspend after idle', input: '\r' },
       ],
     );
 
-    expect(observed.matchedSteps, observed.output).toBe(6);
+    expect(observed.matchedSteps, observed.output).toBe(7);
     expect(observed.result.candidate).toMatchObject({
       provider: 'sprite',
       harnesses: ['claude', 'codex'],

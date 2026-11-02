@@ -1,3 +1,4 @@
+import { networksWithInputs } from '#application/catalog/networks';
 import { harnessIds } from '#domain/harnesses';
 import { AGENT_IDS, PROVIDER_IDS } from '#domain/ids';
 import { networkIds } from '#domain/networks';
@@ -61,17 +62,21 @@ export function harnessChoices(
 }
 
 /**
- * offers every registered network
- * @param dependencies the registered drivers
- * @returns one labelled choice per network
+ * offers every registered network with the default first
+ * @param dependencies the registered drivers, the profile defaults
+ * @param preferred network to offer first
+ * @returns one labelled choice per network, the preferred one first
  */
 export function networkChoices(
-  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
+  preferred: NetworkId = dependencies.defaults.selection.network,
 ): Array<InteractionChoice<NetworkId>> {
-  return networkIds().map((id) => ({
-    label: dependencies.registry.networks[id].displayName,
-    value: id,
-  }));
+  return [preferred, ...networkIds().filter((id) => id !== preferred)].map(
+    (id) => ({
+      label: dependencies.registry.networks[id].displayName,
+      value: id,
+    }),
+  );
 }
 
 /**
@@ -126,6 +131,33 @@ export function defaultHarnesses(
   );
 
   return preselected.length > 0 ? preselected : supported;
+}
+
+/**
+ * picks the first network whose declared inputs the caller supplied
+ * @param dependencies the registered drivers
+ * @param options parsed flags
+ * @param sources process, credential file and profile values
+ * @returns the network those inputs select, if any
+ */
+export function inferNetwork(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  options: CommandOptions,
+  sources: InputSources,
+): NetworkId | undefined {
+  const hasFlags = [
+    options.networkAccount,
+    options.networkKeySource,
+    options.networkAuthKeySource,
+  ].some((value) => Boolean(value?.trim()));
+
+  return networksWithInputs(dependencies.registry).find(
+    ({ inputs }) =>
+      hasFlags ||
+      [inputs.account, inputs.management, inputs.enrollment].some(
+        ({ environment }) => hasValue(sources, environment),
+      ),
+  )?.id;
 }
 
 /** the named inputs of inferred options */

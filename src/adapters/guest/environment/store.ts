@@ -17,9 +17,11 @@ import {
   serializeEnvironment,
 } from './contracts';
 
+import type { NetworkIdentityRecorder } from '#application/ports/drivers';
 import type { GuestEnvironmentAccess } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { ProductDeclarations } from '#domain/declarations';
+import type { NetworkId } from '#domain/ids';
 import type { GuestEnvironment } from '#domain/observations/environment';
 import type { UpdateStatus } from '#domain/observations/updates';
 import type { WorkstationProfile } from '#domain/profile';
@@ -48,6 +50,8 @@ export function createEnvironmentAccess(
     write,
     writeProfile: async (guest, profile) =>
       writeGuestProfile(declarations, guest, profile),
+    identityRecorder: (guest, network) =>
+      networkIdentityRecorder(declarations, guest, network),
     assertProfile: async (guest, expected) =>
       assertGuestProfile(declarations, guest, expected),
     readUpdateStatus,
@@ -120,12 +124,34 @@ async function writeGuestProfile(
 }
 
 /**
+ * keeps a network device identity in the recorded environment, owned by the
+ * network that enrolled it
+ * @param declarations the data every registered driver declares
+ * @param guest target guest
+ * @param network the network whose device the identity names
+ * @returns the recorder a network driver calls with each identity it observes
+ */
+function networkIdentityRecorder(
+  declarations: ProductDeclarations,
+  guest: GuestChannel,
+  network: NetworkId,
+): NetworkIdentityRecorder {
+  return async (identity) => {
+    const environment = await readGuestEnvironment(declarations, guest);
+    await writeGuestEnvironment(declarations, guest, {
+      ...environment,
+      networkIdentity: { ...identity, network },
+    });
+  };
+}
+
+/**
  * refuses to go on when the recorded integration choices changed while
  * inputs were being collected
  * @param declarations the data every registered driver declares
  * @param guest target guest
  * @param expected the profile the inputs were collected for
- * @throws {CommandFault} when the gateway choice differs
+ * @throws {CommandFault} when the network or gateway choice differs
  */
 async function assertGuestProfile(
   declarations: ProductDeclarations,
@@ -133,7 +159,10 @@ async function assertGuestProfile(
   expected: WorkstationProfile,
 ): Promise<void> {
   const { profile } = await readGuestEnvironment(declarations, guest);
-  if (profile.options.isProxyEnabled !== expected.options.isProxyEnabled) {
+  if (
+    profile.network !== expected.network ||
+    profile.options.isProxyEnabled !== expected.options.isProxyEnabled
+  ) {
     throw new CommandFault({
       code: 'CONFLICT',
       message:

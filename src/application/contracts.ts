@@ -96,6 +96,8 @@ export interface CommandOptions {
   update?: boolean;
   /** routes harnesses through CLIProxyAPI when enabled */
   proxy?: boolean;
+  /** account or network the network management credential manages */
+  networkAccount?: string;
   /** base URL of the CLIProxyAPI hub */
   proxyUrl?: string;
   /** Git author name */
@@ -110,6 +112,10 @@ export interface CommandOptions {
   githubHost?: string;
   /** source reference of the provider management credential */
   providerTokenSource?: string;
+  /** source reference of the network management credential */
+  networkKeySource?: string;
+  /** source reference of a single-use network enrollment credential */
+  networkAuthKeySource?: string;
   /** source reference of the CLIProxyAPI key */
   proxyApiKeySource?: string;
   /** source reference of the GitHub token */

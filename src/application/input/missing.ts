@@ -1,7 +1,11 @@
+import { networkDriver } from '#application/catalog/networks';
 import { prerequisiteDetails, missingInput } from '#domain/prerequisites';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
-import type { InputPrerequisite } from '#domain/prerequisites';
+import type {
+  InputPrerequisite,
+  PrerequisiteProblem,
+} from '#domain/prerequisites';
 
 import type { RequiredInput, ResolvedInputs } from './types';
 
@@ -48,6 +52,28 @@ export function missingProvisioningInputs(
   input: ResolvedInputs,
   required: readonly RequiredInput[],
 ): string[] {
+  const network = networkDriver(
+    dependencies.registry,
+    input.profile.network,
+  ).inputs;
+  const networkChecks: Array<[RequiredInput, boolean, PrerequisiteProblem]> =
+    network
+      ? [
+          [
+            'networkEnrollment',
+            Boolean(input.networkKey ?? input.enrollmentKey),
+            missingInput(
+              network.management,
+              `Or set ${network.enrollment.environment} (${network.enrollment.flag}) to enrol with a single-use key.`,
+            ),
+          ],
+          [
+            'networkAccount',
+            Boolean(input.networkAccount),
+            missingInput(network.account),
+          ],
+        ]
+      : [];
   const isProxyRequired =
     required.includes('proxyUrl') || required.includes('proxyApiKey');
   const gateway = isProxyRequired
@@ -56,11 +82,14 @@ export function missingProvisioningInputs(
         apiKey: input.proxyApiKey,
       })
     : [];
+  const absent = networkChecks
+    .filter(([name, present]) => required.includes(name) && !present)
+    .map(([, , problem]) => problem);
 
   return [
     ...(required.includes('name') && !input.name
       ? ['workstation name (--name)']
       : []),
-    ...prerequisiteDetails(gateway),
+    ...prerequisiteDetails([...absent, ...gateway]),
   ];
 }

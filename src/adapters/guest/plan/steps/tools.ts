@@ -248,16 +248,35 @@ function npmActions(source: NpmToolSource): SourceActions {
 }
 
 /**
- * decides the calls of a system package step: mask the vendor services, then
- * install the packages; it is in place once every package is installed
+ * decides the calls of a system package step: mask the vendor services, add
+ * the signed repository, then install the packages; it is in place once every
+ * package is installed
  * @param source the packages
  * @returns the libraries, calls and limit of the step
+ * @throws {Error} when the repository has no entry for the source's family
  */
 function systemActions(source: SystemToolSource): SourceActions {
-  const { packages, vendorServices = [] } = source;
+  const { packages, repository, vendorServices = [] } = source;
   const prepare: LibraryCall[] = [];
   if (vendorServices.length > 0) {
     prepare.push(['oa_mask_service', ...vendorServices]);
+  }
+  if (repository) {
+    const entry = repository[source.family];
+    if (!entry) {
+      throw new Error(
+        `Repository ${repository.id} has no ${source.family} entry`,
+      );
+    }
+    prepare.push([
+      'oa_repo_add',
+      repository.id,
+      repository.key.url,
+      repository.key.fingerprints.join(' '),
+      entry.uri,
+      entry.suite,
+      ...entry.components,
+    ]);
   }
 
   return {

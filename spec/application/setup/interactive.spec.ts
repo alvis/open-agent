@@ -47,6 +47,7 @@ vi.mock(
 
 /** the profile the set-up workstation recorded */
 const PROFILE = profileWith({
+  network: false,
   cliproxyapi: false,
 });
 
@@ -94,6 +95,7 @@ describe('scoped setup', () => {
         profile: DISABLED_NETWORK_PROFILE,
         persistsProfile: false,
         isReleaseChanged: false,
+        networkEnrolled: false,
         mutation: { started: false },
       };
       const observed = await driveInk(
@@ -212,6 +214,7 @@ describe('scoped setup', () => {
         profile: DISABLED_NETWORK_PROFILE,
         persistsProfile: false,
         isReleaseChanged: false,
+        networkEnrolled: false,
         mutation: { started: false },
       };
       await mkdir(join(root, 'home/agent/.codex'), { recursive: true });
@@ -331,6 +334,7 @@ describe('scoped setup', () => {
         profile: DISABLED_NETWORK_PROFILE,
         persistsProfile: false,
         isReleaseChanged: false,
+        networkEnrolled: false,
         mutation: { started: false },
       };
       await mkdir(join(root, 'home/agent/.codex'), { recursive: true });

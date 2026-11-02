@@ -13,6 +13,7 @@ import {
 } from './integrations';
 import {
   assertSameWorkstationKind,
+  isNetworkEnrolled,
   readSetupEnvironment,
   unrecordedProfile,
 } from './recorded';
@@ -102,6 +103,8 @@ interface ResolvedSetup {
   persistsProfile: boolean;
   /** the part of the profile the section targets */
   targeted: ReturnType<typeof targetedProfile>;
+  /** whether the selected network is already enrolled */
+  networkEnrolled: boolean;
   /** whether this run moves the agent's installed release */
   isReleaseChanged: boolean;
   /** the inputs the run needs, resolved */
@@ -114,8 +117,11 @@ interface SetupInputsParams {
   setup: SetupPreparationParams;
   /** the validated profile this run applies */
   profile: WorkstationProfile;
-  /** whether the run writes the profile back and what the section targets */
-  state: Pick<ResolvedSetup, 'persistsProfile' | 'targeted'>;
+  /** whether the run writes the profile back, what the section targets and whether the network is enrolled */
+  state: Pick<
+    ResolvedSetup,
+    'persistsProfile' | 'targeted' | 'networkEnrolled'
+  >;
 }
 
 /**
@@ -148,7 +154,7 @@ export async function prepareSetupContext(
   dependencies: ApplicationDependencies,
   params: SetupPreparationParams,
 ): Promise<PreparedSetup> {
-  const { provider, workstation, options, interaction } = params;
+  const { provider, workstation, section, options, interaction } = params;
   const resolved = await resolveSetup(dependencies, params);
   const { profile } = resolved;
   const resized = await resizeWhenRequested({
@@ -176,6 +182,7 @@ export async function prepareSetupContext(
     await persistPreparedProfile(dependencies, {
       resolved,
       guest,
+      section,
       mutation: params.mutation,
     });
 
@@ -198,9 +205,10 @@ export async function prepareSetupContext(
 /**
  * persists a changed selection only when the guest already records a profile
  * @param dependencies registered drivers and guest profile storage
- * @param params resolved selection, current channel and mutation state
+ * @param params resolved selection, current channel, targeted section and mutation state
  * @param params.resolved validated selection and previously recorded environment
  * @param params.guest current guest channel, after any resize
+ * @param params.section selected setup area
  * @param params.mutation diagnostic mutation state
  */
 async function persistPreparedProfile(
@@ -208,10 +216,12 @@ async function persistPreparedProfile(
   {
     resolved,
     guest,
+    section,
     mutation,
   }: {
     resolved: ResolvedSetup;
     guest: GuestChannel;
+    section: SetupSection;
     mutation: SetupProgress;
   },
 ): Promise<void> {
@@ -219,7 +229,11 @@ async function persistPreparedProfile(
     await persistSetupProfile(dependencies, {
       guest,
       profile: resolved.profile,
-      context: { mutation, expected: resolved.recorded },
+      context: {
+        mutation,
+        expected: resolved.recorded,
+        section,
+      },
     });
   }
 }
@@ -247,6 +261,7 @@ function setupContextOf(
     profile,
     persistsProfile: resolved.persistsProfile,
     isReleaseChanged: resolved.isReleaseChanged,
+    networkEnrolled: resolved.networkEnrolled,
     mutation: params.mutation,
   };
 }
@@ -290,6 +305,7 @@ async function resolveSetupInputs(
         ? selectionRequirements(dependencies, {
             profile: state.targeted,
             base: [],
+            isEnrolled: state.networkEnrolled,
           })
         : [],
       profile,
@@ -337,7 +353,15 @@ async function resolveSetup(
   );
   const persistsProfile = profileUpdateSelected(section, profile, recorded);
   const targeted = targetedProfile(section, profile);
-  const state = { persistsProfile, targeted };
+  const networkEnrolled = await isNetworkEnrolled(dependencies, {
+    guest: params.guest,
+    environment,
+    target: {
+      isTargeted: targeted.network === recorded.network,
+      profile,
+    },
+  });
+  const state = { persistsProfile, targeted, networkEnrolled };
   const input = await resolveSetupInputs(dependencies, {
     setup: params,
     profile,
@@ -350,6 +374,7 @@ async function resolveSetup(
     profile,
     persistsProfile,
     targeted,
+    networkEnrolled,
     isReleaseChanged: await isAgentReleaseChanged(dependencies, {
       section,
       connection: params.connection,

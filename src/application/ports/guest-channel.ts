@@ -94,4 +94,9 @@ export interface GuestChannel {
    * @returns file contents
    */
   read(path: string): Promise<string>;
+  /**
+   * rejects when a provider-enforced network policy would conflict with the
+   * guest replacing its own DNS configuration; never changes the policy
+   */
+  assertUnrestrictedNetwork(): Promise<void>;
 }

@@ -19,6 +19,7 @@ const params = {
   resolutions: [],
   agent: { id: 't3', service },
   harnesses: [],
+  network: null,
   services: [service],
   jobs: [],
 } satisfies Parameters<typeof buildEnvironment>[1];

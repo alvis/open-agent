@@ -7,11 +7,17 @@ import { environmentOf } from '../../../fixtures/environment';
 import { DISABLED_NETWORK_PROFILE } from '../../../fixtures/profile';
 
 const RECORDED = {
-  environment: environmentOf(DISABLED_NETWORK_PROFILE),
+  environment: environmentOf(DISABLED_NETWORK_PROFILE, {
+    networkIdentity: {
+      network: 'none',
+      deviceId: 'retained',
+      ip: '100.64.0.1',
+    },
+  }),
 };
 
 describe('fn:settleInspectionResults', () => {
-  it('should retain the recorded environment and identify every unavailable probe without a diagnostic', () => {
+  it('should retain recorded identity and identify every unavailable probe without a diagnostic', () => {
     const rejected = { status: 'rejected', reason: new Error('') } as const;
 
     const result = settleInspectionResults(RECORDED, [
@@ -26,6 +32,8 @@ describe('fn:settleInspectionResults', () => {
       services: [],
       native: undefined,
       network: {
+        deviceId: 'retained',
+        ip: '100.64.0.1',
         online: false,
         skipped: false,
         reason: 'network probe unavailable',
