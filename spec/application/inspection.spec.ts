@@ -435,15 +435,13 @@ describe('cmd:show', () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-show-probe-failure-'),
     );
-    const { client, sprite } = await installedSprite(directory.path);
-    const exists = vi.mocked(sprite.filesystem().exists);
-    const seeded = exists.getMockImplementation()!;
-    exists.mockImplementation(async (path) => {
-      if (path.endsWith('/.claude/.credentials.json')) {
-        throw new Error('native credential probe unavailable');
+    const { client, execute } = await installedSprite(directory.path);
+    execute.mockImplementation(async (_file, args) => {
+      if (args?.includes('plugin') && args.includes('list')) {
+        throw new Error('native SDK probe unavailable');
       }
 
-      return seeded(path);
+      return { stdout: '[]', stderr: '', exitCode: 0 };
     });
 
     const result = await showWorkstation(dependencies, {
@@ -460,7 +458,7 @@ describe('cmd:show', () => {
       data: {
         inspection: {
           probeFailures: [
-            { probe: 'native', reason: 'native credential probe unavailable' },
+            { probe: 'native', reason: 'native SDK probe unavailable' },
           ],
           readiness: {
             ready: false,

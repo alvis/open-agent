@@ -74,6 +74,7 @@ describe('fn:setupAll', () => {
           gitIdentity: optionalSections ? true : false,
           gitName: optionalSections ? 'Ada' : undefined,
           gitEmail: optionalSections ? 'ada@example.test' : undefined,
+          plugins: optionalSections ? undefined : false,
           setupFile:
             optionalSections || isReleaseChanged ? setupFile : undefined,
           localCredentials: false,
@@ -153,6 +154,7 @@ describe('fn:setupAll', () => {
             },
             native: {
               claude: {
+                pluginListAvailable: false,
                 awakeHooksInstalled: true,
                 authentication: 'not-configured' as const,
               },
@@ -228,6 +230,7 @@ describe('fn:setupAll', () => {
         setupFile,
         github: false,
         gitIdentity: false,
+        plugins: false,
         localCredentials: false,
         nonInteractive: true,
       },
@@ -293,6 +296,7 @@ describe('fn:setupAll', () => {
         envFile: envPath,
         github: false,
         gitIdentity: false,
+        plugins: false,
         localCredentials: false,
         nonInteractive: true,
       },

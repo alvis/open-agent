@@ -10,6 +10,13 @@ import type { CommandOptions, CommandRequest } from '#application/contracts';
 describe('fn:validateCommandRequest', () => {
   it.each([
     { command: 'terminate', options: { nonInteractive: true } },
+    {
+      command: 'setup',
+      options: {
+        withPairCode: true,
+        harnessPlugins: { claude: { plugins: ['one@market'] } },
+      },
+    },
   ] satisfies CommandRequest[])(
     'should reject a request whose required consent conflicts with its options: %j',
     (request) => {
@@ -18,6 +25,36 @@ describe('fn:validateCommandRequest', () => {
       );
     },
   );
+
+  it('should infer the plugins section from actions while skip flags select no section', () => {
+    expect(() =>
+      validateCommandRequest({
+        command: 'setup',
+        options: {
+          nonInteractive: true,
+          harnessPlugins: { claude: { disablePlugins: ['one@market'] } },
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateCommandRequest({
+        command: 'setup',
+        options: { nonInteractive: true, plugins: false },
+      }),
+    ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+    expect(() =>
+      validateCommandRequest({
+        command: 'setup',
+        options: {
+          section: 'plugins',
+          harnessPlugins: { claude: { isEnabled: false } },
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateCommandRequest({ command: 'create', options: {} }),
+    ).not.toThrow();
+  });
 
   it('should reject conflicting requests before credentials or remote access', () => {
     const conflicts: CommandOptions[] = [
@@ -30,6 +67,10 @@ describe('fn:validateCommandRequest', () => {
         localCredentials: false,
         providerTokenSource: 'keychain:test/account',
       },
+      {
+        plugins: false,
+        harnessPlugins: { claude: { plugins: ['one@market'] } },
+      },
     ];
 
     for (const options of conflicts) {
@@ -39,13 +80,39 @@ describe('fn:validateCommandRequest', () => {
     }
   });
 
-  it('should restrict section selection to setup', () => {
+  it('should restrict removals to setup and enforce its selected section and harness', () => {
+    const setupOnly: CommandOptions[] = [
+      { section: 'plugins' },
+      { pluginHarness: 'claude' },
+      { harnessPlugins: { claude: { removeMarketplaces: ['old'] } } },
+      { harnessPlugins: { claude: { disablePlugins: ['off@market'] } } },
+      { harnessPlugins: { claude: { uninstallPlugins: ['gone@market'] } } },
+    ];
+
+    for (const options of setupOnly) {
+      expect(() =>
+        validateCommandRequest({ command: 'create', options }),
+      ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+    }
     expect(() =>
       validateCommandRequest({
-        command: 'create',
-        options: { section: 'git' },
+        command: 'setup',
+        options: {
+          section: 'git',
+          harnessPlugins: { claude: { plugins: ['one@market'] } },
+        },
       }),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+    expect(() =>
+      validateCommandRequest({
+        command: 'setup',
+        options: {
+          section: 'plugins',
+          pluginHarness: 'claude',
+          harnessPlugins: { claude: { plugins: ['one@market'] } },
+        },
+      }),
+    ).not.toThrow();
     expect(() =>
       validateCommandRequest({ command: 'setup', options: {} }),
     ).not.toThrow();

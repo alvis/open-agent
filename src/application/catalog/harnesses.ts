@@ -1,3 +1,6 @@
+import { harnessIds } from '#domain/harnesses';
+import { recordOf } from '#kernel/records';
+
 import type {
   AwakeHookCommand,
   DriverRegistry,
@@ -25,6 +28,19 @@ export function harnessDrivers(
   ids: readonly HarnessId[],
 ): AnyHarnessDriver[] {
   return ids.map((id) => registry.harnesses[id]);
+}
+
+/**
+ * builds one value per registered harness, keyed by harness identifier
+ * @param registry every registered driver
+ * @param build derives the value from a harness driver
+ * @returns the values keyed by harness identifier
+ */
+export function mapHarnesses<Value>(
+  registry: Pick<DriverRegistry, 'harnesses'>,
+  build: (driver: AnyHarnessDriver) => Value,
+): Record<HarnessId, Value> {
+  return recordOf(harnessIds(), (id) => build(registry.harnesses[id]));
 }
 
 /**

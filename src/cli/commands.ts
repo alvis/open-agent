@@ -16,24 +16,39 @@ import {
   integrationFlags,
   outputFlags,
   pairingFlags,
+  pluginFlags,
   providerCredentialFlags,
   providerFlags,
   selectionFlags,
   setupFlags,
 } from './flags';
+import {
+  harnessPluginChangeFlags,
+  harnessPluginFlags,
+  harnessPluginOptions,
+} from './flags/harness';
 import { guestFileFlags } from './guest-file-flags';
 
 import type { Command } from '@stricli/core';
 
 import type { CommandOptions } from '#application/contracts';
 
+import type {
+  HarnessPluginFlagValues,
+  HarnessPluginSelectionValues,
+} from './flags/harness';
 import type { InvocationContext } from './parser';
 
 type BooleanKeys<T> = {
   [K in keyof T]-?: NonNullable<T[K]> extends boolean ? K : never;
 }[keyof T];
 type OptionalBooleanKey =
-  'withPairCode' | 'github' | 'gitIdentity' | 'localCredentials' | 'color';
+  | 'withPairCode'
+  | 'github'
+  | 'gitIdentity'
+  | 'plugins'
+  | 'localCredentials'
+  | 'color';
 type RequiredBooleanFields<T> = Omit<T, BooleanKeys<T>> &
   Required<Pick<T, Exclude<BooleanKeys<T>, OptionalBooleanKey>>> &
   Pick<T, Extract<BooleanKeys<T>, OptionalBooleanKey>>;
@@ -50,10 +65,14 @@ type ConfigurationFlags = FlagsFor<
     typeof guestFileFlags &
     typeof providerCredentialFlags &
     typeof integrationCredentialFlags &
+    typeof pluginFlags &
     typeof outputFlags
->;
+> &
+  HarnessPluginSelectionValues;
 type CreateFlags = ConfigurationFlags & Pick<CommandOptions, 'name'>;
-type SetupFlags = ConfigurationFlags & FlagsFor<typeof setupFlags>;
+type SetupFlags = ConfigurationFlags &
+  FlagsFor<typeof setupFlags> &
+  HarnessPluginFlagValues;
 type InspectFlags = ProviderCommonFlags &
   Required<Pick<CommandOptions, 'inspect'>> &
   Pick<CommandOptions, 'withPairCode'>;
@@ -87,7 +106,7 @@ const createCommand = buildCommand({
       dependencies: this.dependencies,
       request: {
         command: 'create',
-        options: flags,
+        options: { ...flags, harnessPlugins: harnessPluginOptions(flags) },
       },
       state: this.state,
     });
@@ -108,6 +127,8 @@ const createCommand = buildCommand({
       ...guestFileFlags,
       ...providerCredentialFlags,
       ...integrationCredentialFlags,
+      ...pluginFlags,
+      ...harnessPluginFlags,
       ...outputFlags,
     },
   },
@@ -130,7 +151,7 @@ const setupCommand = buildCommand({
       request: {
         command: 'setup',
         machine,
-        options: flags,
+        options: { ...flags, harnessPlugins: harnessPluginOptions(flags) },
       },
       state: this.state,
     });
@@ -145,6 +166,9 @@ const setupCommand = buildCommand({
       ...guestFileFlags,
       ...providerCredentialFlags,
       ...integrationCredentialFlags,
+      ...pluginFlags,
+      ...harnessPluginFlags,
+      ...harnessPluginChangeFlags,
       ...outputFlags,
     },
     positional: machinePositional,

@@ -84,16 +84,25 @@ describe('provider flag on workstation commands', () => {
 describe('command route dispatch', () => {
   it.each([
     {
-      argv: ['create', '--name', 'new-box'],
+      argv: ['create', '--name', 'new-box', '--claude-plugin', 'alpha'],
       command: 'create',
       machine: undefined,
-      options: { name: 'new-box' },
+      options: {
+        name: 'new-box',
+        harnessPlugins: {
+          claude: expect.objectContaining({ plugins: ['alpha'] }),
+        },
+      },
     },
     {
-      argv: ['setup', 'dev-box', '--section', 'git'],
+      argv: ['setup', 'dev-box', '--disable-claude-plugin', 'old'],
       command: 'setup',
       machine: 'dev-box',
-      options: { section: 'git' },
+      options: {
+        harnessPlugins: {
+          claude: expect.objectContaining({ disablePlugins: ['old'] }),
+        },
+      },
     },
     {
       argv: ['list', '--provider', 'sprite'],

@@ -1,4 +1,4 @@
-import { mkdtempDisposable } from 'node:fs/promises';
+import { mkdir, mkdtempDisposable } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
 import { UPDATE_GATE_ASSET } from '#adapters/guest/updates';
+import { setupPlugins } from '#application/setup/plugins';
 import { setupTools } from '#application/setup/tools';
 
 import { driveInk } from '../../fixtures/ink';
@@ -106,5 +107,88 @@ describe('fn:setupTools consent', () => {
       expect.anything(),
     );
     expect(await sprite.filesystem().exists(ENVIRONMENT_PATH)).toBe(true);
+  });
+});
+
+describe('fn:setupPlugins removal consent', () => {
+  it('should not queue an unapproved marketplace removal', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-plugin-decline-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    const context = setupContext(sprite, { pluginHarness: 'claude' });
+    const observed = await driveInk(
+      async (interaction) =>
+        setupPlugins(dependencies, guestOf(sprite), {
+          ...context,
+          interaction,
+        }),
+      [
+        { waitFor: 'Claude plugin action', input: 'Remove marketplace' },
+        { waitFor: 'Search: Remove marketplace', input: '\r' },
+        { waitFor: 'Native marketplace source/ref', input: 'old-market' },
+        { waitFor: 'old-market', input: '\r' },
+        { waitFor: 'Remove old-market from Claude?', input: 'n' },
+        {
+          waitFor: 'Claude plugin action',
+          input: 'Apply queued actions and finish',
+        },
+        { waitFor: 'Search: Apply queued actions and finish', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(7);
+    expect(observed.result.plugins.claude).toBe('preserved');
+    expect(context.mutation.started).toBe(false);
+    expect(sprite.execFile).not.toHaveBeenCalled();
+  });
+
+  it('should apply an explicitly selected removal under --yes', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-plugin-yes-'),
+    );
+    await mkdir(join(directory.path, 'opt/open-agent'), { recursive: true });
+    const sprite = createFilesystemSprite({
+      root: directory.path,
+      execute: vi.fn<Sprite['execFile']>(async (_file, args = []) => ({
+        stdout:
+          args.includes('marketplace') && args.includes('list')
+            ? '[{"name":"old-market","repo":"old-market"}]'
+            : '[]',
+        stderr: '',
+        exitCode: 0,
+      })),
+    });
+    const context = setupContext(sprite, {
+      pluginHarness: 'claude',
+      yes: true,
+    });
+    const observed = await driveInk(
+      async (interaction) =>
+        setupPlugins(dependencies, guestOf(sprite), {
+          ...context,
+          interaction,
+        }),
+      [
+        { waitFor: 'Claude plugin action', input: 'Remove marketplace' },
+        { waitFor: 'Search: Remove marketplace', input: '\r' },
+        { waitFor: 'Native marketplace source/ref', input: 'old-market' },
+        { waitFor: 'old-market', input: '\r' },
+        {
+          waitFor: 'Claude plugin action',
+          input: 'Apply queued actions and finish',
+        },
+        { waitFor: 'Search: Apply queued actions and finish', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(6);
+    expect(observed.result.plugins.claude).toBe('applied');
+    expect(context.mutation.started).toBe(true);
+    expect(
+      vi
+        .mocked(sprite.execFile)
+        .mock.calls.some(([, args]) => args?.includes('old-market')),
+    ).toBe(true);
   });
 });

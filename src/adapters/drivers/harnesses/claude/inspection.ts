@@ -1,14 +1,26 @@
 import { hasWorkHooks } from '#adapters/drivers/harnesses/shared/hooks';
+import {
+  enabledSelections,
+  listNativePlugins,
+} from '#adapters/drivers/harnesses/shared/plugin-state';
 import { awakeHooksReadiness } from '#adapters/drivers/harnesses/shared/readiness';
 import { HOME } from '#adapters/guest/platform/account';
 import { AWAKE_COMMAND } from '#adapters/guest/platform/awake';
-import { readJsonObject } from '#adapters/guest/platform/native/configuration';
+import {
+  readJsonObject,
+  readSelectedPlugins,
+} from '#adapters/guest/platform/native/configuration';
 import { runBoundedIO } from '#kernel/operation';
 
 import { CLAUDE_WORK_HOOKS } from './hooks';
 import { inspectClaudeInitialization } from './initialization';
-import { CLAUDE_SETTINGS } from './paths';
+import {
+  CLAUDE_INVENTORY,
+  CLAUDE_PLUGIN_STATE,
+  CLAUDE_SETTINGS,
+} from './paths';
 
+import type { GuestCommandResult } from '#adapters/guest/platform/run';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type {
   HarnessInspection,
@@ -19,41 +31,58 @@ import type { ReadinessFinding } from '#domain/readiness';
 import type { ClaudeInitialization } from './initialization';
 
 /**
- * reads Claude settings and SDK initialization without a model turn
+ * reads Claude settings, plugin inventory and SDK initialization without a model turn
  * @param guest target guest
- * @returns configuration flags and initialization evidence
+ * @returns configuration flags, selected plugins and initialization evidence
  */
 export async function inspectClaude(
   guest: GuestChannel,
 ): Promise<HarnessInspection<ClaudeInitialization | undefined>> {
-  const [settings, initialization, authenticated] = await Promise.all([
-    readJsonObject(guest, CLAUDE_SETTINGS),
-    inspectClaudeInitialization(guest),
-    runBoundedIO(async () => guest.exists(`${HOME}/.claude/.credentials.json`)),
-  ] as const);
+  const selection = readSelectedPlugins(guest, CLAUDE_PLUGIN_STATE);
+  const [settings, plugins, initialization, selectedPlugins, authenticated] =
+    await Promise.all([
+      readJsonObject(guest, CLAUDE_SETTINGS),
+      listNativePlugins(guest, CLAUDE_INVENTORY),
+      selection.then(async (selected) =>
+        inspectClaudeInitialization(guest, selected),
+      ),
+      selection,
+      runBoundedIO(async () =>
+        guest.exists(`${HOME}/.claude/.credentials.json`),
+      ),
+    ] as const);
 
   return {
-    configuration: claudeConfiguration({ settings, authenticated }),
+    configuration: claudeConfiguration({ settings, plugins, authenticated }),
+    selectedPlugins,
+    pluginsEnabled: enabledSelections(
+      plugins,
+      CLAUDE_INVENTORY,
+      selectedPlugins,
+    ),
     evidence: initialization,
   };
 }
 
 /**
- * evaluates non-secret hook and authentication state
- * @param evidence settings and native authentication presence
+ * evaluates non-secret plugin and authentication state
+ * @param evidence settings, plugin-list result and native authentication presence
  * @param evidence.settings parsed Claude user settings
+ * @param evidence.plugins native plugin-list command result
  * @param evidence.authenticated whether native credentials exist
  * @returns Claude's configuration flags
  */
 function claudeConfiguration(evidence: {
   settings: Record<string, unknown>;
+  plugins: GuestCommandResult;
   authenticated: boolean;
 }): NativeHarnessInspection {
-  const { settings, authenticated } = evidence;
+  const { settings, plugins, authenticated } = evidence;
   const authentication: NativeHarnessInspection['authentication'] =
     authenticated ? 'native' : 'not-configured';
 
   return {
+    pluginListAvailable: plugins.exitCode === 0,
     awakeHooksInstalled: hasWorkHooks(settings.hooks, {
       owned: CLAUDE_WORK_HOOKS,
       command: { program: AWAKE_COMMAND },

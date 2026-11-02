@@ -2,6 +2,7 @@ import { copyUrl } from './clipboard';
 import { readLocalCredential, saveLocalCredential } from './credentials';
 import { environmentVariables } from './environment';
 import { readInputBytes, readInputFile } from './input-file';
+import { classifyMarketplaceSource } from './marketplaces';
 import { runLocal, sendLocalInput } from './process';
 import { findTool } from './tools';
 
@@ -19,6 +20,7 @@ export function createHostPorts(): HostPorts {
     readInputBytes,
     clipboard: { copyUrl },
     credentials: { read: readLocalCredential, save: saveLocalCredential },
+    marketplaces: { classify: classifyMarketplaceSource },
     tools: { findTool },
     environment: { variables: environmentVariables },
   };

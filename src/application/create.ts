@@ -14,7 +14,7 @@ import type { WorkstationRecord } from '#domain/workstation';
 /**
  * creates one private workstation, configure it, verify readiness, then expose its agent
  * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
- * @param request parsed create options
+ * @param request parsed create options and explicit plugin selections
  * @param interaction optional inline review and progress boundary
  * @returns the ready workstation or a recoverable preflight/setup outcome
  */

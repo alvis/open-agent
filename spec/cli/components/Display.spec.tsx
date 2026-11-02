@@ -12,9 +12,9 @@ import {
 import { ResultDetails } from '#cli/components/ResultDetails';
 
 describe('rc:Display', () => {
-  it('should render nested result sections, booleans and long lists within terminal width', () => {
-    const entry =
-      'a-long-native-entry-name-that-exceeds-narrow-terminal-width@alvis';
+  it('should render nested result sections, booleans and plugin lists within terminal width', () => {
+    const plugin =
+      'a-long-native-plugin-name-that-exceeds-narrow-terminal-width@alvis';
     for (const columns of [40, 120]) {
       const text = renderToString(
         <ResultDetails
@@ -24,7 +24,7 @@ describe('rc:Display', () => {
             inspection: {
               online: true,
               reachable: false,
-              entries: [entry],
+              selectedPlugins: [plugin],
               absent: undefined,
               missing: null,
               empty: [],
@@ -42,7 +42,7 @@ describe('rc:Display', () => {
       expect(text).toContain('Empty: None');
       expect(text).not.toContain('Absent:');
       expect(text).not.toContain('{"');
-      expect(text.replaceAll(/\s/g, '')).toContain(entry);
+      expect(text.replaceAll(/\s/g, '')).toContain(plugin);
       expect(text.split('\n').every((line) => line.length <= columns)).toBe(
         true,
       );

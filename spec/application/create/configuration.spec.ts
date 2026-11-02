@@ -5,6 +5,10 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { configureNewWorkstation } from '#application/create/configuration';
+import {
+  normalizePluginOptions,
+  resolvePluginActions,
+} from '#application/plugins';
 import { registry } from '#composition/registry';
 import { Secret } from '#kernel/secret';
 
@@ -56,6 +60,7 @@ vi.mock(
 
 type Configuration = ConfigureNewWorkstationParams['configuration'];
 
+const plugins = resolvePluginActions(normalizePluginOptions({}));
 const profile = { ...DISABLED_NETWORK_PROFILE, harnesses: [] };
 
 /**
@@ -117,6 +122,7 @@ describe('fn:configureNewWorkstation', () => {
       profile,
       runtimeEnv: {},
       setupFile: Buffer.from('#!/bin/sh\n'),
+      plugins,
     };
 
     await configureNewWorkstation(recordingDependencies(calls), {
@@ -138,7 +144,7 @@ describe('fn:configureNewWorkstation', () => {
     await configureNewWorkstation(recordingDependencies(calls), {
       provider: providerOf(sprite.client),
       connection: connectionOf(sprite),
-      configuration: { hostname: 'box', profile, runtimeEnv: {} },
+      configuration: { hostname: 'box', profile, runtimeEnv: {}, plugins },
     });
 
     expect(calls).toEqual(['configureNative']);
@@ -168,6 +174,7 @@ describe('fn:configureNewWorkstation', () => {
         hostname: 'box',
         profile,
         runtimeEnv: {},
+        plugins,
       },
     });
 
@@ -184,7 +191,7 @@ describe('fn:configureNewWorkstation', () => {
     });
   });
 
-  it('should apply selected GitHub and Git configuration', async () => {
+  it('should apply selected GitHub, Git, and native plugin configuration', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-configure-options-'),
     );
@@ -195,6 +202,12 @@ describe('fn:configureNewWorkstation', () => {
       ...DISABLED_NETWORK_PROFILE,
       harnesses: ['claude'],
     } satisfies WorkstationProfile;
+    const selectedPlugins = resolvePluginActions(
+      normalizePluginOptions({
+        harnessPlugins: { claude: { disablePlugins: ['old-plugin'] } },
+      }),
+      profile.harnesses,
+    );
     const connection = connectionOf(sprite);
     using github = vi
       .spyOn(wired.guest.native, 'configureGithub')
@@ -216,6 +229,11 @@ describe('fn:configureNewWorkstation', () => {
         calls.push('hook installed');
       },
     );
+    using plugin = vi
+      .spyOn(registry.harnesses.claude.plugins, 'apply')
+      .mockImplementation(async () => {
+        calls.push('plugin applied');
+      });
 
     const guest = await configureNewWorkstation(wired, {
       provider: providerOf(sprite.client),
@@ -232,6 +250,7 @@ describe('fn:configureNewWorkstation', () => {
           committerEmail: 'author@example.test',
         },
         runtimeEnv: {},
+        plugins: selectedPlugins,
       },
     });
 
@@ -240,6 +259,7 @@ describe('fn:configureNewWorkstation', () => {
       calls,
       github: github.mock.calls,
       git: git.mock.calls,
+      plugin: plugin.mock.calls,
     }).toEqual({
       guest: await connection.guest(),
       calls: [
@@ -248,6 +268,7 @@ describe('fn:configureNewWorkstation', () => {
         'git configured',
         'harness configured',
         'hook installed',
+        'plugin applied',
       ],
       github: [
         [
@@ -260,6 +281,12 @@ describe('fn:configureNewWorkstation', () => {
         [
           expect.anything(),
           expect.objectContaining({ authorEmail: 'author@example.test' }),
+        ],
+      ],
+      plugin: [
+        [
+          expect.anything(),
+          expect.objectContaining({ disablePlugins: ['old-plugin'] }),
         ],
       ],
     });

@@ -44,6 +44,7 @@ export interface NetworkOutput {
 
 /** native configuration of one harness */
 export interface NativeHarnessOutput {
+  pluginListAvailable: boolean;
   awakeHooksInstalled: boolean;
   authentication: string;
 }
@@ -58,8 +59,9 @@ export type AgentEnvironmentOutput =
     }
   | { ok: false; reason: string };
 
-/** the evidence the guest observed for a harness */
+/** plugins selected for a harness and the evidence the guest observed */
 export interface HarnessStateOutput {
+  selectedPlugins: readonly string[];
   /** evidence the guest observed, passed through as recorded */
   evidence: unknown;
 }
@@ -158,6 +160,7 @@ function projectNativeHarness(
   native: NativeHarnessInspection,
 ): NativeHarnessOutput {
   return projectFields<NativeHarnessInspection, NativeHarnessOutput>(native, {
+    pluginListAvailable: same,
     awakeHooksInstalled: same,
     authentication: same,
   });
@@ -185,12 +188,13 @@ function projectAgentEnvironment(
 }
 
 /**
- * projects the evidence observed for a harness
+ * projects the plugins selected for a harness
  * @param state internal state
  * @returns output state
  */
 function projectHarnessState(state: HarnessAgentState): HarnessStateOutput {
   return projectFields<HarnessAgentState, HarnessStateOutput>(state, {
+    selectedPlugins: same,
     evidence: same,
   });
 }

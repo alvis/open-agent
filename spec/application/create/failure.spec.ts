@@ -10,6 +10,10 @@ import {
   creationOutcome,
   markCreateIncomplete,
 } from '#application/create/failure';
+import {
+  normalizePluginOptions,
+  resolvePluginActions,
+} from '#application/plugins';
 import { ReadinessFault } from '#application/readiness';
 import { prepareResult } from '#cli/output';
 import { projectResult } from '#cli/output/project';
@@ -343,6 +347,7 @@ describe('cmd:create retained setup recovery', () => {
         },
         name: workstation.name,
         token: 'sdk-only-test-token',
+        plugins: resolvePluginActions(normalizePluginOptions({})),
         preflight,
         provider,
       } satisfies CreateContext;

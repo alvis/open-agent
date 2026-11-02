@@ -21,6 +21,7 @@ describe('fn:inspectClaude', () => {
       settings: undefined,
       authenticated: false,
       configuration: {
+        pluginListAvailable: true,
         awakeHooksInstalled: false,
         authentication: 'not-configured',
       },
@@ -30,6 +31,7 @@ describe('fn:inspectClaude', () => {
       settings: { env: {} },
       authenticated: true,
       configuration: {
+        pluginListAvailable: false,
         awakeHooksInstalled: false,
         authentication: 'native',
       },
@@ -40,7 +42,16 @@ describe('fn:inspectClaude', () => {
     );
     const sprite = createFilesystemSprite({
       root: directory.path,
-      execute: createNativeCommandExecutor([]),
+      execute: createNativeCommandExecutor([
+        {
+          argv: ['claude', 'plugin', 'list', '--json'],
+          result: {
+            stdout: '[]',
+            stderr: '',
+            exitCode: scenario.configuration.pluginListAvailable ? 0 : 1,
+          },
+        },
+      ]),
     });
     const files = sprite.filesystem();
     if (scenario.settings) {
@@ -54,6 +65,8 @@ describe('fn:inspectClaude', () => {
 
     expect(inspection).toEqual({
       configuration: scenario.configuration,
+      selectedPlugins: [],
+      pluginsEnabled: scenario.configuration.pluginListAvailable,
       evidence: undefined,
     });
   });

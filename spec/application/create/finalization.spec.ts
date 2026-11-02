@@ -19,6 +19,11 @@ import { markCreateIncomplete } from '#application/create/failure';
 
 import { finalizeCreate, finishCreate } from '#application/create/finalization';
 
+import {
+  normalizePluginOptions,
+  resolvePluginActions,
+} from '#application/plugins';
+
 import { inspectUntilServing } from '#application/serving';
 
 import { resultExitCode } from '#cli/exit';
@@ -102,6 +107,7 @@ const CONTEXT = {
   },
   name: WORKSTATION.name,
   token: 'test-token',
+  plugins: resolvePluginActions(normalizePluginOptions({})),
   preflight: { checks: [], reminders: [] },
   provider: registry.providers.sprite,
 } satisfies CreateContext;
@@ -122,6 +128,7 @@ const OBSERVED = {
   },
   native: {
     claude: {
+      pluginListAvailable: false,
       awakeHooksInstalled: true,
       authentication: 'not-configured',
     },
@@ -132,7 +139,8 @@ const OBSERVED = {
     },
     harnesses: {
       claude: {
-        evidence: undefined,
+        selectedPlugins: [],
+        evidence: { sdkPluginLoading: 'not-verified' },
       },
     },
   },
@@ -156,6 +164,7 @@ const observed = {
   },
   native: {
     claude: {
+      pluginListAvailable: false,
       awakeHooksInstalled: true,
       authentication: 'not-configured',
     },
@@ -166,7 +175,8 @@ const observed = {
     },
     harnesses: {
       claude: {
-        evidence: undefined,
+        selectedPlugins: [],
+        evidence: { sdkPluginLoading: 'not-verified' },
       },
     },
   },
@@ -238,6 +248,7 @@ function createContext(
     },
     name: sprite.name,
     token: 'cor04-generated-sdk-token',
+    plugins: resolvePluginActions(normalizePluginOptions({})),
     preflight: { checks: ['provider name was available'], reminders: [] },
     provider: providerOf(sprite.client),
   };

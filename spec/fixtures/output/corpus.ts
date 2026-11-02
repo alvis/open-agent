@@ -110,12 +110,14 @@ const INSPECTION: GuestInspection = {
   },
   native: {
     claude: {
+      pluginListAvailable: false,
       awakeHooksInstalled: false,
       authentication: 'not-configured',
     },
     harnesses: {
       claude: {
-        evidence: undefined,
+        selectedPlugins: [],
+        evidence: { sdkPluginLoading: 'not-verified' },
       },
     },
   },
@@ -327,6 +329,7 @@ export const CORPUS: readonly CorpusCase[] = [
         status: 'configured',
         names: ['API_BASE', 'REGION'],
       },
+      plugins: { claude: 'applied' },
       network: { status: 'disabled', readiness: 'skipped' },
       components: { installed: 6, skipped: 1, failed: 1 },
       tools: 'updated',
@@ -425,6 +428,15 @@ export const CORPUS: readonly CorpusCase[] = [
       section: 'env',
       machine: MACHINE,
       runtimeEnvironment: { status: 'skipped' },
+    },
+  }),
+  corpusCase('setup-plugins', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'plugins',
+      machine: MACHINE,
+      plugins: { claude: 'applied' },
     },
   }),
   corpusCase('setup-tools-updated', {

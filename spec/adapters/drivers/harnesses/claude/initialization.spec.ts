@@ -59,21 +59,48 @@ const discovery = {
 };
 
 describe('fn:inspectClaudeInitialization', () => {
-  it('should report discovery', async () => {
-    const guest = claudeGuest((_, id) => ({
-      type: 'control_response',
-      response: { subtype: 'success', request_id: id, response: discovery },
-    }));
+  it.each([
+    { selected: [], loaded: [], selectedPluginsLoaded: true },
+    {
+      selected: ['chosen@market'],
+      loaded: ['chosen@market'],
+      selectedPluginsLoaded: true,
+    },
+    {
+      selected: ['chosen@market'],
+      loaded: ['other@market'],
+      selectedPluginsLoaded: false,
+    },
+  ])(
+    'should report discovery and loaded plugins for $selected',
+    async ({ selected, loaded, selectedPluginsLoaded }) => {
+      const guest = claudeGuest((subtype, id) => ({
+        type: 'control_response',
+        response: {
+          subtype: 'success',
+          request_id: id,
+          response:
+            subtype === 'initialize'
+              ? discovery
+              : {
+                  plugins: loaded.map((source) => ({ source })),
+                  error_count: 0,
+                },
+        },
+      }));
 
-    const result = await inspectClaudeInitialization(guest);
+      const result = await inspectClaudeInitialization(guest, selected);
 
-    expect(result).toEqual({
-      kind: 'commands',
-      modelCount: 1,
-      commands: ['plan'],
-      agents: ['reviewer'],
-    });
-  });
+      expect(result).toEqual({
+        kind: 'commands',
+        modelCount: 1,
+        commands: ['plan'],
+        agents: ['reviewer'],
+        loadedPlugins: loaded,
+        selectedPluginsLoaded,
+      });
+    },
+  );
 
   it.each([
     { name: 'missing models', evidence: { ...discovery, models: null } },
@@ -91,7 +118,7 @@ describe('fn:inspectClaudeInitialization', () => {
       response: { subtype: 'success', request_id: id, response: evidence },
     }));
 
-    expect(await inspectClaudeInitialization(guest)).toBeUndefined();
+    expect(await inspectClaudeInitialization(guest, [])).toBeUndefined();
   });
 
   it.each([
@@ -106,7 +133,7 @@ describe('fn:inspectClaudeInitialization', () => {
   ])('should reject an unexpected control frame %j', async (frame) => {
     const guest = claudeGuest(() => frame);
 
-    expect(await inspectClaudeInitialization(guest)).toBeUndefined();
+    expect(await inspectClaudeInitialization(guest, [])).toBeUndefined();
   });
 
   it.each([
@@ -121,6 +148,28 @@ describe('fn:inspectClaudeInitialization', () => {
       response: { subtype: 'success', request_id: id, ...fields },
     }));
 
-    expect(await inspectClaudeInitialization(guest)).toBeUndefined();
+    expect(await inspectClaudeInitialization(guest, [])).toBeUndefined();
+  });
+
+  it.each([
+    { name: 'missing plugins', reload: {} },
+    { name: 'reload errors', reload: { plugins: [], error_count: 1 } },
+    ...[null, { source: 3 }, { source: '' }].map((plugin) => ({
+      name: `malformed plugin ${JSON.stringify(plugin)}`,
+      reload: { plugins: [plugin] },
+    })),
+  ])('should leave evidence absent after $name', async ({ reload }) => {
+    const guest = claudeGuest((subtype, id) => ({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: id,
+        response: subtype === 'initialize' ? discovery : reload,
+      },
+    }));
+
+    expect(
+      await inspectClaudeInitialization(guest, ['chosen@market']),
+    ).toBeUndefined();
   });
 });

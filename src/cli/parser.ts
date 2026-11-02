@@ -13,6 +13,8 @@ import { pairingAgentIds } from '#domain/ids';
 import { ensureError } from '#kernel/faults';
 import { redactResolved } from '#kernel/redaction';
 
+import { harnessPluginToggleNames } from './flags/harness';
+
 import type {
   Application,
   ApplicationText,
@@ -103,6 +105,8 @@ const PAIRED_BOOLEAN_FLAGS = [
   'local-credentials',
   'github',
   'git-identity',
+  'plugins',
+  ...harnessPluginToggleNames(),
 ];
 
 /**

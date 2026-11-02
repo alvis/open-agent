@@ -144,8 +144,8 @@ describe('fn:createInteraction', () => {
           settleWithin(
             interaction
               .multiselect(
-                { message: 'Cancelable harnesses', backLabel: 'harness menu' },
-                [{ label: 'Harness', value: 'harness' }],
+                { message: 'Cancelable plugins', backLabel: 'plugin menu' },
+                [{ label: 'Plugin', value: 'plugin' }],
               )
               .then(
                 () => ({ submitted: true }),
@@ -156,7 +156,7 @@ describe('fn:createInteraction', () => {
                 }),
               ),
           ),
-        [{ waitFor: 'Cancelable harnesses', input }],
+        [{ waitFor: 'Cancelable plugins', input }],
       );
 
       expect(observed.matchedSteps).toBe(1);
@@ -171,7 +171,7 @@ describe('fn:createInteraction', () => {
             settleWithin(
               interaction
                 .multiselect({ message: 'No parent choice' }, [
-                  { label: 'Harness', value: 'harness' },
+                  { label: 'Plugin', value: 'plugin' },
                 ])
                 .catch((error: unknown) => error),
             ),

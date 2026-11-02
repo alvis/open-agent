@@ -40,7 +40,7 @@ export class ReadinessFault extends CommandFault {
 /**
  * evaluates current routing, service, and native harness evidence
  * @param dependencies the registered drivers
- * @param inspection fresh guest inspection
+ * @param inspection fresh guest inspection, including native plugin loading
  * @returns readiness and named checks that could not be verified
  */
 export function assessReadiness(

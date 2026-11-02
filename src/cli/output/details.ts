@@ -114,6 +114,7 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
   const recorded = asRecord(inspection.environment);
   const updates = asRecord(inspection.updates);
   const environment = asRecord(native.agentEnvironment);
+  const agentState = asRecord(native.harnesses);
   const readiness = asRecord(inspection.readiness);
 
   return {
@@ -124,10 +125,19 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
     'services': serviceDetails(inspection.services),
     'network': inspection.network,
     ...Object.fromEntries(
-      harnessDrivers(registry, harnessIds()).map((driver) => [
-        driver.displayName,
-        native[driver.id],
-      ]),
+      harnessDrivers(registry, harnessIds()).map((driver) => {
+        const state = asRecord(agentState[driver.id]);
+
+        return [
+          driver.displayName,
+          native[driver.id] === undefined
+            ? undefined
+            : {
+                ...asRecord(native[driver.id]),
+                selectedPlugins: state.selectedPlugins,
+              },
+        ];
+      }),
     ),
     'Agent environment':
       native.agentEnvironment === undefined

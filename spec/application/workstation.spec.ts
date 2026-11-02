@@ -117,6 +117,7 @@ describe('fn:runCommand', () => {
           name: 'workstation',
           yes: true,
           github: false,
+          plugins: false,
           gitIdentity: false,
           network: 'none',
         },
@@ -307,6 +308,7 @@ describe('fn:runCommand', () => {
         network: 'none',
         github: false,
         gitIdentity: false,
+        plugins: false,
       },
     });
 
