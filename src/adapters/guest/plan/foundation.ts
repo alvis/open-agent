@@ -8,7 +8,7 @@ import {
   PING_GROUP_RANGE,
 } from '#adapters/guest/platform/layout';
 import { libraryCommand } from '#adapters/guest/platform/library';
-import { CRON_LIBRARY } from '#adapters/guest/services/cron';
+import { backendAssets } from '#adapters/guest/services/backends';
 import {
   HOMEBREW_LIBRARY,
   LINKS_LIBRARY,
@@ -51,7 +51,7 @@ const SYSCTL_LIMIT_MS = 30_000;
 interface FoundationContext {
   /** every registered driver, whose agent and network bring launchers */
   registry: DriverRegistry;
-  /** the provider, whose awake adapter is installed */
+  /** the provider, whose backend, adapter and boot hook are installed */
   provider: PlanProvider;
   /** the selection, whose agent and network bring launchers */
   profile: WorkstationProfile;
@@ -67,15 +67,17 @@ interface FoundationContext {
 
 /**
  * builds the steps every package step builds on: the guest programs, the
- * agent account, the bootstrap packages, Homebrew where a tool is poured from
- * it, the login profile and the ping sysctl
+ * provider's boot hook before any package step, the agent account, the
+ * bootstrap packages, Homebrew where a tool is poured from it, the login
+ * profile where no boot hook writes it, and the ping sysctl
  * @param context the provider, selection, release, family and resolved tools
- * @returns the asset, account, bootstrap, Homebrew, profile and sysctl steps
+ * @returns the asset, boot hook, account, bootstrap, Homebrew, profile and
+ * sysctl steps
  */
 export async function foundationSteps(
   context: FoundationContext,
 ): Promise<SetupStep[]> {
-  const { family, release } = context;
+  const { provider, family, release } = context;
   const assets = guestAssets(context);
   const installs = await Promise.all(
     assets.map(async (asset) =>
@@ -83,6 +85,7 @@ export async function foundationSteps(
     ),
   );
   const libraries = assets.map(assetStepId);
+  const bootHook = await provider.bootHookStep?.(libraries);
   const homebrew = family.homebrew(release);
   const brewTools = context.resolutions.flatMap((resolution) =>
     'source' in resolution && resolution.source.kind === 'brew'
@@ -95,7 +98,8 @@ export async function foundationSteps(
 
   return [
     ...installs,
-    accountsStep(family, libraries),
+    ...(bootHook ? [bootHook] : []),
+    accountsStep(family, [...libraries, ...(bootHook ? [bootHook.id] : [])]),
     bootstrapStep(family, family.bootstrapPackages(release)),
     ...(homebrew.supported && brewTools.length > 0
       ? [
@@ -107,21 +111,26 @@ export async function foundationSteps(
           }),
         ]
       : []),
-    fileStep(family, {
-      id: PROFILE_STEP,
-      component: 'login profile',
-      path: LOGIN_PROFILE_PATH,
-      contents: LOGIN_PROFILE,
-      mode: PROFILE_MODE,
-    }),
+    // a boot hook writes the profile itself, on every boot
+    ...(bootHook
+      ? []
+      : [
+          fileStep(family, {
+            id: PROFILE_STEP,
+            component: 'login profile',
+            path: LOGIN_PROFILE_PATH,
+            contents: LOGIN_PROFILE,
+            mode: PROFILE_MODE,
+          }),
+        ]),
     sysctlStep(family),
   ];
 }
 
 /**
  * lists the guest programs setup installs before any step sources one: the
- * family's library and update fragment, the tool libraries, cron's, the
- * governor and the provider's awake adapter, the update gate
+ * family's library and update fragment, the tool libraries, the service
+ * backend's, the governor and the provider's awake adapter, the update gate
  * and updater, and the agent's and network's launchers
  * @param context the provider, the selection and the family
  * @returns each asset once
@@ -142,7 +151,7 @@ function guestAssets(
     RUSTUP_LIBRARY,
     LINKS_LIBRARY,
     VERSIONS_LIBRARY,
-    CRON_LIBRARY,
+    ...backendAssets(provider.serviceBackend),
     AWAKE_ASSET,
     ...(provider.awakeAsset ? [provider.awakeAsset] : []),
     UPDATE_GATE_ASSET,
@@ -168,9 +177,10 @@ function library(
 }
 
 /**
- * builds the step that creates the agent account with its fixed ids
+ * builds the step that creates the agent account with the ids the Fly boot
+ * hook restores
  * @param family the guest's OS family
- * @param needs ids of the steps installing the library
+ * @param needs ids of the steps installing the library and the boot hook
  * @returns a critical step that ensures the account exists
  */
 function accountsStep(family: OsFamily, needs: readonly string[]): SetupStep {

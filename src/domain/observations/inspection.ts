@@ -1,3 +1,4 @@
+import type { BootReport } from '#domain/observations/boot';
 import type { HubStatus } from '#domain/observations/hub';
 import type { NativeConfigurationInspection } from '#domain/observations/native';
 import type { NetworkStatus } from '#domain/observations/network';
@@ -20,6 +21,8 @@ export interface GuestInspection {
   probeFailures: InspectionProbeFailure[];
   /** the idle governor's recorded state, reported but never a readiness failure */
   governor: GovernorReport;
+  /** what the provider's boot hook recorded about the last boot; absent when it has none, or the inspection did not ask */
+  boot?: BootReport;
 }
 
 /** a live probe that could not establish its current guest state */

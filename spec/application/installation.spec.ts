@@ -200,7 +200,7 @@ describe('fn:installWorkstation', () => {
     boundary.needsBottleProbe.mockReturnValue(true);
 
     const result = await installWorkstation(boundary.mechanics, {
-      provider: dependencies.registry.providers.sprite,
+      provider: dependencies.registry.providers['fly-machine'],
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
     });
@@ -215,6 +215,7 @@ describe('fn:installWorkstation', () => {
       [boundary.connection, assembly],
     ]);
     expect(boundary.assemble).toHaveBeenCalledOnce();
+    expect(boundary.installProvider).not.toHaveBeenCalled();
   });
 
   it('should leave out of the whole plan the foundation steps the first run settled when the plan stays the same', async () => {
@@ -226,7 +227,7 @@ describe('fn:installWorkstation', () => {
     });
 
     await installWorkstation(boundary.mechanics, {
-      provider: dependencies.registry.providers.sprite,
+      provider: dependencies.registry.providers['fly-machine'],
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
     });
@@ -278,7 +279,7 @@ describe('fn:installWorkstation', () => {
     });
 
     await installWorkstation(boundary.mechanics, {
-      provider: dependencies.registry.providers.sprite,
+      provider: dependencies.registry.providers['fly-machine'],
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
     });
@@ -327,7 +328,7 @@ describe('fn:installWorkstation', () => {
     });
 
     await installWorkstation(boundary.mechanics, {
-      provider: dependencies.registry.providers.sprite,
+      provider: dependencies.registry.providers['fly-machine'],
       connection: boundary.connection,
       profile: DISABLED_NETWORK_PROFILE,
     });
@@ -356,7 +357,7 @@ describe('fn:installWorkstation', () => {
 
     await expect(
       installWorkstation(boundary.mechanics, {
-        provider: dependencies.registry.providers.sprite,
+        provider: dependencies.registry.providers['fly-machine'],
         connection: boundary.connection,
         profile: DISABLED_NETWORK_PROFILE,
       }),

@@ -13,6 +13,7 @@ const STATE = {
   holdMaxMinutes: 60,
   holds: [],
   openHolds: 0,
+  sleepPermitted: true,
   diagnostics: [],
 } satisfies GovernorState;
 const ADAPTER = { at: INSTANT, action: 'apply-deadline', result: 'applied' };
@@ -38,12 +39,12 @@ describe('fn:isGovernorReport', () => {
       },
     },
     {
-      label: 'a failed deadline application',
+      label: 'a failed idle transition',
       state: {
         ...STATE,
         adapter: {
           at: INSTANT,
-          action: 'apply-deadline',
+          action: 'enter-idle-form',
           failure: 'provider unavailable',
         },
       },

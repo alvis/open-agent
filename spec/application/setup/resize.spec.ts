@@ -17,11 +17,8 @@ const large = { label: 'large', cpus: 4, memoryGb: 4 };
 const workstation = workstationOf(
   createFilesystemSprite({ root: tmpdir() }),
 ).workstation;
-// a provider that restarts the machine to resize it, so a resize needs consent
-const capabilities = {
-  ...dependencies.registry.providers.sprite.capabilities,
-  resizeRestarts: true,
-};
+const capabilities =
+  dependencies.registry.providers['fly-machine'].capabilities;
 const profile = {
   ...DISABLED_NETWORK_PROFILE,
   options: { ...DISABLED_NETWORK_PROFILE.options, minCpus: 4, minMemoryGb: 4 },

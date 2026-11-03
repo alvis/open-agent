@@ -23,29 +23,6 @@ vi.mock(
   async () => import('../../mocks/session'),
 );
 
-/** machine sizes a resizable provider offers, so a CPU minimum moves the workstation */
-const OFFERS = [
-  { label: 'small', cpus: 2, memoryGb: 4 },
-  { label: 'large', cpus: 4, memoryGb: 8 },
-];
-
-/**
- * authenticates the Sprite provider with more than one machine size, so a
- * supplied minimum resizes the workstation
- * @returns the authenticated Sprite provider offering the small and large sizes
- */
-function resizableProvider(): ReturnType<
-  typeof registry.providers.sprite.authenticate
-> {
-  return Object.assign(
-    registry.providers.sprite.authenticate({
-      credential: 'test-org/1/0abc/0def',
-      restorableServices: [],
-    }),
-    { machines: OFFERS },
-  );
-}
-
 describe('fn:prepareGuestSection', () => {
   it.each([
     { release: undefined, expected: 'stable' },
@@ -214,7 +191,10 @@ describe('fn:prepareGuestSection', () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-resize-preparation-'),
     );
-    const profile: WorkstationProfile = DISABLED_NETWORK_PROFILE;
+    const profile: WorkstationProfile = {
+      ...DISABLED_NETWORK_PROFILE,
+      provider: 'fly-machine',
+    };
     const original = createFilesystemSprite({
       root: join(directory.path, 'old'),
     });
@@ -228,7 +208,10 @@ describe('fn:prepareGuestSection', () => {
     }
     const target = workstationOf(original);
     const next = workstationOf(replacement);
-    const provider = resizableProvider();
+    const provider = registry.providers['fly-machine'].authenticate({
+      credential: 'test-fly-credential',
+      restorableServices: [],
+    });
     const workstation = {
       ...target.workstation,
       machine: provider.machines[0],
@@ -288,7 +271,10 @@ describe('fn:prepareGuestSection', () => {
       await using directory = await mkdtempDisposable(
         join(tmpdir(), 'open-agent-preparation-failure-'),
       );
-      const profile: WorkstationProfile = DISABLED_NETWORK_PROFILE;
+      const profile: WorkstationProfile = {
+        ...DISABLED_NETWORK_PROFILE,
+        provider: 'fly-machine',
+      };
       const original = createFilesystemSprite({
         root: join(directory.path, 'old'),
       });
@@ -302,7 +288,10 @@ describe('fn:prepareGuestSection', () => {
       }
       const target = workstationOf(original);
       const next = workstationOf(replacement);
-      const provider = resizableProvider();
+      const provider = registry.providers['fly-machine'].authenticate({
+        credential: 'test-fly-credential',
+        restorableServices: [],
+      });
       const workstation = {
         ...target.workstation,
         machine: provider.machines[0],

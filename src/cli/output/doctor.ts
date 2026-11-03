@@ -1,6 +1,7 @@
 import { projectEnvironment } from './environment';
 import { each, projectFields, same } from './fields';
 import {
+  projectBoot,
   projectGovernor,
   projectHub,
   projectNative,
@@ -15,6 +16,7 @@ import type { CurrentReadiness, DoctorData } from '#application/data';
 
 import type { EnvironmentOutput } from './environment';
 import type {
+  BootOutput,
   GovernorOutput,
   HubOutput,
   NativeOutput,
@@ -38,6 +40,7 @@ export interface CurrentReadinessOutput {
   environment: EnvironmentOutput;
   updates?: UpdateStatusOutput;
   governor: GovernorOutput;
+  boot?: BootOutput;
 }
 
 /** the bounded doctor inspection */
@@ -66,6 +69,7 @@ function projectCurrentReadiness(
     environment: projectEnvironment,
     updates: projectUpdates,
     governor: projectGovernor,
+    boot: projectBoot,
   });
 }
 

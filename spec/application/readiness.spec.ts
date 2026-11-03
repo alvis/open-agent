@@ -35,7 +35,7 @@ function inspectionOf(
 }
 
 describe('fn:assessReadiness maintenance schedule', () => {
-  it.each(['sprite'] as const)(
+  it.each(['sprite', 'fly-machine'] as const)(
     'should check the cron service on %s',
     (provider) => {
       const missing = assessReadiness(dependencies, inspectionOf(provider, []));

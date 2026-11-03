@@ -6,6 +6,7 @@ import type {
   ManagementCredentialName,
 } from '#domain/credentials';
 import type { HarnessId, ProviderId } from '#domain/ids';
+import type { BootReport } from '#domain/observations/boot';
 import type { GuestEnvironment } from '#domain/observations/environment';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { UpdateStatus } from '#domain/observations/updates';
@@ -85,6 +86,7 @@ export interface CurrentReadiness extends ReadinessAssessment {
   environment: GuestInspection['environment'];
   updates?: UpdateStatus;
   governor: GuestInspection['governor'];
+  boot?: BootReport;
 }
 
 /** bounded doctor inspection result */

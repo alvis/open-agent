@@ -218,6 +218,7 @@ export async function showWorkstation(
         await provider.openGuest(workstation),
         {
           onProbe: probeProgress(interaction?.progress.bind(interaction)),
+          provider,
         },
       )
     : undefined;
@@ -289,6 +290,7 @@ export async function doctorWorkstation(
     await provider.openGuest(workstation),
     {
       onProbe: probeProgress(interaction?.progress.bind(interaction)),
+      provider,
     },
   );
   const { ready, failures, skipped, probeFailures } = assessReadiness(
@@ -313,6 +315,7 @@ export async function doctorWorkstation(
       environment: inspection.environment,
       updates: inspection.updates,
       governor: inspection.governor,
+      boot: inspection.boot,
     },
   };
 

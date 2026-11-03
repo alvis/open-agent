@@ -39,7 +39,10 @@ interface EnvironmentParams {
   /** the workstation's profile */
   profile: WorkstationProfile;
   /** the selected provider */
-  provider: Pick<ProviderDeclaration, 'id' | 'capabilities' | 'awakeAsset'>;
+  provider: Pick<
+    ProviderDeclaration,
+    'id' | 'capabilities' | 'serviceBackend' | 'awakeAsset'
+  >;
   /** every tool setup resolved */
   tools: readonly ToolSpec[];
   /** the source picked for each tool, or why none is usable */
@@ -158,7 +161,7 @@ function recordTools(
 /**
  * gathers the provider facts the governor reads, with the profile's idle
  * settings capped at the furthest one deadline keeps the workstation awake
- * @param provider the provider's id, capabilities and awake adapter
+ * @param provider the provider's id, capabilities and service backend
  * @param profile the profile whose idle settings are capped
  * @returns the facts the governor and the awake adapter read
  */
@@ -173,6 +176,7 @@ function providerFacts(
 
   return {
     id: provider.id,
+    serviceBackend: provider.serviceBackend,
     keepAwakeMode: capabilities.keepAwakeMode,
     idleForms: [...capabilities.idleForms],
     wakeMode: capabilities.wakeMode,

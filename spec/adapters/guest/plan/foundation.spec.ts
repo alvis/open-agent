@@ -38,10 +38,11 @@ const tool = {
 
 describe('fn:foundationSteps', () => {
   it('should leave Homebrew optional when only optional tools need it', async () => {
-    const { id, capabilities } = registry.providers.sprite;
+    const { id, capabilities, serviceBackend } = registry.providers.sprite;
     const provider = {
       id,
       capabilities: { ...capabilities, keepAwakeMode: 'none' },
+      serviceBackend,
     } satisfies PlanProvider;
 
     const steps = await foundationSteps({

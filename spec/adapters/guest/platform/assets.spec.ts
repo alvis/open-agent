@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { T3_LAUNCHER } from '#adapters/drivers/agents/t3/service';
+import { FLY_MACHINE_AWAKE } from '#adapters/drivers/providers/fly-machine/capabilities';
 import { guestAsset, readAsset } from '#adapters/guest/platform/assets';
 
 describe('fn:readAsset', () => {
@@ -9,15 +9,15 @@ describe('fn:readAsset', () => {
   });
 
   it('should assign the variables an asset adds after the layout in its header', async () => {
-    const launcher = await readAsset(T3_LAUNCHER);
+    const awake = await readAsset(FLY_MACHINE_AWAKE);
     const plain = await readAsset({
       path: 'drivers/providers/sprite/awake.sh',
     });
 
-    expect(launcher).toContain("\nOA_GUEST_ROOT='/opt/open-agent'\n");
-    expect(launcher).toContain("\nOA_T3_MIN_FREE_MB='64'\n");
+    expect(awake).toContain("\nOA_GUEST_ROOT='/opt/open-agent'\n");
+    expect(awake).toContain("\nOA_FLY_API='/.fly/api'\n");
     expect(plain).toContain("\nOA_GUEST_ROOT='/opt/open-agent'\n");
-    expect(plain).not.toContain('OA_T3_MIN_FREE_MB=');
+    expect(plain).not.toContain('OA_FLY_API=');
   });
 
   it('should refuse an added variable that is not an OA_ name or redefines the layout', async () => {

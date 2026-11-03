@@ -50,7 +50,13 @@ export interface GuestFacts {
 
 /** one thing an inspection reads, named without its commands */
 export type InspectionProbe =
-  'inspection' | 'services' | 'network' | 'native' | 'proxy' | 'governor';
+  | 'inspection'
+  | 'services'
+  | 'network'
+  | 'native'
+  | 'proxy'
+  | 'governor'
+  | 'boot';
 
 /** the lifecycle of one probe an inspection runs */
 export type ProbeEvent =
@@ -64,6 +70,8 @@ export type ProbeEvent =
 
 /** what an inspection observes and reads besides the guest itself */
 export interface InspectionParams {
+  /** the provider, whose boot record is read when it keeps one */
+  provider?: Pick<ProviderDriver, 'inspectBoot'>;
   /** observer for actual probe starts and elapsed completions */
   onProbe?: (event: ProbeEvent) => void;
 }
@@ -265,7 +273,7 @@ export interface GuestMechanics {
      * @throws {CommandFault} when a required tool has no usable source on the image
      */
     assertImageTools(
-      provider: Pick<ProviderDriver, 'images'>,
+      provider: Pick<ProviderDriver, 'images' | 'serviceBackend'>,
       profile: WorkstationProfile,
     ): void;
   };
@@ -294,8 +302,8 @@ export interface GuestMechanics {
     /**
      * reads current service, route and installation state
      * @param guest target guest
-     * @param params the probe observer
-     * @returns current service, network, native, gateway, environment and update status
+     * @param params the provider whose boot record is read, and the probe observer
+     * @returns current service, network, native, gateway, environment, update and boot status
      */
     inspect(
       guest: GuestChannel,

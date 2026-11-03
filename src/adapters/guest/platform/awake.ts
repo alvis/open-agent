@@ -3,8 +3,8 @@ import { SHARED_MODE } from '#domain/guest';
 
 /**
  * the idle governor and awake command, root's file every account runs:
- * harness hooks record awake events with it as the agent, and root records
- * managed holds
+ * harness hooks record awake events with it as the agent, root records
+ * managed holds and runs the per-minute tick
  */
 export const AWAKE_ASSET = guestAsset('governor/awake.sh', SHARED_MODE);
 

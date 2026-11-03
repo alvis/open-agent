@@ -1,7 +1,7 @@
 import type { ProductDeclarations } from '#domain/declarations';
 
 /** every registered provider driver, in catalog order */
-export const PROVIDER_IDS = ['sprite'] as const;
+export const PROVIDER_IDS = ['sprite', 'fly-machine'] as const;
 
 /** every registered harness driver, in catalog order */
 export const HARNESS_IDS = ['claude', 'codex'] as const;

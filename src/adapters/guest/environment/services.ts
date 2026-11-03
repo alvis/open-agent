@@ -1,33 +1,46 @@
+import { governorJobs, governorServices } from '#adapters/guest/governor';
 import { cronService } from '#adapters/guest/services/cron';
 
 import { UPDATE_JOB } from '#adapters/guest/updates';
 
-import type { NetworkDriver } from '#application/ports/drivers';
+import type { ProviderDriver, NetworkDriver } from '#application/ports/drivers';
+import type { ProviderCapabilities } from '#domain/declarations';
 import type { EnvironmentNetwork } from '#domain/observations/environment';
 import type { ServiceDefinition, PeriodicJob } from '#domain/services';
 
 /**
- * lists the services environment.json records for the provider to run:
- * cron, which runs the periodic jobs, then the network's daemon, then the
- * agent's service, which waits for the daemon
+ * lists the services environment.json records for the backend to run: cron,
+ * which runs the periodic jobs, the governor's awake relay where the backend
+ * has a machine log, then the network's daemon, then the agent's service,
+ * which waits for the daemon
  * @param agent the agent's service, its needs naming the daemon already
+ * @param provider the provider's service backend
  * @param daemon the selected network's daemon; absent when it runs none
  * @returns the services, each after those it needs
  */
 export function guestServices(
   agent: ServiceDefinition,
+  provider: Pick<ProviderDriver, 'serviceBackend'>,
   daemon?: ServiceDefinition,
 ): ServiceDefinition[] {
-  return [cronService, ...(daemon ? [daemon] : []), agent];
+  return [
+    cronService,
+    ...governorServices(provider),
+    ...(daemon ? [daemon] : []),
+    agent,
+  ];
 }
 
 /**
  * lists the jobs environment.json records for cron to run: the hourly update
- * gate
+ * gate, then a governed provider's per-minute governor tick
+ * @param capabilities whether the provider governs its keep-awake
  * @returns the jobs, in the order cron lists them
  */
-export function guestJobs(): PeriodicJob[] {
-  return [UPDATE_JOB];
+export function guestJobs(
+  capabilities: Pick<ProviderCapabilities, 'keepAwakeMode'>,
+): PeriodicJob[] {
+  return [UPDATE_JOB, ...governorJobs(capabilities)];
 }
 
 /**

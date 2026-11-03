@@ -151,6 +151,10 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
     ),
     'Installed tools': installedTools(recorded.tools, updates.tools),
     'Skipped tools': skippedTools(asRecord(recorded.setup).skipped),
+    'Last boot':
+      inspection.boot === undefined
+        ? undefined
+        : bootDetails(asRecord(inspection.boot)),
     'Idle governor':
       inspection.governor === undefined
         ? undefined
@@ -164,6 +168,24 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
             lastUpdateFinishedAt: updates.finishedAt,
             failedTools: failedTools(updates.tools),
           },
+  };
+}
+
+/**
+ * condenses the boot hook's record of the last boot: its result and start,
+ * the steps that did not succeed, and the hook's latest log lines
+ * @param boot the boot report from the inspection
+ * @returns the last boot's details
+ */
+function bootDetails(boot: JsonObject): JsonObject {
+  const unsuccessful = asRecord(boot.unsuccessfulSteps);
+
+  return {
+    status: boot.status ?? 'not recorded',
+    startedAt: boot.startedAt,
+    unsuccessfulSteps:
+      Object.keys(unsuccessful).length === 0 ? undefined : unsuccessful,
+    log: boot.log,
   };
 }
 
@@ -241,9 +263,10 @@ function failedTools(value: JsonValue | undefined): string[] | undefined {
  * heartbeat, the open holds, then what the provider's keep-awake mode makes of
  * the awake deadline, then the last adapter failure or task release when there
  * is one. A `native-deadline` provider keeps the workstation awake until the
- * deadline and then follows its own idle rules; a provider with no keep-awake
- * mode is not governed. A deadline already past is marked as passed. Every
- * string the guest supplied is shown
+ * deadline and then follows its own idle rules, so sleep is never reported as
+ * not permitted for it; a `governed` provider reports whether sleep is
+ * permitted; a provider with no keep-awake mode is not governed. A deadline
+ * already past is marked as passed. Every string the guest supplied is shown
  * without control characters, so a recorded value cannot move the cursor or
  * rewrite the terminal
  * @param report the governor report from the inspection
@@ -296,6 +319,9 @@ function keepAwakeParts(state: JsonObject): string[] {
         deadline === undefined
           ? 'nothing keeps it awake'
           : `awake until ${printable(deadline)}${isPassed ? ' (passed)' : ''}`,
+        state.sleepPermitted === true
+          ? 'sleep permitted'
+          : 'sleep not permitted',
       ];
   }
 }

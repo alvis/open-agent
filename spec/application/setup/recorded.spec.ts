@@ -126,7 +126,7 @@ describe('fn:assertSameWorkstationKind', () => {
   it('should reject a provider change while accepting the recorded agent', () => {
     expect(() =>
       assertSameWorkstationKind(DISABLED_NETWORK_PROFILE, {
-        provider: 'other-provider',
+        provider: 'fly-machine',
       }),
     ).toThrowError(expect.objectContaining({ code: 'INPUT' }));
     expect(() =>

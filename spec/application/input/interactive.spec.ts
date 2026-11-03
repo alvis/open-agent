@@ -59,6 +59,7 @@ describe('input source resolution', () => {
           interaction,
         }),
       [
+        { waitFor: 'Provider', input: '\r' },
         { waitFor: 'Minimum CPUs', input: '\r' },
         { waitFor: 'Minimum memory (GB)', input: '\r' },
         { waitFor: 'Release channel', input: '\r' },
@@ -69,7 +70,7 @@ describe('input source resolution', () => {
       ],
     );
 
-    expect(observed.matchedSteps, observed.output).toBe(7);
+    expect(observed.matchedSteps, observed.output).toBe(8);
     expect(observed.result.candidate).toMatchObject({
       provider: 'sprite',
       harnesses: ['claude', 'codex'],

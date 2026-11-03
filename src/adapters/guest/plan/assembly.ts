@@ -11,7 +11,7 @@ import {
 import { idleStep, IDLE_STEP } from '#adapters/guest/governor';
 import { familyOf } from '#adapters/guest/os/families';
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
-import { jobsStep } from '#adapters/guest/services/cron';
+import { backendSteps, backendTools } from '#adapters/guest/services/backends';
 import { BASE_TOOLS } from '#adapters/guest/tools/base';
 import { agentCli } from '#adapters/guest/tools/channel';
 import { resolveTools } from '#adapters/guest/tools/resolve';
@@ -26,7 +26,11 @@ import type {
   DriverRegistry,
   ProviderDriver,
 } from '#application/ports/drivers';
-import type { AssemblyParams, SetupAssembly } from '#application/ports/plan';
+import type {
+  AssemblyParams,
+  PlanProvider,
+  SetupAssembly,
+} from '#application/ports/plan';
 import type { OsImage, OsRelease } from '#domain/guest';
 import type { GuestEnvironment } from '#domain/observations/environment';
 import type { WorkstationProfile } from '#domain/profile';
@@ -36,17 +40,19 @@ import type { Resolution, ToolSpec } from '#domain/tools';
 const ENVIRONMENT_STEP = 'environment';
 
 /**
- * lists every tool a workstation installs: the base set, then the agent's,
- * at its release channel's dist-tag, the harnesses' with their ACP adapters,
- * and the network's; a tool two drivers declare is installed once, as the
- * first declares it
+ * lists every tool a workstation installs: the base set, the service
+ * backend's, then the agent's, at its release channel's dist-tag, the
+ * harnesses' with their ACP adapters, and the network's; a tool two drivers
+ * declare is installed once, as the first declares it
  * @param registry every registered driver
  * @param profile the selection
+ * @param provider the provider, whose service backend may bring tools
  * @returns the tools, each named once
  */
 function workstationTools(
   registry: DriverRegistry,
   profile: WorkstationProfile,
+  provider: Pick<PlanProvider, 'serviceBackend'>,
 ): ToolSpec[] {
   const agent = registry.agents[profile.agent];
   const cli = agentCli(agent, profile.options.agentRelease);
@@ -59,6 +65,7 @@ function workstationTools(
     ]);
   const declared = [
     ...BASE_TOOLS,
+    ...backendTools(provider.serviceBackend),
     ...agentTools,
     ...harnessTools,
     ...registry.networks[profile.network].tools,
@@ -83,12 +90,13 @@ function workstationTools(
  */
 export function assertImageTools(
   registry: DriverRegistry,
-  provider: Pick<ProviderDriver, 'images'>,
+  provider: Pick<PlanProvider, 'serviceBackend'> &
+    Pick<ProviderDriver, 'images'>,
   profile: WorkstationProfile,
 ): void {
   const release = declaredRelease(provider.images[0]);
   if (release) {
-    resolveTools(workstationTools(registry, profile), {
+    resolveTools(workstationTools(registry, profile, provider), {
       release,
       family: familyOf(release),
     });
@@ -97,11 +105,12 @@ export function assertImageTools(
 
 /**
  * assembles a workstation's setup plan: the guest libraries and assets, the
- * agent account, the bootstrap packages, Homebrew and the ping sysctl, then
- * every resolved tool, the idle governor's directories, environment.json and
- * the version each tool's manager reports installed, recorded into it; the
- * cron jobs setup installs are a plan of their own, so the caller can
- * configure the workstation before anything starts
+ * provider's boot hook before any package step, the agent account, the
+ * bootstrap packages, Homebrew and the ping sysctl, then every resolved tool,
+ * the idle governor's directories, environment.json and the version each
+ * tool's manager reports installed, recorded into it; the services and
+ * cron jobs the backend installs and starts are a plan of their own, so the
+ * caller can configure the workstation before anything starts
  * @param registry every registered driver
  * @param params the provider, profile, probed release and version
  * @returns the steps, the resolved tools and the environment they record
@@ -112,7 +121,7 @@ export async function assemblePlan(
 ): Promise<SetupAssembly> {
   const { provider, profile, release } = params;
   const family = familyOf(release);
-  const tools = workstationTools(registry, profile);
+  const tools = workstationTools(registry, profile, provider);
   const resolutions = resolveTools(
     tools,
     { release, family },
@@ -163,7 +172,7 @@ export async function assemblePlan(
       }),
     ],
     // they run once environment.json is written, which the steps include
-    services: [jobsStep({ family, needs: [] })],
+    services: backendSteps(provider.serviceBackend, { family, needs: [] }),
   };
 }
 
@@ -209,8 +218,8 @@ function assembleEnvironment(
       };
     }),
     network: environmentNetwork(network),
-    services: guestServices(agent, network.daemon),
-    jobs: guestJobs(),
+    services: guestServices(agent, provider, network.daemon),
+    jobs: guestJobs(provider.capabilities),
     ...(params.networkIdentity && { networkIdentity: params.networkIdentity }),
   });
 }

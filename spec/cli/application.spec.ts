@@ -20,6 +20,7 @@ const parse = vi.mocked(parseApplication);
 describe('fn:cli', () => {
   it('should emit a successful JSON list without contacting a provider service', async () => {
     vi.stubEnv('SPRITES_TOKEN', 'test-org/1/0abc/0def');
+    vi.stubEnv('FLY_API_TOKEN', '');
     const originalExitCode = process.exitCode;
     const signalListeners = {
       sigint: process.listenerCount('SIGINT'),

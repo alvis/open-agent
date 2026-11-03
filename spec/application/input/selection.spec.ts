@@ -95,7 +95,7 @@ function recordingInteraction(): {
 }
 
 describe('fn:resolveCreateSelection', () => {
-  it('should ask harnesses, network and the supported options in order while skipping single-choice steps and hold-max', async () => {
+  it('should ask provider, harnesses, network and the supported options in order while skipping single-choice steps and hold-max', async () => {
     const { interaction, asked } = recordingInteraction();
 
     const { candidate } = await resolveCreateSelection(dependencies, {
@@ -105,6 +105,7 @@ describe('fn:resolveCreateSelection', () => {
     });
 
     expect(asked).toEqual([
+      'Provider',
       'Minimum CPUs',
       'Minimum memory (GB)',
       'Release channel',

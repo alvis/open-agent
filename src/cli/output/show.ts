@@ -1,6 +1,7 @@
 import { projectEnvironment } from './environment';
 import { each, projectFields, same } from './fields';
 import {
+  projectBoot,
   projectGovernor,
   projectGuestService,
   projectHub,
@@ -51,6 +52,7 @@ function projectShownInspection(
     updates: projectUpdates,
     probeFailures: each(projectProbeFailure),
     governor: projectGovernor,
+    boot: projectBoot,
     readiness: projectReadiness,
   });
 }

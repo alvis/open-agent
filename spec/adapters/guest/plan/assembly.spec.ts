@@ -51,7 +51,7 @@ async function runToolStep(
   tool: string,
 ): Promise<{ statuses: Array<StepOutcome['status']>; scripts: string[] }> {
   const assembly = await assemblePlan(registry, {
-    provider: registry.providers.sprite,
+    provider: registry.providers['fly-machine'],
     profile: NIGHTLY_PROFILE,
     release: RELEASE,
     version: OPEN_AGENT_VERSION,
@@ -137,7 +137,7 @@ describe('fn:assemblePlan', () => {
     } satisfies DriverRegistry;
 
     const assembly = await assemblePlan(selectedRegistry, {
-      provider: registry.providers.sprite,
+      provider: registry.providers['fly-machine'],
       profile: DISABLED_NETWORK_PROFILE,
       release: RELEASE,
       version: OPEN_AGENT_VERSION,
@@ -215,7 +215,7 @@ describe('fn:assemblePlan', () => {
     const networkIdentity = { network: 'none' as const, deviceId: 'retained' };
 
     const assembly = await assemblePlan(selectedRegistry, {
-      provider: registry.providers.sprite,
+      provider: registry.providers['fly-machine'],
       profile: DISABLED_NETWORK_PROFILE,
       release: RELEASE,
       version: OPEN_AGENT_VERSION,
@@ -264,7 +264,7 @@ describe('fn:assemblePlan', () => {
     } satisfies DriverRegistry;
 
     const assembly = await assemblePlan(selectedRegistry, {
-      provider: registry.providers.sprite,
+      provider: registry.providers['fly-machine'],
       profile: DISABLED_NETWORK_PROFILE,
       release: RELEASE,
       version: OPEN_AGENT_VERSION,
@@ -319,6 +319,7 @@ describe('fn:assertImageTools', () => {
 
   it('should reject an image whose declared architecture cannot install a required tool', () => {
     const provider = {
+      serviceBackend: 'provider',
       images: [
         {
           id: 'unsupported-tool-architecture',

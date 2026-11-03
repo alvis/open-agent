@@ -106,9 +106,36 @@ describe('fn:listWorkstations', () => {
     expect(openGuest).not.toHaveBeenCalled();
   });
 
+  it('should keep an unavailable provider visible when another provider answers with an empty list', async () => {
+    const { client, provider } = spritesOf([]);
+
+    const result = await listWorkstations(dependencies, [
+      { id: 'sprite', driver: provider },
+      { id: 'fly-machine', code: 'AUTH', reason: 'Credential missing' },
+    ]);
+
+    expect(result).toMatchObject({
+      command: 'list',
+      ok: true,
+      data: {
+        machines: [],
+        unavailable: [
+          {
+            provider: 'fly-machine',
+            code: 'AUTH',
+            reason: 'Credential missing',
+          },
+        ],
+      },
+    });
+    expect(client.listAllSprites).toHaveBeenCalledOnce();
+    expect(client.getSprite).not.toHaveBeenCalled();
+  });
+
   it('should preserve a shared failure code when no provider can be queried', async () => {
     const unavailable: ProviderAvailability[] = [
       { id: 'sprite', code: 'AUTH', reason: 'Sprite token missing' },
+      { id: 'fly-machine', code: 'AUTH', reason: 'Fly token missing' },
     ];
 
     await expect(
@@ -118,7 +145,26 @@ describe('fn:listWorkstations', () => {
       ok: false,
       error: {
         code: 'AUTH',
-        details: ['sprite: Sprite token missing'],
+        details: [
+          'sprite: Sprite token missing',
+          'fly-machine: Fly token missing',
+        ],
+      },
+    });
+  });
+
+  it('should use a general provider failure for mixed provider codes', async () => {
+    const mixed: ProviderAvailability[] = [
+      { id: 'sprite', code: 'AUTH', reason: 'Sprite token missing' },
+      { id: 'fly-machine', code: 'PREFLIGHT', reason: 'Fly setup failed' },
+    ];
+
+    await expect(listWorkstations(dependencies, mixed)).resolves.toMatchObject({
+      command: 'list',
+      ok: false,
+      error: {
+        code: 'PROVIDER',
+        details: expect.arrayContaining(['fly-machine: Fly setup failed']),
       },
     });
   });

@@ -1,4 +1,4 @@
-import type { GuestAsset, OsImage } from '#domain/guest';
+import type { GuestAsset, OsImage, ServiceBackendId } from '#domain/guest';
 import type { GuestCommand } from '#domain/guest-command';
 import type {
   AgentId,
@@ -17,22 +17,23 @@ import type { ServiceDefinition } from '#domain/services';
 import type { ToolSpec } from '#domain/tools';
 
 /** how core reaches the guest */
-type GuestChannelMode = 'provider-exec';
+type GuestChannelMode = 'provider-exec' | 'ssh';
 
 /** who decides when the workstation sleeps */
-export type KeepAwakeMode = 'native-deadline' | 'none';
+export type KeepAwakeMode = 'native-deadline' | 'governed' | 'none';
 
 /** a state an idle workstation can enter */
-export type IdleForm = 'provider-managed' | 'disk-snapshot';
+export type IdleForm =
+  'provider-managed' | 'memory-suspend' | 'stop' | 'disk-snapshot';
 
 /** how a sleeping workstation is woken */
 export type WakeMode = 'url-traffic' | 'cli-restore' | 'always-on';
 
 /** where workstation data survives sleep */
-type PersistenceMode = 'provider-disk' | 'snapshot' | 'host-disk';
+type PersistenceMode = 'provider-disk' | 'volume' | 'snapshot' | 'host-disk';
 
 /** how the ACP agent port is published */
-type ExposureMode = 'provider-url' | 'network-only';
+type ExposureMode = 'provider-url' | 'provider-service' | 'network-only';
 
 /** where list finds workstations without waking them */
 type DiscoverySource = 'provider-metadata';
@@ -136,7 +137,9 @@ export interface ProviderDeclaration<
   shellAccounts: readonly string[];
   /** OS images the provider can create workstations from, the default first */
   images: readonly [OsImage, ...OsImage[]];
-  /** guest program the idle governor runs to apply an awake deadline; absent when nothing keeps the provider awake */
+  /** who runs the guest services: the provider itself, or a backend setup installs */
+  serviceBackend: ServiceBackendId;
+  /** guest program the idle governor runs to apply an awake deadline or enter an idle form; absent when nothing keeps the provider awake */
   awakeAsset?: GuestAsset;
 }
 

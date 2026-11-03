@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createGuestMechanics } from '#adapters/guest/mechanics';
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
@@ -10,6 +10,7 @@ import { profileWith } from '../../fixtures/profile';
 
 import type { ProbeEvent } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
+import type { BootReport } from '#domain/observations/boot';
 
 const PROFILE = profileWith({
   network: false,
@@ -46,12 +47,52 @@ function inspectionGuest(): GuestChannel {
 }
 
 describe('fn:createInspection', () => {
-  it('should report an enabled gateway with completed probe events', async () => {
+  it('should report an enabled gateway and provider boot evidence with completed probe events', async () => {
+    const guest = inspectionGuest();
+    const boot: BootReport = {
+      status: 'ok',
+      startedAt: '2026-10-26T00:00:00Z',
+      durationMs: 70,
+      unsuccessfulSteps: {},
+      log: [],
+    };
+    const events: ProbeEvent[] = [];
+    const inspectBoot = vi.fn(async () => boot);
+    const inspection = createGuestMechanics({ registry, defaults }).inspection;
+
+    const result = await inspection.inspect(guest, {
+      provider: { inspectBoot },
+      onProbe: (event) => {
+        events.push(event);
+      },
+    });
+
+    expect(result).toMatchObject({
+      hub: { reachable: true, skipped: false, status: 204 },
+      boot,
+    });
+    expect(events.filter(({ probe }) => probe === 'proxy')).toEqual([
+      { probe: 'proxy', phase: 'started' },
+      { probe: 'proxy', phase: 'completed', durationMs: expect.any(Number) },
+    ]);
+    expect(events.filter(({ probe }) => probe === 'boot')).toEqual([
+      { probe: 'boot', phase: 'started' },
+      { probe: 'boot', phase: 'completed', durationMs: expect.any(Number) },
+    ]);
+    expect(inspectBoot).toHaveBeenCalledExactlyOnceWith(guest);
+  });
+
+  it('should keep sibling inspection evidence when the provider boot record cannot be read', async () => {
     const guest = inspectionGuest();
     const events: ProbeEvent[] = [];
     const inspection = createGuestMechanics({ registry, defaults }).inspection;
 
     const result = await inspection.inspect(guest, {
+      provider: {
+        inspectBoot: async () => {
+          throw new Error('Boot record unavailable');
+        },
+      },
       onProbe: (event) => {
         events.push(event);
       },
@@ -60,9 +101,10 @@ describe('fn:createInspection', () => {
     expect(result).toMatchObject({
       hub: { reachable: true, skipped: false, status: 204 },
     });
-    expect(events.filter(({ probe }) => probe === 'proxy')).toEqual([
-      { probe: 'proxy', phase: 'started' },
-      { probe: 'proxy', phase: 'completed', durationMs: expect.any(Number) },
+    expect(result).not.toHaveProperty('boot');
+    expect(events.filter(({ probe }) => probe === 'boot')).toEqual([
+      { probe: 'boot', phase: 'started' },
+      { probe: 'boot', phase: 'failed', durationMs: expect.any(Number) },
     ]);
   });
 });

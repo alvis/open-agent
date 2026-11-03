@@ -153,8 +153,11 @@ const TRAILING_FIELDS: Readonly<Record<string, Check>> = {
   schedule: shape({ dueDays: atLeast(1) }),
   provider: shape({
     id: text,
-    keepAwakeMode: oneOf('native-deadline', 'none'),
-    idleForms: listOf(oneOf('provider-managed', 'disk-snapshot')),
+    serviceBackend: oneOf('provider', 'runit'),
+    keepAwakeMode: oneOf('native-deadline', 'governed', 'none'),
+    idleForms: listOf(
+      oneOf('provider-managed', 'memory-suspend', 'stop', 'disk-snapshot'),
+    ),
     wakeMode: oneOf('url-traffic', 'cli-restore', 'always-on'),
     supportsCliWakeSleep: flag,
     maxAwakeDeadlineMinutes: (value) => value === null || atLeast(1)(value),

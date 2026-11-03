@@ -39,7 +39,7 @@ export interface GuestProcess {
   kill(): void;
 }
 
-/** the provider's services */
+/** provider services, or runit's when the service backend is runit */
 export interface GuestServiceControl {
   /**
    * reads every service and its current state from one complete registry

@@ -58,8 +58,9 @@ oa_update_system_clean_roots() {
 # cleans up after the system packages' update: it removes from apt's download
 # cache the package files of versions an upgrade replaced, and the leftovers of
 # an interrupted download. A file stays when its package is not installed, and
-# so does the file of every installed version; `apt-get autoclean` removes
-# both, so it never runs. It returns 2, with the
+# so does the file of every installed version, since the boot hook reinstalls
+# the recorded packages from this cache alone, on a root filesystem rebuilt;
+# `apt-get autoclean` removes both, so it never runs. It returns 2, with the
 # note on stderr, when apt keeps no cache
 oa_update_system_clean() {
   if ! oa_clean_archives=$(oa_update_archives) || ! test -d "$oa_clean_archives" ||

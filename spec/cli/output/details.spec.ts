@@ -18,6 +18,7 @@ describe('fn:humanResultDetails', () => {
           agentEnvironment: { ok: false },
         },
         environment: { profile: { options: { minCpus: 2 } } },
+        boot: { unsuccessfulSteps: { bootstrap: 'failed' } },
         updates: {},
       },
     });
@@ -29,6 +30,10 @@ describe('fn:humanResultDetails', () => {
       'Installed tools': undefined,
       'services': undefined,
       'Maintenance': { failedTools: undefined },
+      'Last boot': {
+        status: 'not recorded',
+        unsuccessfulSteps: { bootstrap: 'failed' },
+      },
     });
   });
 

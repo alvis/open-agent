@@ -81,3 +81,6 @@ export type HomebrewSupport =
       /** why, as reported to the user */
       reason: string;
     };
+
+/** who runs the guest services: the provider itself, or a backend setup installs */
+export type ServiceBackendId = 'provider' | 'runit';

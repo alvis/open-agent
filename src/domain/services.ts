@@ -34,7 +34,7 @@ export interface GuestServiceState {
   startedAt?: string;
 }
 
-/** a command the provider runs on a fixed schedule */
+/** a command the service backend runs on a fixed schedule */
 export interface PeriodicJob {
   /** job identifier */
   name: string;
