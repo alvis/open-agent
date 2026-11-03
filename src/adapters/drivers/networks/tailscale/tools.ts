@@ -29,7 +29,7 @@ function tailscaleRepository(distribution: string): SystemRepository {
  * has none, Tailscale's signed package, whose own `tailscaled` unit is masked
  * so only open-agent's daemon service runs. The probe finds the tool on the
  * PATH, as the link to the bottle or the package's own `/usr/bin/tailscale`.
- * Its launcher runs `ip`, so `iproute2`, optional on its
+ * Its launcher and exit-route probe run `ip`, so `iproute2`, optional on its
  * own, is needed whenever this network is selected
  */
 export const tailscaleTool: ToolSpec = {

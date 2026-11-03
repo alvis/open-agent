@@ -11,6 +11,7 @@ import {
   profileUpdateSelected,
   targetedProfile,
 } from './integrations';
+import { verifySetupExitNode } from './network';
 import {
   assertSameWorkstationKind,
   isNetworkEnrolled,
@@ -79,6 +80,8 @@ interface SetupContextParts {
   resized: WorkstationRecord;
   /** the session the section applies over */
   connection: SetupSession;
+  /** the exit node the network section verified, if any */
+  verifiedExitNode: SetupContext['verifiedExitNode'];
 }
 
 /** the named inputs of reconnect */
@@ -156,7 +159,8 @@ export async function prepareSetupContext(
 ): Promise<PreparedSetup> {
   const { provider, workstation, section, options, interaction } = params;
   const resolved = await resolveSetup(dependencies, params);
-  const { profile } = resolved;
+  const { profile, input, targeted } = resolved;
+  const exitNode = await verifySetupExitNode(dependencies, input, targeted);
   const resized = await resizeWhenRequested({
     provider,
     workstation,
@@ -192,6 +196,7 @@ export async function prepareSetupContext(
         resolved,
         resized,
         connection,
+        verifiedExitNode: exitNode,
       }),
     };
   } catch (error) {
@@ -241,14 +246,14 @@ async function persistPreparedProfile(
 /**
  * assembles the context a section is applied with
  * @param params target, selected section, input choices, and diagnostic state
- * @param parts the resolved state, the resized machine and the connection
+ * @param parts the resolved state, the resized machine, the connection and the verified exit node
  * @returns complete setup context for the selected section
  */
 function setupContextOf(
   params: SetupPreparationParams,
   parts: SetupContextParts,
 ): SetupContext {
-  const { resolved, resized, connection } = parts;
+  const { resolved, resized, connection, verifiedExitNode } = parts;
   const { profile, input } = resolved;
 
   return {
@@ -262,6 +267,7 @@ function setupContextOf(
     persistsProfile: resolved.persistsProfile,
     isReleaseChanged: resolved.isReleaseChanged,
     networkEnrolled: resolved.networkEnrolled,
+    verifiedExitNode,
     mutation: params.mutation,
   };
 }

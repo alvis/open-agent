@@ -10,6 +10,7 @@ import type { CommandRequest } from '#application/contracts';
 import type { ResolvedInputs } from '#application/input/types';
 import type { HarnessPluginActions } from '#application/plugins';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { NetworkExitNode } from '#application/ports/drivers';
 import type { Interaction } from '#application/ports/interaction';
 import type { WorkstationProfile } from '#domain/profile';
 
@@ -26,6 +27,7 @@ export interface ReviewContext {
   values: RequiredCreateValues;
   input: ResolvedInputs;
   plugins: HarnessPluginActions;
+  verifiedExitNode?: NetworkExitNode;
   interaction?: Interaction;
   preflight: CreatePreflight;
 }
@@ -47,7 +49,8 @@ export function reviewCreatePlan(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: ReviewContext,
 ): void {
-  const { values, input, plugins, interaction, preflight } = context;
+  const { values, input, plugins, verifiedExitNode, interaction, preflight } =
+    context;
   const { profile } = input;
   const provider = dependencies.registry.providers[profile.provider];
   const { credential } = provider.prerequisites;
@@ -59,7 +62,7 @@ export function reviewCreatePlan(
         machineSummary(dependencies, profile),
         ...releaseSummary(dependencies, profile),
         `Harnesses: ${profile.harnesses.map((id) => harnessLabel(id)).join(', ')}`,
-        networkSummary(dependencies, input),
+        networkSummary(dependencies, input, verifiedExitNode),
         profile.options.isProxyEnabled
           ? `CLIProxyAPI ${input.proxyUrl}`
           : 'CLIProxyAPI disabled',
@@ -159,21 +162,25 @@ function releaseSummary(
 }
 
 /**
- * summarizes the selected network for the creation review
+ * summarizes the selected network and its routing for the creation review
  * @param dependencies the registered drivers
- * @param input resolved selection
+ * @param input resolved selection and exit node selector
+ * @param verifiedExitNode exit node the network verified, when it could
  * @returns one review line
  */
 function networkSummary(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   input: ResolvedInputs,
+  verifiedExitNode?: NetworkExitNode,
 ): string {
   const network = networkDriver(dependencies.registry, input.profile.network);
   if (!network.daemon) {
     return 'No private network';
   }
 
-  return `${network.displayName} enabled`;
+  return input.profile.options.isExitNodeEnabled
+    ? `${network.displayName} enabled, exit node ${verifiedExitNode?.name ?? input.exitNode}`
+    : `${network.displayName} enabled, direct routing`;
 }
 
 /**

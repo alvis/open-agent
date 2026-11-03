@@ -151,7 +151,7 @@ function networkIdentityRecorder(
  * @param declarations the data every registered driver declares
  * @param guest target guest
  * @param expected the profile the inputs were collected for
- * @throws {CommandFault} when the network or gateway choice differs
+ * @throws {CommandFault} when the network, exit node or gateway choice differs
  */
 async function assertGuestProfile(
   declarations: ProductDeclarations,
@@ -161,6 +161,7 @@ async function assertGuestProfile(
   const { profile } = await readGuestEnvironment(declarations, guest);
   if (
     profile.network !== expected.network ||
+    profile.options.isExitNodeEnabled !== expected.options.isExitNodeEnabled ||
     profile.options.isProxyEnabled !== expected.options.isProxyEnabled
   ) {
     throw new CommandFault({

@@ -110,6 +110,7 @@ const INSPECTION: GuestInspection = {
   services: [],
   network: {
     online: false,
+    dnsReady: false,
     skipped: true,
     reason: 'No private network is selected',
   },
@@ -149,16 +150,23 @@ const INSPECTION: GuestInspection = {
   governor: { recorded: true, state: RECORDED_GOVERNOR },
 };
 
-const TAILSCALE_PROFILE_WITH_PROXY: WorkstationProfile = profileWith({
+const TAILSCALE_PROFILE_WITH_EXIT: WorkstationProfile = profileWith({
   network: true,
+  exitNode: true,
   cliproxyapi: true,
 });
 
 const ONLINE_NETWORK: GuestInspection['network'] = {
   online: true,
+  dnsReady: true,
   skipped: false,
   deviceId: 'node-1234',
   ip: '192.0.2.7',
+  exitNode: 'home-router',
+  exitNodeIp: '192.0.2.2',
+  exitNodeName: 'home-router',
+  routeDevice: 'tailscale0',
+  egressIp: '203.0.113.9',
 };
 
 const REACHABLE_HUB: GuestInspection['hub'] = {
@@ -249,7 +257,7 @@ export const CORPUS: readonly CorpusCase[] = [
     retainedCredential: { storage: 'keychain' },
   }),
   corpusCase(
-    'create-success-tailscale',
+    'create-success-tailscale-exit-node',
     {
       command: 'create',
       ok: true,
@@ -263,7 +271,7 @@ export const CORPUS: readonly CorpusCase[] = [
         },
         machine: DETAILED_MACHINE,
         preflight: PREFLIGHT,
-        profile: TAILSCALE_PROFILE_WITH_PROXY,
+        profile: TAILSCALE_PROFILE_WITH_EXIT,
         readiness: PASSING_READINESS,
         network: ONLINE_NETWORK,
         hub: REACHABLE_HUB,
@@ -375,7 +383,7 @@ export const CORPUS: readonly CorpusCase[] = [
         names: ['API_BASE', 'REGION'],
       },
       plugins: { claude: 'applied', codex: 'preserved' },
-      network: { status: 'configured' },
+      network: { status: 'configured', exitNode: 'home-router' },
       proxy: { status: 'configured', baseUrl: 'https://hub.example.test/' },
       components: { installed: 6, skipped: 1, failed: 1 },
       tools: 'updated',
@@ -428,7 +436,7 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       section: 'network',
       machine: MACHINE,
-      network: { status: 'configured' },
+      network: { status: 'configured', exitNode: 'home-router' },
     },
   }),
   corpusCase('setup-network-disabled', {
@@ -725,7 +733,7 @@ export const CORPUS: readonly CorpusCase[] = [
         services: [{ name: 't3-code', status: 'running', needs: [] }],
         network: ONLINE_NETWORK,
         hub: REACHABLE_HUB,
-        environment: environmentOf(TAILSCALE_PROFILE_WITH_PROXY, {
+        environment: environmentOf(TAILSCALE_PROFILE_WITH_EXIT, {
           tools: INSTALLED_TOOLS,
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
@@ -927,7 +935,7 @@ export const CORPUS: readonly CorpusCase[] = [
       currentReadiness: currentReadiness({
         network: ONLINE_NETWORK,
         hub: REACHABLE_HUB,
-        environment: environmentOf(TAILSCALE_PROFILE_WITH_PROXY, {
+        environment: environmentOf(TAILSCALE_PROFILE_WITH_EXIT, {
           tools: INSTALLED_TOOLS,
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
@@ -950,7 +958,7 @@ export const CORPUS: readonly CorpusCase[] = [
         ready: false,
         failures: ['T3 environment endpoint'],
         skipped: [],
-        network: { ...INSPECTION.network, deviceId: 'node-1234' },
+        network: { ...INSPECTION.network, exitNodeName: 'home-router' },
       }),
     },
   }),

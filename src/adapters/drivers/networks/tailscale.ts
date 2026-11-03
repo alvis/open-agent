@@ -1,4 +1,6 @@
+import { matchesExitNode } from './tailscale/api';
 import {
+  assertSafeTailnetTarget,
   cleanupTailnetDevice,
   removeStaleTailnetDevice,
 } from './tailscale/cleanup';
@@ -7,6 +9,7 @@ import { identifyTailnetDevice } from './tailscale/identity';
 import {
   issueTailscaleCredential,
   preflightTailscale,
+  verifyTailscaleExitNode,
 } from './tailscale/preflight';
 import { tailscaleReadiness } from './tailscale/readiness';
 import { releaseTailscale } from './tailscale/release';
@@ -15,13 +18,14 @@ import { inspectTailscale } from './tailscale/status';
 import { tailscaleTool } from './tailscale/tools';
 
 import type { NetworkDriver } from '#application/ports/drivers';
-import type { NetworkStatus } from '#domain/observations/network';
+import type { TailnetStatus } from '#domain/observations/network';
 
 /** Tailscale as a private-network driver */
-export const tailscale: NetworkDriver<'tailscale', NetworkStatus> = {
+export const tailscale: NetworkDriver<'tailscale', TailnetStatus> = {
   id: 'tailscale',
   kind: 'networks',
   displayName: 'Tailscale',
+  supportsExitNode: true,
   tools: [tailscaleTool],
   inputs: {
     account: {
@@ -40,19 +44,24 @@ export const tailscale: NetworkDriver<'tailscale', NetworkStatus> = {
       environment: 'TAILSCALE_AUTH_KEY',
       flag: '--network-auth-key-source SOURCE',
     },
+    exitNode: {
+      environment: 'TAILSCALE_EXIT_NODE',
+      prompt: 'Home exit node',
+      flag: '--exit-node NODE',
+    },
   },
   daemon: tailscaleDaemon,
   launcher: tailscaleLauncher,
   preflight: preflightTailscale,
-
+  verifyExitNode: verifyTailscaleExitNode,
   issueCredential: issueTailscaleCredential,
   enroll: enrollTailscale,
   release: releaseTailscale,
   status: inspectTailscale,
-
+  matchesExitNode,
   readiness: tailscaleReadiness,
   identify: identifyTailnetDevice,
-
+  assertSafeTarget: assertSafeTailnetTarget,
   cleanup: cleanupTailnetDevice,
   removeStaleDevice: removeStaleTailnetDevice,
 };

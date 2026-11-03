@@ -179,51 +179,72 @@ describe('fn:configureNewWorkstation', () => {
     expect(calls).toEqual(['configureNative']);
   });
 
-  it('should enroll Tailscale with connectivity progress', async () => {
-    await using directory = await mkdtempDisposable(
-      join(tmpdir(), 'open-agent-configure-network-'),
-    );
-    const sprite = createFilesystemSprite({ root: directory.path });
-    const calls: string[] = [];
-    const messages: string[] = [];
-    const profile = {
-      ...TAILSCALE_PROFILE,
-      harnesses: [],
-    } satisfies WorkstationProfile;
-    const connection = connectionOf(sprite);
-    using enroll = vi
-      .spyOn(registry.networks.tailscale, 'enroll')
-      .mockImplementation(async () => {
-        calls.push('network enrolled');
+  it.each([
+    { exitNode: false, notice: 'connectivity' },
+    { exitNode: true, notice: 'exit-node' },
+  ])(
+    'should enroll Tailscale with $notice progress',
+    async ({ exitNode, notice }) => {
+      const selectedExitNode = exitNode ? { exitNode: 'selected-node' } : {};
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-configure-network-'),
+      );
+      const sprite = createFilesystemSprite({ root: directory.path });
+      const calls: string[] = [];
+      const messages: string[] = [];
+      const profile = {
+        ...TAILSCALE_PROFILE,
+        harnesses: [],
+        options: {
+          ...TAILSCALE_PROFILE.options,
+          isExitNodeEnabled: exitNode,
+        },
+      } satisfies WorkstationProfile;
+      const connection = connectionOf(sprite);
+      using enroll = vi
+        .spyOn(registry.networks.tailscale, 'enroll')
+        .mockImplementation(async () => {
+          calls.push('network enrolled');
+        });
+
+      const guest = await configureNewWorkstation(
+        recordingDependencies(calls),
+        {
+          provider: providerOf(sprite.client),
+          connection,
+          interaction: progressOf(messages),
+          configuration: {
+            hostname: 'box',
+            profile,
+            authKey: Secret.fromHost('provider-api', 'selected-auth-key'),
+            ...selectedExitNode,
+            runtimeEnv: {},
+            plugins,
+          },
+        },
+      );
+
+      expect({
+        guest,
+        messages,
+        calls,
+        enrollment: enroll.mock.calls,
+      }).toEqual({
+        guest: await connection.guest(),
+        messages: [expect.stringContaining(notice)],
+        calls: ['network enrolled', 'configureNative'],
+        enrollment: [
+          [
+            expect.anything(),
+            expect.objectContaining({
+              hostname: 'box',
+              exitNode: exitNode ? 'selected-node' : undefined,
+            }),
+          ],
+        ],
       });
-
-    const guest = await configureNewWorkstation(recordingDependencies(calls), {
-      provider: providerOf(sprite.client),
-      connection,
-      interaction: progressOf(messages),
-      configuration: {
-        hostname: 'box',
-        profile,
-        authKey: Secret.fromHost('provider-api', 'selected-auth-key'),
-        runtimeEnv: {},
-        plugins,
-      },
-    });
-
-    expect({
-      guest,
-      messages,
-      calls,
-      enrollment: enroll.mock.calls,
-    }).toEqual({
-      guest: await connection.guest(),
-      messages: [expect.stringContaining('connectivity')],
-      calls: ['network enrolled', 'configureNative'],
-      enrollment: [
-        [expect.anything(), expect.objectContaining({ hostname: 'box' })],
-      ],
-    });
-  });
+    },
+  );
 
   it('should apply selected GitHub, Git, and native plugin configuration', async () => {
     await using directory = await mkdtempDisposable(

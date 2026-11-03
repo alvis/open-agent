@@ -141,7 +141,8 @@ async function selectNetworkAction(
         {
           value: 'network',
           label: 'Configure workstation networking',
-          description: 'Private network connection on the workstation',
+          description:
+            'Private network connection and optional exit-node routing on the workstation',
         },
         {
           value: 'network-credential',

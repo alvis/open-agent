@@ -108,6 +108,7 @@ const PAIRED_BOOLEAN_FLAGS = [
   'plugins',
   ...harnessPluginToggleNames(),
   'proxy',
+  'use-exit-node',
 ];
 
 /**

@@ -11,10 +11,12 @@ import { dependencies } from '../../mocks/dependencies';
 
 const networkOnly = profileWith({
   network: true,
+  exitNode: false,
   cliproxyapi: false,
 });
 const everything = profileWith({
   network: true,
+  exitNode: true,
   cliproxyapi: true,
 });
 
@@ -91,12 +93,14 @@ describe('fn:resolveBaseInputs', () => {
         },
         fileEnv: {
           SPRITES_TOKEN: 'file-management-token',
+          TAILSCALE_EXIT_NODE: 'file-exit',
           CLIPROXYAPI_BASE_URL: 'https://file.example.test',
           CREDENTIAL_ONLY: 'credential-file-value',
         },
         runtimeFileEnv: { APP_TOKEN: 'runtime-secret-value' },
         profile: {
           TAILSCALE_TAILNET: 'profile-tailnet',
+          TAILSCALE_EXIT_NODE: 'profile-exit',
           CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
         },
       },
@@ -110,6 +114,7 @@ describe('fn:resolveBaseInputs', () => {
         networkKey: 'process-tailnet-token',
         enrollmentKey: undefined,
         networkAccount: 'flag-tailnet',
+        exitNode: 'file-exit',
         proxyUrl: 'https://file.example.test',
         proxyApiKey: undefined,
         profile: networkOnly,
@@ -119,6 +124,7 @@ describe('fn:resolveBaseInputs', () => {
           TAILSCALE_API_KEY: 'process environment',
           GH_TOKEN: 'process environment',
           TAILSCALE_TAILNET: 'flag',
+          TAILSCALE_EXIT_NODE: 'selected.env',
           CLIPROXYAPI_BASE_URL: 'selected.env',
         },
         missing: [],
@@ -153,6 +159,7 @@ describe('fn:resolveBaseInputs', () => {
           TAILSCALE_TAILNET: 'file-tailnet',
         },
         profile: {
+          TAILSCALE_EXIT_NODE: 'profile-exit',
           CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
         },
       },
@@ -168,6 +175,7 @@ describe('fn:resolveBaseInputs', () => {
           proxyApiKey: 'explicit-proxy-secret',
           enrollmentKey: 'file-enrollment-secret',
           networkAccount: 'file-tailnet',
+          exitNode: 'profile-exit',
           proxyUrl: 'https://profile.example.test',
           runtimeEnv: {},
           sources: {
@@ -178,6 +186,7 @@ describe('fn:resolveBaseInputs', () => {
             GH_TOKEN: 'explicit secret reference',
             TAILSCALE_AUTH_KEY: 'credential file',
             TAILSCALE_TAILNET: 'credential file',
+            TAILSCALE_EXIT_NODE: 'saved profile',
             CLIPROXYAPI_BASE_URL: 'saved profile',
           },
         }),

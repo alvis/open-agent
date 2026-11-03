@@ -72,7 +72,7 @@ describe('environment access on a guest', () => {
     await expect(
       access.assertProfile(guest, {
         ...updated,
-        options: { ...updated.options, isProxyEnabled: true },
+        options: { ...updated.options, isExitNodeEnabled: true },
       }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
   });

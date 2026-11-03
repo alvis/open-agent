@@ -375,16 +375,30 @@ export interface NetworkManagement {
   account?: string;
 }
 
+/** an exit node the network provider verified as usable */
+export interface NetworkExitNode {
+  /** device identity at the network provider */
+  id: string;
+  /** human-readable device name */
+  name: string;
+  /** IPv4 address the device is reached at */
+  ip: string;
+}
+
 /** inputs for checking a network before provisioning */
 export interface NetworkPreflightParams {
   /** device name the workstation will register under */
   hostname: string;
   /** management credential, when the caller supplied one */
   management?: NetworkManagement;
+  /** exit node selector, present only when egress is to be routed through one */
+  exitNode?: string;
 }
 
 /** what a network preflight established */
 export interface NetworkPreflightResult {
+  /** the exit node the selector resolved to */
+  exitNode?: NetworkExitNode;
   /** reasons that block provisioning, in the order the checks were made */
   problems: unknown[];
 }
@@ -400,6 +414,8 @@ export interface NetworkEnrollParams {
   hostname: string;
   /** single-use enrolment credential when the guest is not registered, delivered as setup session input */
   credential?: Secret;
+  /** selected exit node or native selector; absent for direct routing */
+  exitNode?: NetworkExitNode | string;
   /** persists the observed device identity once enrolment is confirmed */
   recordIdentity: NetworkIdentityRecorder;
 }
@@ -408,6 +424,16 @@ export interface NetworkEnrollParams {
 export interface NetworkRecord {
   /** identity retained from an earlier inspection of this network's device */
   identity?: NetworkIdentity;
+}
+
+/** inputs for checking a termination target before deletion */
+export interface NetworkTargetParams<Status extends NetworkStatus> {
+  /** identity captured from the guest */
+  identity: Status;
+  /** management credential, when the caller supplied one */
+  management?: NetworkManagement;
+  /** exit node selector the caller routes through */
+  exitNode?: string;
 }
 
 /** outcome of removing a terminated workstation's network device */
@@ -440,6 +466,12 @@ export interface NetworkStaleDeviceParams {
   management?: NetworkManagement;
 }
 
+/** facts the network's readiness checks depend on */
+export interface NetworkReadinessContext {
+  /** the workstation routes egress through an exit node */
+  isExitNodeEnabled: boolean;
+}
+
 /** inputs for stopping the network daemon */
 export interface NetworkReleaseParams {
   /** daemon service as currently registered, absent when none is */
@@ -463,10 +495,20 @@ export interface NetworkDriver<
   /**
    * validates caller inputs and the device name before provisioning, running
    * every check even when one fails
-   * @param params device name and credential
-   * @returns every blocking problem
+   * @param params device name, credential and exit node selector
+   * @returns the verified exit node and every blocking problem
    */
   preflight(params: NetworkPreflightParams): Promise<NetworkPreflightResult>;
+  /**
+   * verifies an exit node selector against the network inventory without checking the device name
+   * @param management management credential and account
+   * @param selector exit node name, identity or address
+   * @returns the verified exit node
+   */
+  verifyExitNode(
+    management: NetworkManagement,
+    selector: string,
+  ): Promise<NetworkExitNode>;
   /**
    * creates the single-use enrolment credential from the management credential
    * @param management management credential
@@ -474,7 +516,7 @@ export interface NetworkDriver<
    */
   issueCredential(management: NetworkManagement): Promise<string>;
   /**
-   * starts the daemon, enrols the device and requires live evidence
+   * starts the daemon, enrols the device or updates its exit route, and requires live evidence
    * @param guest guest channel
    * @param params enrollment inputs
    */
@@ -492,11 +534,22 @@ export interface NetworkDriver<
    */
   status(guest: GuestChannel): Promise<Status>;
   /**
+   * tells whether the status confirms the selected exit node
+   * @param selection exit node IP, name or identity the caller selected
+   * @param status current status
+   * @returns whether the selected and observed exit nodes agree
+   */
+  matchesExitNode(selection: string, status: Status): boolean;
+  /**
    * derives network readiness findings from already gathered status
    * @param status current status
-   * @returns findings in reporting order
+   * @param context selection facts
+   * @returns findings in reporting order, skipped for routing not selected
    */
-  readiness(status: Status): ReadinessFinding[];
+  readiness(
+    status: Status,
+    context: NetworkReadinessContext,
+  ): ReadinessFinding[];
   /**
    * captures the device identity before a workstation is deleted
    * @param guest ownership-checked guest channel
@@ -504,6 +557,11 @@ export interface NetworkDriver<
    * @returns captured native or persisted identity
    */
   identify(guest: GuestChannel, record: NetworkRecord): Promise<Status>;
+  /**
+   * refuses to delete a workstation that is, or routes through, a protected device
+   * @param params captured identity and the caller's selection
+   */
+  assertSafeTarget(params: NetworkTargetParams<Status>): Promise<void>;
   /**
    * removes the terminated workstation's device from the network
    * @param params captured identity and management credential

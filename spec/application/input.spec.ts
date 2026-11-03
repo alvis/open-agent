@@ -133,12 +133,14 @@ describe('fn:resolveInputs', () => {
           'providerToken',
           'networkEnrollment',
           'networkAccount',
+          'exitNode',
           'proxyUrl',
           'proxyApiKey',
           'gitIdentity',
         ],
         profile: profileWith({
           network: true,
+          exitNode: true,
           cliproxyapi: true,
         }),
       },
@@ -163,6 +165,9 @@ describe('fn:resolveInputs', () => {
           'Or set TAILSCALE_AUTH_KEY (--network-auth-key-source SOURCE) to enrol with a single-use key.',
         expect.stringMatching(
           /^Tailscale tailnet .* is not set\. Set TAILSCALE_TAILNET or pass --credential-file FILE containing TAILSCALE_TAILNET; use --network-account ACCOUNT;/u,
+        ),
+        expect.stringContaining(
+          'Set TAILSCALE_EXIT_NODE or pass --credential-file FILE containing TAILSCALE_EXIT_NODE; use --exit-node NODE;',
         ),
         expect.stringContaining(
           'Set CLIPROXYAPI_BASE_URL or pass --credential-file FILE containing CLIPROXYAPI_BASE_URL; use --proxy-url URL;',
@@ -341,6 +346,7 @@ describe('fn:resolveInputs', () => {
       'TAILSCALE_API_KEY',
       'TAILSCALE_AUTH_KEY',
       'TAILSCALE_TAILNET',
+      'TAILSCALE_EXIT_NODE',
       'CLIPROXYAPI_BASE_URL',
       'CLIPROXYAPI_API_KEY',
     ]) {
@@ -352,6 +358,7 @@ describe('fn:resolveInputs', () => {
     try {
       const selected = await resolveCreateInputs(dependencies, {
         network: 'tailscale',
+        useExitNode: true,
         proxy: true,
         nonInteractive: true,
         localCredentials: false,
@@ -365,11 +372,15 @@ describe('fn:resolveInputs', () => {
         missing: selected.missing,
       }).toEqual({
         network: 'tailscale',
-        options: expect.objectContaining({ isProxyEnabled: true }),
+        options: expect.objectContaining({
+          isExitNodeEnabled: true,
+          isProxyEnabled: true,
+        }),
         missing: [
           expect.stringContaining('--name'),
           expect.stringContaining('TAILSCALE_API_KEY'),
           expect.stringContaining('TAILSCALE_TAILNET'),
+          expect.stringContaining('TAILSCALE_EXIT_NODE'),
           expect.stringContaining('CLIPROXYAPI_BASE_URL'),
           expect.stringContaining('CLIPROXYAPI_API_KEY'),
         ],

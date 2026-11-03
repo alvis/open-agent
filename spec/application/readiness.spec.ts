@@ -26,7 +26,7 @@ function inspectionOf(
     network: { online: false, skipped: true },
     hub: { reachable: false, skipped: true },
     environment: environmentOf({
-      ...profileWith({ network: false, cliproxyapi: false }),
+      ...profileWith({ network: false, exitNode: false, cliproxyapi: false }),
       provider,
     }),
     probeFailures: [],

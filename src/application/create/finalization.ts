@@ -1,3 +1,4 @@
+import { networkDriver } from '#application/catalog/networks';
 import { pairAgent } from '#application/catalog/services';
 import { commandError } from '#application/failures';
 import { requireWorkstationUrl } from '#application/machine';
@@ -120,6 +121,7 @@ async function configureAndFinalize(
       hostname: workstation.name,
       profile: context.input.profile,
       authKey: context.authKey,
+      exitNode: context.effectiveExitNode,
       proxyUrl: context.input.proxyUrl,
       proxyApiKey: context.input.proxyApiKey,
       githubToken: context.input.githubToken,
@@ -159,7 +161,7 @@ export async function finalizeCreate(
   finalization: CreateFinalizationContext,
 ): Promise<CommandResult> {
   const { workstation, observed, context } = finalization;
-  assertCreateReadiness(dependencies, observed);
+  assertCreateReadiness(dependencies, observed, context.effectiveExitNode);
   requireWorkstationUrl(workstation);
   await context.provider.expose(
     workstation,
@@ -283,18 +285,30 @@ function readyError(error: unknown): unknown {
 }
 
 /**
- * withholds public exposure unless every current gate passes and the agent
- * serves the version installed
+ * withholds public exposure unless the selected route and every current gate
+ * pass, and the agent serves the version installed
  * @param dependencies the registered drivers
  * @param observed fresh guest inspection
+ * @param selectedExitNode explicit user exit-node IP or hostname
  * @throws {ReadinessFault} when a gate fails or the agent serves another version than the one installed
  */
 function assertCreateReadiness(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   observed: GuestInspection,
+  selectedExitNode?: string,
 ): void {
   const readiness = assessReadiness(dependencies, observed);
   const { failures } = readiness;
+  const network = networkDriver(
+    dependencies.registry,
+    observed.environment.profile.network,
+  );
+  if (
+    selectedExitNode &&
+    !network.matchesExitNode(selectedExitNode, observed.network)
+  ) {
+    failures.push('selected exit node');
+  }
   const mismatch = servedVersionMismatch(dependencies, observed);
   if (mismatch) {
     failures.push(mismatch);

@@ -52,7 +52,8 @@ export interface SetupDataOutput {
   service?: 'configured';
   pairing?: PairingOutput;
   network?:
-    { status: 'configured' } | { status: 'disabled'; readiness: 'skipped' };
+    | { status: 'configured'; exitNode?: string }
+    | { status: 'disabled'; readiness: 'skipped' };
   github?: string;
   gitIdentity?: string;
   proxy?: { status: 'configured'; baseUrl?: string } | { status: 'disabled' };
@@ -98,7 +99,7 @@ function projectNetworkOutcome(
   return network.status === 'configured'
     ? projectFields<typeof network, NonNullable<SetupDataOutput['network']>>(
         network,
-        { status: same },
+        { status: same, exitNode: same },
       )
     : projectFields<typeof network, NonNullable<SetupDataOutput['network']>>(
         network,

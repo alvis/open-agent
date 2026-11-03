@@ -93,16 +93,23 @@ describe('Tailscale daemon lifecycle', () => {
 });
 
 describe('fn:enrollTailnet', () => {
-  it('should deliver the enrollment key privately and select the requested hostname', async () => {
+  it('should deliver the enrollment key privately and select the requested exit and hostname', async () => {
     const authKey = Secret.fromHost('provider-api', 'enrollment-key');
 
-    await enrollTailnet(guest, { authKey, hostname: 'workstation' });
+    await enrollTailnet(guest, {
+      authKey,
+      selected: '100.64.0.1',
+      hostname: 'workstation',
+    });
 
     expect(boundary.runSessionCommand.mock.calls).toEqual([
       [
         guest,
         expect.objectContaining({
-          arguments: expect.arrayContaining(['--hostname=workstation']),
+          arguments: expect.arrayContaining([
+            '--exit-node=100.64.0.1',
+            '--hostname=workstation',
+          ]),
           timeoutMs: 120000,
         }),
         { kind: 'secret', value: authKey, as: 'shm-file' },

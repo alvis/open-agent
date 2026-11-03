@@ -4,16 +4,19 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { removeStaleTailnetDevice } from '#adapters/drivers/networks/tailscale/cleanup';
+import {
+  assertSafeTailnetTarget,
+  removeStaleTailnetDevice,
+} from '#adapters/drivers/networks/tailscale/cleanup';
 import { CommandFault } from '#kernel/faults';
 
 import { createFilesystemSprite, guestOf } from '../../../../mocks/sprites';
 
 import type { NetworkStaleDeviceParams } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
-import type { NetworkStatus } from '#domain/observations/network';
+import type { TailnetStatus } from '#domain/observations/network';
 
-const statuses = vi.hoisted(() => new WeakMap<GuestChannel, NetworkStatus>());
+const statuses = vi.hoisted(() => new WeakMap<GuestChannel, TailnetStatus>());
 const boundary = vi.hoisted(
   () =>
     ({
@@ -23,6 +26,13 @@ const boundary = vi.hoisted(
       inspectTailscale: vi.fn<
         typeof import('#adapters/drivers/networks/tailscale/status').inspectTailscale
       >(async (guest) => statuses.get(guest) ?? LOGGED_OUT),
+      resolveExitNode: vi.fn<
+        typeof import('#adapters/drivers/networks/tailscale/api').resolveExitNode
+      >(async () => ({
+        id: 'home',
+        name: 'home.example.ts.net',
+        ip: '100.64.0.1',
+      })),
       findTailnetDevice: vi.fn<
         typeof import('#adapters/drivers/networks/tailscale/api').findTailnetDevice
       >(async (_key, _tailnet, id) =>
@@ -66,14 +76,16 @@ vi.mock(
         typeof import('#adapters/drivers/networks/tailscale/api')
       >()),
       findTailnetDevice: boundary.findTailnetDevice,
+      resolveExitNode: boundary.resolveExitNode,
       deleteTailnetDevice: boundary.deleteTailnetDevice,
     }) satisfies Partial<
       typeof import('#adapters/drivers/networks/tailscale/api')
     >,
 );
 
-const LOGGED_OUT: NetworkStatus = {
+const LOGGED_OUT: TailnetStatus = {
   online: false,
+  dnsReady: false,
   skipped: false,
 };
 const management = { credential: 'tskey-api-test', account: 'example.ts.net' };
@@ -86,7 +98,7 @@ const recorded = { deviceId: 'nSTALE1CNTRL', ip: '100.64.0.9' };
  */
 async function removeStale(
   params: NetworkStaleDeviceParams,
-  status: NetworkStatus = LOGGED_OUT,
+  status: TailnetStatus = LOGGED_OUT,
 ): Promise<void> {
   await using directory = await mkdtempDisposable(
     join(tmpdir(), 'open-agent-stale-device-'),
@@ -159,4 +171,46 @@ describe('fn:removeStaleTailnetDevice', () => {
       });
     },
   );
+});
+
+describe('fn:assertSafeTailnetTarget', () => {
+  it.each([
+    { identity: { ...LOGGED_OUT, deviceId: 'self', exitNode: 'self' } },
+    {
+      identity: { ...LOGGED_OUT, deviceId: 'home' },
+      management,
+      exitNode: 'home',
+    },
+    {
+      identity: { ...LOGGED_OUT, deviceId: 'workstation', ip: '100.64.0.1' },
+      management,
+      exitNode: 'home',
+    },
+  ])(
+    'should reject deletion when the selected target is the exit node $identity',
+    async (params) => {
+      await expect(assertSafeTailnetTarget(params)).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+    },
+  );
+
+  it.each([
+    { identity: { ...LOGGED_OUT, ...recorded }, management, exitNode: 'home' },
+  ])(
+    'should allow a target with no conflicting exit identity $identity',
+    async (params) => {
+      await expect(assertSafeTailnetTarget(params)).resolves.toBeUndefined();
+    },
+  );
+  it('should avoid management requests when no exit node was selected', async () => {
+    await expect(
+      assertSafeTailnetTarget({
+        identity: { ...LOGGED_OUT, ...recorded },
+        management,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(boundary.resolveExitNode).not.toHaveBeenCalled();
+  });
 });

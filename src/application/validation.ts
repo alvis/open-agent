@@ -226,7 +226,10 @@ export function validateSetupIntegrationOptions(
         'The update interval switch requires --section tools or --section all',
     });
   }
-  if (section !== 'network' && options.network !== undefined) {
+  if (
+    section !== 'network' &&
+    (options.network !== undefined || options.useExitNode !== undefined)
+  ) {
     throw new CommandValidationError({
       message: 'Network switches require --section network or --section all',
     });

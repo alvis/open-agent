@@ -32,10 +32,11 @@ describe('None network driver', () => {
     expect(registry.networks.none).toBe(none);
   });
 
-  it('should declare no daemon, tools or inputs', () => {
+  it('should declare no daemon, tools, inputs or exit node support', () => {
     expect(none).toMatchObject({
       id: 'none',
       kind: 'networks',
+      supportsExitNode: false,
       tools: [],
     });
     expect(none.daemon).toBeUndefined();
@@ -43,12 +44,15 @@ describe('None network driver', () => {
   });
 
   it('should pass preflight without checking any caller input', async () => {
-    await expect(none.preflight({ hostname: 'workstation' })).resolves.toEqual({
-      problems: [],
-    });
+    await expect(
+      none.preflight({ hostname: 'workstation', exitNode: '100.64.0.1' }),
+    ).resolves.toEqual({ problems: [] });
   });
 
-  it('should refuse to issue a credential', async () => {
+  it('should refuse to verify an exit node or issue a credential', async () => {
+    await expect(
+      none.verifyExitNode({ credential: 'unused' }, 'node'),
+    ).rejects.toThrow('No private network is selected');
     await expect(
       none.issueCredential({ credential: 'unused' }),
     ).rejects.toThrow('No private network is selected');
@@ -63,6 +67,10 @@ describe('None network driver', () => {
 
     await none.enroll(guest, { hostname: 'workstation', recordIdentity });
     await none.release(guest, { service: undefined, recordIdentity });
+    await none.assertSafeTarget({
+      identity: await none.identify(guest, {}),
+      exitNode: '100.64.0.1',
+    });
 
     await expect(
       none.cleanup({ identity: await none.identify(guest, {}) }),
@@ -86,12 +94,16 @@ describe('None network driver', () => {
       reason: 'No private network is selected',
     });
     expect(await none.status(guest)).not.toBe(status);
+    expect(none.matchesExitNode('100.64.0.1', status)).toBe(false);
     expect(execute).not.toHaveBeenCalled();
   });
 
   it('should report readiness as skipped, never as a failure', () => {
-    expect(none.readiness({ online: false, skipped: true })).toEqual([
-      { name: 'private network', status: 'skipped' },
-    ]);
+    expect(
+      none.readiness(
+        { online: false, skipped: true },
+        { isExitNodeEnabled: false },
+      ),
+    ).toEqual([{ name: 'private network', status: 'skipped' }]);
   });
 });

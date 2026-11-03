@@ -13,6 +13,7 @@ import type { GuestChannel } from '#application/ports/guest-channel';
 
 const PROFILE = profileWith({
   network: false,
+  exitNode: false,
   cliproxyapi: true,
 });
 

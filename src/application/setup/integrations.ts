@@ -136,6 +136,7 @@ export function targetedProfile(
     network: isNetworkTargeted ? profile.network : NO_NETWORK,
     options: {
       ...profile.options,
+      isExitNodeEnabled: isNetworkTargeted && profile.options.isExitNodeEnabled,
       isProxyEnabled: isProxyTargeted && profile.options.isProxyEnabled,
     },
   };

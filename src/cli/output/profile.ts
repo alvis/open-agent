@@ -16,6 +16,7 @@ export interface ProfileSummaryOutput {
 
 /** numeric and boolean options a workstation recorded */
 export interface ProfileOptionsOutput {
+  isExitNodeEnabled: boolean;
   isProxyEnabled: boolean;
   idleTimeoutMinutes: number;
   holdMaxMinutes: number;
@@ -70,6 +71,7 @@ export function projectProfileOptions(
   options: ProfileOptions,
 ): ProfileOptionsOutput {
   return projectFields<ProfileOptions, ProfileOptionsOutput>(options, {
+    isExitNodeEnabled: same,
     isProxyEnabled: same,
     idleTimeoutMinutes: same,
     holdMaxMinutes: same,

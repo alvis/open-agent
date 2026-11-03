@@ -168,6 +168,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
       validateSetupIntegrationOptions(
         {
           network: 'tailscale',
+          useExitNode: false,
           proxy: false,
           harness: ['claude'],
           idleMinutes: 0,
@@ -177,13 +178,19 @@ describe('fn:validateSetupIntegrationOptions', () => {
     ).not.toThrow();
     expect(() => validateSetupIntegrationOptions({}, undefined)).not.toThrow();
     expect(() =>
-      validateSetupIntegrationOptions({ network: 'none' }, 'network'),
+      validateSetupIntegrationOptions(
+        { network: 'none', useExitNode: false },
+        'network',
+      ),
     ).not.toThrow();
     expect(() =>
       validateSetupIntegrationOptions({ proxy: false }, 'proxy'),
     ).not.toThrow();
     expect(() =>
       validateSetupIntegrationOptions({ network: 'none' }, 'proxy'),
+    ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+    expect(() =>
+      validateSetupIntegrationOptions({ useExitNode: false }, 'git'),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
       validateSetupIntegrationOptions({ proxy: false }, 'network'),

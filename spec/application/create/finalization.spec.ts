@@ -40,7 +40,10 @@ import { rememberSecret } from '#kernel/redaction';
 
 import { environmentOf } from '../../fixtures/environment';
 
-import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
+import {
+  DISABLED_NETWORK_PROFILE,
+  TAILSCALE_PROFILE,
+} from '../../fixtures/profile';
 
 import { dependencies, dependenciesWith } from '../../mocks/dependencies';
 
@@ -123,6 +126,7 @@ const OBSERVED = {
   ],
   network: {
     online: false,
+    dnsReady: false,
     skipped: true,
     reason: 'No private network is selected',
   },
@@ -170,6 +174,7 @@ const observed = {
   services,
   network: {
     online: false,
+    dnsReady: false,
     skipped: true,
     reason: 'No private network is selected',
   },
@@ -578,6 +583,75 @@ describe('fn:finalizeCreate READY boundary', () => {
         mutations: ['visibility:public', 'labels:ready'],
       },
     );
+  });
+
+  it('should withhold exposure when the selected exit node changed', async () => {
+    const { sprite, mutations } = createSprite();
+    const profile = {
+      ...TAILSCALE_PROFILE,
+      options: {
+        ...TAILSCALE_PROFILE.options,
+        isExitNodeEnabled: true,
+      },
+    };
+    const base = createContext(sprite);
+    const context = {
+      ...base,
+      effectiveExitNode: 'selected-node',
+      input: { ...base.input, profile },
+    } satisfies CreateContext;
+    const tailscale = registry.networks.tailscale;
+    if (!tailscale.daemon || !tailscale.launcher) {
+      throw new Error('The selected network lacks its daemon');
+    }
+    const inspection = {
+      ...observed,
+      services: [
+        ...observed.services,
+        { name: tailscale.daemon.name, needs: [], status: 'running' },
+      ],
+      environment: environmentOf(profile, {
+        services: [registry.agents[profile.agent].service, tailscale.daemon],
+        network: {
+          id: 'tailscale',
+          daemon: tailscale.daemon.name,
+          launcher: {
+            stateDirectory: tailscale.launcher.stateDirectory,
+            socket: tailscale.launcher.socket,
+            tun: tailscale.launcher.tun,
+          },
+        },
+      }),
+      network: {
+        online: true,
+        skipped: false,
+        dnsReady: true,
+        routeDevice: 'tailscale0',
+        egressIp: '198.51.100.20',
+        exitNodeIp: '198.51.100.21',
+        exitNodeName: 'different-node',
+      },
+    } satisfies GuestInspection;
+
+    const failure: unknown = await finalizeCreate(dependencies, {
+      workstation: toRecord(sprite),
+      guest: guestOf(sprite),
+      observed: inspection,
+      context,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect({ failure, mutations }).toEqual({
+      failure: expect.objectContaining({
+        code: 'PREFLIGHT',
+        readiness: expect.objectContaining({
+          failures: expect.arrayContaining(['selected exit node']),
+        }),
+      }),
+      mutations: [],
+    });
   });
 
   it('should withhold exposure for a served version mismatch', async () => {

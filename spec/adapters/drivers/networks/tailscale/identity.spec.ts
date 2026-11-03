@@ -39,6 +39,7 @@ describe('fn:identifyTailnetDevice', () => {
       deviceId: 'old',
       ip: '100.64.0.2',
       online: false,
+      dnsReady: false,
       skipped: true,
     });
   });

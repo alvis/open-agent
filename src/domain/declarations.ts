@@ -223,12 +223,16 @@ export interface NetworkInputs {
   management: InputPrerequisite & { store: string };
   /** single-use enrollment credential that can replace the management credential */
   enrollment: Pick<InputPrerequisite, 'environment' | 'flag'>;
+  /** exit node selector */
+  exitNode: InputPrerequisite;
 }
 
 /** network identity and capabilities, declared as data */
 export interface NetworkDeclaration<
   Name extends string = string,
 > extends DriverDescriptor<'networks', Name> {
+  /** can route egress through an exit node */
+  supportsExitNode: boolean;
   /** caller-side inputs, read and prompted for by core; absent when the network takes none */
   inputs?: NetworkInputs;
   /** daemon service; the agent service depends on it when the network is selected; absent when the network runs no daemon */

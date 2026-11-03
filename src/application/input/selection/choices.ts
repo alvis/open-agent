@@ -1,7 +1,10 @@
-import { networksWithInputs } from '#application/catalog/networks';
+import {
+  networksWithInputs,
+  networkDriver,
+} from '#application/catalog/networks';
 import { harnessIds } from '#domain/harnesses';
 import { AGENT_IDS, PROVIDER_IDS } from '#domain/ids';
-import { networkIds } from '#domain/networks';
+import { isNetworkId, networkIds } from '#domain/networks';
 import { isDriverId } from '#domain/profile';
 
 import { hasValue } from './sources';
@@ -149,14 +152,18 @@ export function inferNetwork(
     options.networkAccount,
     options.networkKeySource,
     options.networkAuthKeySource,
+    options.exitNode,
   ].some((value) => Boolean(value?.trim()));
 
   return networksWithInputs(dependencies.registry).find(
     ({ inputs }) =>
       hasFlags ||
-      [inputs.account, inputs.management, inputs.enrollment].some(
-        ({ environment }) => hasValue(sources, environment),
-      ),
+      [
+        inputs.account,
+        inputs.management,
+        inputs.enrollment,
+        inputs.exitNode,
+      ].some(({ environment }) => hasValue(sources, environment)),
   )?.id;
 }
 
@@ -166,21 +173,31 @@ export interface InferredOptionsParams {
   options: CommandOptions;
   /** process, credential file and profile values */
   sources: InputSources;
+  /** network the options select; ignored unless it names a registered network */
+  network: string | undefined;
 }
 
 /**
  * infers options from supplied inputs, as non-interactive runs always have
  * @param dependencies the registered drivers
- * @param params the call's inputs: options, sources
+ * @param params the call's inputs: options, sources, network
  * @returns options the supplied inputs imply
  */
 export function inferredOptions(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   params: InferredOptionsParams,
-): { isProxyEnabled: boolean } {
-  const { options, sources } = params;
+): { isExitNodeEnabled: boolean; isProxyEnabled: boolean } {
+  const { options, sources, network } = params;
+  const exitNode =
+    network !== undefined && isNetworkId(network)
+      ? networkDriver(dependencies.registry, network).inputs?.exitNode
+          .environment
+      : undefined;
 
   return {
+    isExitNodeEnabled:
+      Boolean(options.exitNode?.trim()) ||
+      (exitNode !== undefined && hasValue(sources, exitNode)),
     isProxyEnabled:
       [options.proxyUrl, options.proxyApiKeySource].some((value) =>
         Boolean(value?.trim()),

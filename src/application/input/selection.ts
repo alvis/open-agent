@@ -65,6 +65,7 @@ const CREATE_FIELDS: readonly SelectionField[] = [
   'agentRelease',
   'harnesses',
   'network',
+  'isExitNodeEnabled',
   'isProxyEnabled',
   'idleTimeoutMinutes',
   'holdMaxMinutes',
@@ -79,13 +80,14 @@ const SECTION_FIELDS: Readonly<
     'agentRelease',
     'harnesses',
     'network',
+    'isExitNodeEnabled',
     'isProxyEnabled',
     'idleTimeoutMinutes',
     'holdMaxMinutes',
     'updateDueIntervalDays',
   ],
   agent: ['agentRelease'],
-  network: ['network'],
+  network: ['network', 'isExitNodeEnabled'],
   proxy: ['isProxyEnabled'],
   tools: ['updateDueIntervalDays'],
 };
@@ -209,7 +211,7 @@ export async function resolveCreateSelection(
       harnesses,
       network,
       options: await resolveOptions(dependencies, {
-        selected: { provider, agent, harnesses },
+        selected: { provider, agent, harnesses, network },
         supplied: {
           ...supplied.options,
           ...machine,
@@ -218,7 +220,7 @@ export async function resolveCreateSelection(
         fields: CREATE_FIELDS,
         prompts,
         base: dependencies.defaults.options,
-        inferred: inferredOptions(dependencies, { options, sources }),
+        inferred: inferredOptions(dependencies, { options, sources, network }),
       }),
     },
     problems,
@@ -278,6 +280,7 @@ export async function resolveSetupSelection(
           provider: recorded.provider,
           agent: recorded.agent,
           harnesses,
+          network,
         },
         supplied: supplied.options,
         fields: sectionFields(section),
@@ -319,6 +322,7 @@ export function selectionRequirements(
       ? [
           ...(isEnrolled ? [] : (['networkEnrollment'] as const)),
           'networkAccount' as const,
+          ...(profile.options.isExitNodeEnabled ? (['exitNode'] as const) : []),
         ]
       : []),
     ...(profile.options.isProxyEnabled

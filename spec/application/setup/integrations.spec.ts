@@ -217,21 +217,30 @@ describe('fn:profileUpdateSelected machine requirements', () => {
 
 describe('fn:targetedProfile', () => {
   it.each([
-    { section: 'agent', network: 'none', proxy: false },
-    { section: 'network', network: 'tailscale', proxy: false },
-    { section: 'proxy', network: 'none', proxy: true },
-    { section: 'all', network: 'tailscale', proxy: true },
+    { section: 'agent', network: 'none', exitNode: false, proxy: false },
+    {
+      section: 'network',
+      network: 'tailscale',
+      exitNode: true,
+      proxy: false,
+    },
+    { section: 'proxy', network: 'none', exitNode: false, proxy: true },
+    { section: 'all', network: 'tailscale', exitNode: true, proxy: true },
   ] as const)(
     'should limit preflight integration choices to the $section section',
-    ({ section, network, proxy }) => {
+    ({ section, network, exitNode, proxy }) => {
       const selected = profileWith({
         network: true,
+        exitNode: true,
         cliproxyapi: true,
       });
 
       expect(targetedProfile(section, selected)).toMatchObject({
         network,
-        options: { isProxyEnabled: proxy },
+        options: {
+          isExitNodeEnabled: exitNode,
+          isProxyEnabled: proxy,
+        },
       });
     },
   );

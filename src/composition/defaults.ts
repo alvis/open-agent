@@ -11,6 +11,7 @@ export const defaults = {
     network: NO_NETWORK,
   },
   options: {
+    isExitNodeEnabled: false,
     isProxyEnabled: false,
     idleTimeoutMinutes: 5,
     holdMaxMinutes: 60,

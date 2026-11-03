@@ -54,6 +54,8 @@ export interface WorkstationProfile {
 
 /** options whose meaning depends on declared driver capabilities */
 export interface ProfileOptions {
+  /** route egress through an existing approved exit node */
+  isExitNodeEnabled: boolean;
   /** route proxy-capable harnesses through an existing CLIProxyAPI hub */
   isProxyEnabled: boolean;
   /** minutes without heartbeat or hold before sleep; 0 never initiates sleep */
@@ -294,7 +296,7 @@ export function validateProfile({
     ...optionViolations({
       declarations,
       options: candidate.options,
-      selected: { harnesses },
+      selected: { network, harnesses },
     }),
   ];
   // incompatibilities are declared against a fully known selection, so they
@@ -343,6 +345,7 @@ function incompatibilityViolations(
         'harnesses' as const,
         'network' as const,
         ...OPTION_BOUNDS.map(({ key }) => key),
+        'isExitNodeEnabled' as const,
         'isProxyEnabled' as const,
       ],
     }));
@@ -365,6 +368,7 @@ function isProfileCandidate(value: unknown): value is ProfileCandidate {
     Array.isArray(value.harnesses) &&
     value.harnesses.every((id: unknown) => typeof id === 'string') &&
     typeof value.network === 'string' &&
+    typeof options.isExitNodeEnabled === 'boolean' &&
     typeof options.isProxyEnabled === 'boolean' &&
     OPTION_BOUNDS.every(({ key }) => typeof options[key] === 'number') &&
     (options.agentRelease === undefined ||

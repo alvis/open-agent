@@ -138,9 +138,13 @@ describe('fn:prepareCreate consent', () => {
     });
   });
 
-  it.each([{ management: true }, { management: false }])(
-    'should carry network enrollment into provisioning: %j',
-    async ({ management }) => {
+  it.each([
+    { usesExitNode: false, management: true, effectiveExitNode: undefined },
+    { usesExitNode: true, management: true, effectiveExitNode: '100.64.0.1' },
+    { usesExitNode: true, management: false, effectiveExitNode: 'exit' },
+  ])(
+    'should carry network enrollment and the available exit route into provisioning: %j',
+    async ({ usesExitNode, management, effectiveExitNode }) => {
       vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
       vi.stubEnv('TAILSCALE_AUTH_KEY', 'supplied-enrollment-key');
       vi.stubEnv(
@@ -157,9 +161,11 @@ describe('fn:prepareCreate consent', () => {
           Response.json({
             devices: [
               {
-                id: 'other-id',
-                name: 'other.example.ts.net',
-                hostname: 'other',
+                id: 'exit-id',
+                name: 'exit.example.ts.net',
+                hostname: 'exit',
+                addresses: ['100.64.0.1'],
+                enabledRoutes: ['0.0.0.0/0'],
               },
             ],
           }),
@@ -171,13 +177,18 @@ describe('fn:prepareCreate consent', () => {
         options: {
           ...request.options,
           network: 'tailscale',
+          useExitNode: usesExitNode,
+          ...(usesExitNode ? { exitNode: 'exit' } : {}),
           yes: true,
         },
       });
 
       expect(result).toMatchObject({
         kind: 'ready',
-        context: { authKey: expect.anything() },
+        context: {
+          effectiveExitNode,
+          authKey: expect.anything(),
+        },
       });
     },
   );
@@ -200,6 +211,7 @@ describe('fn:prepareCreate consent', () => {
       options: {
         ...request.options,
         network: 'tailscale',
+        useExitNode: false,
         yes: true,
       },
     });

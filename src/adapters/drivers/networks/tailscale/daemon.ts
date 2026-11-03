@@ -38,10 +38,12 @@ export async function restoreTailnetDns(guest: GuestChannel): Promise<void> {
   }
 }
 
-/** credential and device name for one enrollment */
+/** credential, exit-node selector and device name for one enrollment */
 interface TailnetEnrollParams {
   /** single-use enrollment credential */
   authKey: Secret;
+  /** requested exit-node selector */
+  selected: string;
   /** tailnet device hostname */
   hostname: string;
 }
@@ -58,13 +60,13 @@ const ENROLL_PROGRAM =
  * enrolls a guest with its single-use credential, delivered as a private
  * session file removed before the CLI starts
  * @param guest target guest, running over a setup session
- * @param params enrollment credential and device name
+ * @param params enrollment credential, exit-node selector and device name
  */
 export async function enrollTailnet(
   guest: GuestChannel,
   params: TailnetEnrollParams,
 ): Promise<void> {
-  const { authKey, hostname } = params;
+  const { authKey, selected, hostname } = params;
   await runGuest(
     guest,
     [
@@ -74,6 +76,8 @@ export async function enrollTailnet(
       'oa-tailscale-up',
       ...tailscaleCommand(
         'up',
+        `--exit-node=${selected}`,
+        '--exit-node-allow-lan-access=false',
         '--accept-routes=false',
         `--hostname=${hostname}`,
       ),

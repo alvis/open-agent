@@ -26,6 +26,7 @@ interface NewWorkstationConfiguration {
   /** validated selection the workstation is created with */
   profile: WorkstationProfile;
   authKey?: Secret;
+  exitNode?: string;
   proxyUrl?: string;
   proxyApiKey?: string;
   githubToken?: string;
@@ -118,7 +119,9 @@ async function enrolAndConfigure(
   if (network.daemon) {
     interaction?.progress({
       stage: 'network',
-      message: `Configuring ${network.displayName} connectivity`,
+      message: profile.options.isExitNodeEnabled
+        ? `Configuring ${network.displayName} exit-node routing`
+        : `Configuring ${network.displayName} connectivity`,
     });
   }
   await traceStage({
@@ -127,6 +130,7 @@ async function enrolAndConfigure(
       network.enroll(guest, {
         hostname: configuration.hostname,
         credential: configuration.authKey,
+        exitNode: configuration.exitNode,
         recordIdentity: dependencies.guest.environment.identityRecorder(
           guest,
           network.id,

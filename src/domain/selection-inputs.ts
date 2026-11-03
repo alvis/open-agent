@@ -17,7 +17,10 @@ const SELECTION_INPUTS = {
   minMemoryGb: { flag: '--mem', environment: 'OPEN_AGENT_MEM' },
   harnesses: { flag: '--harness', environment: 'OPEN_AGENT_HARNESSES' },
   network: { flag: '--network', environment: 'OPEN_AGENT_NETWORK' },
-
+  isExitNodeEnabled: {
+    flag: '--use-exit-node',
+    environment: 'OPEN_AGENT_USE_EXIT_NODE',
+  },
   idleTimeoutMinutes: {
     flag: '--idle-minutes',
     environment: 'OPEN_AGENT_IDLE_MINUTES',

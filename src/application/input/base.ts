@@ -106,6 +106,9 @@ export async function resolveBaseInputs(
     networkAccount: network
       ? value(network.account.environment, options.networkAccount)
       : options.networkAccount,
+    exitNode: network
+      ? value(network.exitNode.environment, options.exitNode)
+      : options.exitNode,
     proxyUrl: value(
       dependencies.registry.gateways.cliproxyapi.inputs.baseUrl.environment,
       options.proxyUrl,

@@ -71,52 +71,60 @@ describe('fn:confirmCreation', () => {
 });
 
 describe('fn:reviewCreatePlan', () => {
-  it('should describe the selected network and optional identities without credentials', async () => {
-    const status = vi.fn<(update: StatusUpdate) => void>();
-    const operation = new OperationContext({
-      signal: new AbortController().signal,
-      onStatus: status,
-    });
-    const profile = {
-      ...TAILSCALE_PROFILE,
-      options: {
-        ...TAILSCALE_PROFILE.options,
-        idleTimeoutMinutes: 0,
-        isProxyEnabled: true,
-      },
-    };
+  it.each([
+    { usesExitNode: false, route: /direct routing/ },
+    { usesExitNode: true, route: /exit node selected-node/ },
+  ])(
+    'should describe selected network routing and optional identities without credentials: %s',
+    async ({ usesExitNode, route }) => {
+      const status = vi.fn<(update: StatusUpdate) => void>();
+      const operation = new OperationContext({
+        signal: new AbortController().signal,
+        onStatus: status,
+      });
+      const profile = {
+        ...TAILSCALE_PROFILE,
+        options: {
+          ...TAILSCALE_PROFILE.options,
+          idleTimeoutMinutes: 0,
+          isExitNodeEnabled: usesExitNode,
+          isProxyEnabled: true,
+        },
+      };
 
-    await withOperation(operation, async () =>
-      reviewCreatePlan(dependencies, {
-        values: { name: 'box', token: 'private-token' },
-        input: {
-          ...input,
-          profile,
-          proxyUrl: 'https://hub.example.test',
-          githubToken: 'github-token',
-          gitIdentity: {
-            authorName: 'Author',
-            authorEmail: 'author@example.test',
-            committerName: 'Author',
-            committerEmail: 'author@example.test',
+      await withOperation(operation, async () =>
+        reviewCreatePlan(dependencies, {
+          values: { name: 'box', token: 'private-token' },
+          input: {
+            ...input,
+            profile,
+            exitNode: 'selected-node',
+            proxyUrl: 'https://hub.example.test',
+            githubToken: 'github-token',
+            gitIdentity: {
+              authorName: 'Author',
+              authorEmail: 'author@example.test',
+              committerName: 'Author',
+              committerEmail: 'author@example.test',
+            },
+            ...(usesExitNode ? { enrollmentKey: 'enrollment-key' } : {}),
           },
-          enrollmentKey: 'enrollment-key',
-        },
-        plugins,
-        preflight: { checks: [], reminders: [] },
-      }),
-    );
+          plugins,
+          preflight: { checks: [], reminders: [] },
+        }),
+      );
 
-    expect(status.mock.calls).toEqual([
-      [
-        {
-          kind: 'info',
-          message: expect.stringMatching(/Tailscale enabled/),
-        },
-      ],
-    ]);
-    expect(JSON.stringify(status.mock.calls)).not.toMatch(
-      /private-token|github-token|enrollment-key/,
-    );
-  });
+      expect(status.mock.calls).toEqual([
+        [
+          {
+            kind: 'info',
+            message: expect.stringMatching(route),
+          },
+        ],
+      ]);
+      expect(JSON.stringify(status.mock.calls)).not.toMatch(
+        /private-token|github-token|enrollment-key/,
+      );
+    },
+  );
 });

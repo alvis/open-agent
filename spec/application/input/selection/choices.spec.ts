@@ -32,16 +32,26 @@ describe('fn:defaultHarnesses', () => {
 });
 
 describe('fn:inferredOptions', () => {
-  it('should infer the proxy from a supplied CLIProxyAPI hub', () => {
+  it('should ignore exit-node inputs unless the selected network is registered', () => {
+    const sources = {
+      processEnv: { TAILSCALE_EXIT_NODE: 'exit-node' },
+      fileEnv: {},
+      profile: {},
+    };
+
     expect(
       inferredOptions(dependencies, {
         options: {},
-        sources: {
-          processEnv: { CLIPROXYAPI_BASE_URL: 'https://hub.example.test' },
-          fileEnv: {},
-          profile: {},
-        },
+        sources,
+        network: 'unregistered-network',
       }),
-    ).toEqual({ isProxyEnabled: true });
+    ).toMatchObject({ isExitNodeEnabled: false });
+    expect(
+      inferredOptions(dependencies, {
+        options: {},
+        sources,
+        network: 'tailscale',
+      }),
+    ).toMatchObject({ isExitNodeEnabled: true });
   });
 });

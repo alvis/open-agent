@@ -1,4 +1,5 @@
 import { isHarnessId } from '#domain/harnesses';
+import { isNetworkId } from '#domain/networks';
 import { machineViolations, isDriverId } from '#domain/profile';
 
 import { releaseChoices } from './choices';
@@ -17,6 +18,7 @@ interface OptionContext {
     provider: string;
     agent: string;
     harnesses: readonly string[];
+    network: string;
   };
   /** options the caller supplied */
   supplied: SuppliedSelection['options'];
@@ -26,7 +28,7 @@ interface OptionContext {
   /** recorded options for setup, default options for a new workstation */
   base: ProfileOptions;
   /** options inferred from supplied inputs, also the prompt defaults */
-  inferred?: { isProxyEnabled: boolean };
+  inferred?: { isExitNodeEnabled: boolean; isProxyEnabled: boolean };
   /** option the targeted setup section turns on unless a flag says otherwise */
   enables?: 'proxy';
 }
@@ -42,8 +44,9 @@ type MachineContext = Pick<OptionContext, 'supplied' | 'prompts' | 'base'> & {
 };
 
 /**
- * resolves the capability-driven options the run owns: CLIProxyAPI only when
- * a selected harness supports it, idle minutes only when the provider keeps workstations awake; hold-max
+ * resolves the capability-driven options the run owns: exit node only when
+ * the network supports one, CLIProxyAPI only when a selected harness supports
+ * it, idle minutes only when the provider keeps workstations awake; hold-max
  * and the update due interval are never asked
  * @param dependencies the registered drivers
  * @param context selected drivers, supplied values, prompts and base options
@@ -65,6 +68,9 @@ export async function resolveOptions(
   return {
     ...base,
     ...(agentRelease !== undefined && { agentRelease }),
+    isExitNodeEnabled: fields.includes('isExitNodeEnabled')
+      ? await resolveExitNode(dependencies, context)
+      : base.isExitNodeEnabled,
     isProxyEnabled: fields.includes('isProxyEnabled')
       ? await resolveProxy(dependencies, context)
       : base.isProxyEnabled,
@@ -159,6 +165,31 @@ export async function resolveMachine(
     base.minMemoryGb;
 
   return { minCpus, minMemoryGb };
+}
+
+/**
+ * resolves whether egress uses an exit node, asked only when the network supports one
+ * @param dependencies the registered drivers
+ * @param context selected drivers, supplied values and prompts
+ * @returns whether an exit node is used
+ */
+async function resolveExitNode(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  context: OptionContext,
+): Promise<boolean> {
+  const { selected, supplied, prompts, inferred, base } = context;
+  if (supplied.isExitNodeEnabled !== undefined) {
+    return supplied.isExitNodeEnabled;
+  }
+  if (
+    !isNetworkId(selected.network) ||
+    !dependencies.registry.networks[selected.network].supportsExitNode
+  ) {
+    return false;
+  }
+  const fallback = inferred?.isExitNodeEnabled ?? base.isExitNodeEnabled;
+
+  return (await prompts?.confirm('Use an exit node?', fallback)) ?? fallback;
 }
 
 /**

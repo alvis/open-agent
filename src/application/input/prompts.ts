@@ -141,6 +141,12 @@ async function promptPublicInputs(
       required: true,
     });
   }
+  if (network && required.includes('exitNode')) {
+    input.exitNode ??= await interaction.input({
+      message: network.exitNode.prompt,
+      required: true,
+    });
+  }
   if (required.includes('proxyUrl')) {
     input.proxyUrl ??= await interaction.input({
       message: dependencies.registry.gateways.cliproxyapi.inputs.baseUrl.prompt,

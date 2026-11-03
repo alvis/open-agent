@@ -20,6 +20,7 @@ const boundary = vi.hoisted(
         deviceId: 'workstation',
         ip: '100.64.0.2',
         online: true,
+        dnsReady: false,
         skipped: false,
       })),
     }) satisfies Partial<

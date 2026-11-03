@@ -8,7 +8,7 @@ const INSPECTION_MESSAGES: Record<InspectionProbe, string> = {
   inspection:
     'Reading guest configuration; a sleeping workstation may need to wake',
   services: 'Checking managed services',
-  network: 'Checking the selected network and DNS',
+  network: 'Checking the selected network, DNS and exit routing',
   native: 'Checking harness configuration, plugins and the agent environment',
   proxy: 'Checking the selected model gateway catalogue',
   governor: 'Reading the idle governor state',

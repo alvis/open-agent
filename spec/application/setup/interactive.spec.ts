@@ -48,6 +48,7 @@ vi.mock(
 /** the profile the set-up workstation recorded */
 const PROFILE = profileWith({
   network: false,
+  exitNode: false,
   cliproxyapi: false,
 });
 
