@@ -35,6 +35,9 @@ export const AGENT_BIN = `${AGENT_HOME}/.local/bin`;
 /** the agent's private open-agent configuration directory */
 export const AGENT_CONFIG = `${AGENT_HOME}/.config/open-agent`;
 
+/** the runtime environment the agent keeps for its applications */
+export const RUNTIME_ENV_PATH = `${AGENT_CONFIG}/runtime-env.json`;
+
 /** the committer the agent configured */
 export const COMMITTER_PATH = `${AGENT_CONFIG}/committer.json`;
 

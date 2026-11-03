@@ -12,6 +12,7 @@ const invalidName = {
   name: 'invalid workstation',
   providerToken: 'test-org/1234/0123abcd/4567ef89',
   profile: DISABLED_NETWORK_PROFILE,
+  runtimeEnv: {},
   sources: {},
   missing: [],
 } satisfies ResolvedInputs;

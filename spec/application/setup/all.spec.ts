@@ -1,4 +1,4 @@
-import { mkdtempDisposable, readFile } from 'node:fs/promises';
+import { mkdtempDisposable, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -43,7 +43,10 @@ describe('fn:setupAll', () => {
       await using directory = await mkdtempDisposable(
         join(tmpdir(), 'open-agent-setup-all-'),
       );
-      const isGitConfigured = optionalSections || isReleaseChanged;
+      const envFile = join(directory.path, 'runtime.env');
+      if (optionalSections || isReleaseChanged) {
+        await writeFile(envFile, 'PROJECT_COLOR=blue\n');
+      }
       const sprite = createFilesystemSprite({
         root: directory.path,
         execute: async (_file, args = []) => ({
@@ -68,15 +71,17 @@ describe('fn:setupAll', () => {
         ...workstationOf(sprite),
         options: {
           github: optionalSections ? undefined : false,
-          gitIdentity: isGitConfigured,
-          gitName: isGitConfigured ? 'Ada' : undefined,
-          gitEmail: isGitConfigured ? 'ada@example.test' : undefined,
+          gitIdentity: optionalSections ? true : false,
+          gitName: optionalSections ? 'Ada' : undefined,
+          gitEmail: optionalSections ? 'ada@example.test' : undefined,
+          envFile: optionalSections || isReleaseChanged ? envFile : undefined,
           localCredentials: false,
           nonInteractive: true,
           withPairCode,
         },
         input: {
           profile,
+          runtimeEnv: {},
           sources: {},
           missing: [],
         },
@@ -118,7 +123,8 @@ describe('fn:setupAll', () => {
         ...dependencies.guest,
         native: {
           ...dependencies.guest.native,
-          configureGit: async () => {
+          configureGit: async () => undefined,
+          configureRuntimeEnv: async () => {
             if (isReleaseChanged) {
               lifecycle.push({
                 event: 'final section',
@@ -174,7 +180,14 @@ describe('fn:setupAll', () => {
         tools: 'updated',
         ...(withPairCode ? { pairing: { status: 'created' } } : {}),
         ...(optionalSections
-          ? { github: 'skipped', gitIdentity: 'configured' }
+          ? {
+              github: 'skipped',
+              gitIdentity: 'configured',
+              runtimeEnvironment: {
+                status: 'configured',
+                names: ['PROJECT_COLOR'],
+              },
+            }
           : {}),
       });
 
@@ -204,6 +217,8 @@ describe('fn:setupAll', () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-setup-release-failure-'),
     );
+    const envFile = join(directory.path, 'runtime.env');
+    await writeFile(envFile, 'PROJECT_COLOR=blue\n');
     const sprite = createFilesystemSprite({
       root: directory.path,
       execute: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
@@ -216,14 +231,13 @@ describe('fn:setupAll', () => {
     const context: SetupContext = {
       ...workstationOf(sprite),
       options: {
+        envFile,
         github: false,
-        gitIdentity: true,
-        gitName: 'Ada',
-        gitEmail: 'ada@example.test',
+        gitIdentity: false,
         localCredentials: false,
         nonInteractive: true,
       },
-      input: { profile, sources: {}, missing: [] },
+      input: { profile, runtimeEnv: {}, sources: {}, missing: [] },
       profile,
       persistsProfile: false,
       isReleaseChanged: true,
@@ -232,17 +246,20 @@ describe('fn:setupAll', () => {
     const channel = await context.connection.guest();
     const agentName = registry.agents[profile.agent].service.name;
     await channel.services.ensure(agentService(registry, profile));
-    const failure = new Error('The Git identity could not be written');
-    const observed: Array<{ status: string | undefined; author: string }> = [];
+    const failure = new Error('The runtime environment could not be written');
+    const observed: Array<{
+      status: string | undefined;
+      environment: Record<string, string>;
+    }> = [];
     const wired = dependenciesWith({
       guest: {
         ...dependencies.guest,
         native: {
           ...dependencies.guest.native,
-          configureGit: async (_guest, identity) => {
+          configureRuntimeEnv: async (_guest, environment) => {
             observed.push({
               status: services.get(agentName)?.state?.status,
-              author: identity.authorName,
+              environment,
             });
             throw failure;
           },
@@ -252,7 +269,9 @@ describe('fn:setupAll', () => {
 
     await expect(setupAll(wired, channel, context)).rejects.toBe(failure);
 
-    expect(observed).toEqual([{ status: 'running', author: 'Ada' }]);
+    expect(observed).toEqual([
+      { status: 'running', environment: { PROJECT_COLOR: 'blue' } },
+    ]);
     expect(services.get(agentName)?.state?.status).toBe('running');
     expect(
       JSON.parse(
@@ -261,6 +280,53 @@ describe('fn:setupAll', () => {
     ).toMatchObject({ setup: { state: 'incomplete' } });
     expect(exposure.mock.calls).toEqual([]);
     await context.connection.close();
+  });
+
+  it('should name the guest and apply native harness settings before rejecting a restricted env file and before services or exposure', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-setup-order-'),
+    );
+    const envPath = join(directory.path, 'restricted.env');
+    await writeFile(envPath, 'PATH=/untrusted/path\n');
+    const sprite = createFilesystemSprite({
+      root: directory.path,
+      execute: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
+    });
+    const services = vi.spyOn(sprite, 'listServices');
+    const exposure = vi.spyOn(sprite, 'updateURLSettings');
+    const context: SetupContext = {
+      ...workstationOf(sprite),
+      options: {
+        envFile: envPath,
+        github: false,
+        gitIdentity: false,
+        localCredentials: false,
+        nonInteractive: true,
+      },
+      input: {
+        profile: DISABLED_NETWORK_PROFILE,
+        runtimeEnv: {},
+        sources: {},
+        missing: [],
+      },
+      profile: DISABLED_NETWORK_PROFILE,
+      persistsProfile: false,
+      isReleaseChanged: false,
+      mutation: { started: false },
+    };
+
+    await expect(
+      setupAll(dependencies, await context.connection.guest(), context),
+    ).rejects.toMatchObject({
+      code: 'INPUT',
+    });
+
+    expect(
+      await sprite.filesystem().exists('/opt/open-agent/workstation-name'),
+    ).toBe(true);
+    expect(await sprite.filesystem().exists(CLAUDE_SETTINGS)).toBe(true);
+    expect(services).not.toHaveBeenCalled();
+    expect(exposure).not.toHaveBeenCalled();
   });
 });
 

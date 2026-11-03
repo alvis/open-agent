@@ -82,6 +82,7 @@ describe('scoped setup', () => {
         options: { localCredentials: false },
         input: {
           profile: DISABLED_NETWORK_PROFILE,
+          runtimeEnv: {},
           sources: {},
           missing: [],
         },

@@ -16,6 +16,7 @@ export interface ResolvedInputs {
   gitIdentity?: GitIdentity;
   /** driver selection and options this run resolved */
   profile: WorkstationProfile;
+  runtimeEnv: Record<string, string>;
   sources: Record<string, string>;
   missing: string[];
   retainedCredentials?: Partial<

@@ -1,5 +1,8 @@
 import { parse } from 'dotenv';
 
+import { harnessEnvironmentNames } from '#domain/environment-names';
+import { HARNESS_IDS } from '#domain/ids';
+import { selectionInputs } from '#domain/selection-inputs';
 import { CommandFault } from '#kernel/faults';
 import { checkOperation } from '#kernel/operation';
 
@@ -13,9 +16,123 @@ export interface InputSources {
   processEnv: NodeJS.ProcessEnv;
   /** entries of the selected credential file */
   fileEnv: Record<string, string>;
+  /** entries of the selected guest env file; absent without --env-file */
+  runtimeFileEnv?: Record<string, string>;
+}
+
+/**
+ * names the process environment may not supply as input files
+ * @param dependencies the registered drivers
+ * @returns the names
+ */
+function reservedEnv(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+): Set<string> {
+  return new Set([
+    ...Object.values(dependencies.registry.providers).map(
+      ({ prerequisites }) => prerequisites.credential.environment,
+    ),
+    ...Object.values(selectionInputs()).map(({ environment }) => environment),
+    'GH_TOKEN',
+    'GITHUB_TOKEN',
+    'GIT_AUTHOR_NAME',
+    'GIT_AUTHOR_EMAIL',
+    'GIT_COMMITTER_NAME',
+    'GIT_COMMITTER_EMAIL',
+    'NON_INTERACTIVE',
+    'CI',
+    'TERM',
+    'NO_COLOR',
+  ]);
+}
+/**
+ * names no input source may set
+ * @param dependencies the registered drivers
+ * @returns the names
+ */
+function rejectedEnv(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+): Set<string> {
+  return new Set([
+    'HOME',
+    'PATH',
+    'SHELL',
+    'IFS',
+    'ENV',
+    'BASH_ENV',
+    'CDPATH',
+    'LD_PRELOAD',
+    'LD_LIBRARY_PATH',
+    'NODE_OPTIONS',
+    'NODE_PATH',
+    'PYTHONPATH',
+    'PYTHONSTARTUP',
+    'RUBYOPT',
+    'PERL5OPT',
+    'GIT_CONFIG_GLOBAL',
+    'GIT_CONFIG_SYSTEM',
+    'GIT_SSH_COMMAND',
+    'GIT_ASKPASS',
+    'SSH_ASKPASS',
+    ...harnessEnvironmentNames(dependencies.registry, HARNESS_IDS),
+    'HTTP_PROXY',
+    'HTTPS_PROXY',
+    'ALL_PROXY',
+    'NO_PROXY',
+  ]);
 }
 
 const KEYCHAIN_REFERENCE_PARTS = 2;
+
+/**
+ * filters the guest env file to runtime variables safe to forward to the guest
+ * @param dependencies the registered drivers
+ * @param fileEnv parsed entries from the selected guest env file
+ * @returns variables permitted in the guest runtime environment
+ */
+export function runtimeEnvironment(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  fileEnv: Record<string, string>,
+): Record<string, string> {
+  const conflicts = Object.keys(fileEnv).filter(
+    (name) =>
+      rejectedEnv(dependencies).has(name) ||
+      /^(?:DYLD_|LD_|GIT_CONFIG_|NPM_CONFIG_)/i.test(name),
+  );
+  if (conflicts.length > 0) {
+    throw new CommandFault({
+      code: 'INPUT',
+      message: `Unsupported runtime environment overrides: ${conflicts.join(', ')}`,
+    });
+  }
+
+  const selected = Object.fromEntries(
+    Object.entries(fileEnv).filter(
+      ([name]) => !reservedEnv(dependencies).has(name),
+    ),
+  );
+  Object.values(selected).forEach(rememberSecret);
+
+  return selected;
+}
+
+/**
+ * reads process, selected credential and guest env files
+ * @param dependencies what this computer provides
+ * @param options parsed credential-file and env-file options
+ * @returns sources in documented precedence order
+ */
+export async function readInputSources(
+  dependencies: Pick<ApplicationDependencies, 'host'>,
+  options: CommandOptions,
+): Promise<InputSources> {
+  const environment = await readEnvironmentSources(dependencies, options);
+  const runtimeFileEnv = options.envFile
+    ? parse(await readInputText(dependencies, options.envFile, 'env file'))
+    : undefined;
+
+  return { ...environment, runtimeFileEnv };
+}
 
 /**
  * reads credential environment sources
@@ -26,7 +143,7 @@ const KEYCHAIN_REFERENCE_PARTS = 2;
 export async function readEnvironmentSources(
   dependencies: Pick<ApplicationDependencies, 'host'>,
   options: CommandOptions,
-): Promise<InputSources> {
+): Promise<Pick<InputSources, 'processEnv' | 'fileEnv'>> {
   const fileEnv = options.credentialFile
     ? parse(
         await readInputText(

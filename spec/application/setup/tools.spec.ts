@@ -84,6 +84,7 @@ function toolsContext(
     options: { section: 'tools' },
     input: {
       profile: DISABLED_NETWORK_PROFILE,
+      runtimeEnv: {},
       sources: {},
       missing: [],
     },
@@ -213,6 +214,7 @@ describe('fn:setupTools --update', () => {
       options: { update: true },
       input: {
         profile: DISABLED_NETWORK_PROFILE,
+        runtimeEnv: {},
         sources: {},
         missing: [],
       },
@@ -353,7 +355,7 @@ describe('fn:profileUpdateSelected', () => {
     },
   );
 
-  it.each(['agent', 'git', 'github'] as const)(
+  it.each(['agent', 'git', 'github', 'env'] as const)(
     'should report the %s section as leaving the profile alone',
     (section) => {
       expect(profileUpdateSelected(section, recorded, recorded)).toBe(false);

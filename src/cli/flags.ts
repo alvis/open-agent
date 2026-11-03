@@ -218,11 +218,12 @@ export const setupFlags = {
       'network',
       'github',
       'git',
+      'env',
       'tools',
     ] as const),
     optional: true,
     placeholder: 'SECTION',
-    brief: 'SECTION · all, agent, network, github, git, or tools',
+    brief: 'SECTION · all, agent, network, github, git, env, or tools',
   },
   update: { kind: 'boolean', default: false, brief: 'update managed tools' },
 } as const;

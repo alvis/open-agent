@@ -19,6 +19,7 @@ import type { Interaction } from '#application/ports/interaction';
 function emptyInput(): ResolvedInputs {
   return {
     profile: DISABLED_NETWORK_PROFILE,
+    runtimeEnv: {},
     sources: {},
     missing: [],
   };

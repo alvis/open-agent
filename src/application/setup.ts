@@ -1,6 +1,6 @@
 import { requireValidSuppliedSelection } from '#application/input';
 import { readSetupSelection } from '#application/input/selection';
-import { readEnvironmentSources } from '#application/input/sources';
+import { readInputSources } from '#application/input/sources';
 import { selectManagedMachine } from '#application/inspection';
 import { summarizeMachine } from '#application/machine';
 import { withBackNavigation } from '#application/navigation';
@@ -13,7 +13,12 @@ import { setupFailure } from './setup/failure';
 import { recordSetupMetadata } from './setup/metadata';
 import { setupNetwork } from './setup/network';
 import { prepareGuestSection } from './setup/preparation';
-import { setupGit, setupGithub, setupAgent } from './setup/sections';
+import {
+  setupEnvironment,
+  setupGit,
+  setupGithub,
+  setupAgent,
+} from './setup/sections';
 import { selectSetupSection } from './setup/selection';
 import { setupTools } from './setup/tools';
 
@@ -211,7 +216,7 @@ async function readStaticSetupInputs(
   section: SetupSection,
 ): Promise<{ sources: InputSources; supplied: SuppliedSelection }> {
   validateSetupIntegrationOptions(options, section);
-  const sources = await readEnvironmentSources(dependencies, options);
+  const sources = await readInputSources(dependencies, options);
   const supplied = readSetupSelection(dependencies, {
     options,
     sources,
@@ -294,6 +299,10 @@ async function applySection(
     git: async (): Promise<AppliedSetupSection> => ({
       section: 'git',
       ...(await setupGit(dependencies, guest, context)),
+    }),
+    env: async (): Promise<AppliedSetupSection> => ({
+      section: 'env',
+      ...(await setupEnvironment(dependencies, guest, context)),
     }),
     tools: async (): Promise<AppliedSetupSection> => ({
       section: 'tools',

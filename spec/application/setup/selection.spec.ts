@@ -5,7 +5,10 @@ import { selectSetupSection } from '#application/setup/selection';
 import { driveInk } from '../../fixtures/ink';
 
 describe('fn:selectSetupSection', () => {
-  it.each([{ options: { withPairCode: true }, section: 'agent' }] as const)(
+  it.each([
+    { options: { withPairCode: true }, section: 'agent' },
+    { options: { envFile: 'runtime.vars' }, section: 'env' },
+  ] as const)(
     'should select $section from explicit actions',
     async ({ options, section }) => {
       await expect(selectSetupSection(options)).resolves.toBe(section);

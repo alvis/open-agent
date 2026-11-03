@@ -13,7 +13,7 @@ import {
 import { resolveInteractiveInputs } from './input/prompts';
 import { resolveCreateSelection } from './input/selection';
 import { suppliedSelectionViolations } from './input/selection/supplied';
-import { readEnvironmentSources } from './input/sources';
+import { readInputSources } from './input/sources';
 
 import type { CommandOptions } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
@@ -73,7 +73,7 @@ export async function resolveInputs(
     : { required: requirementSelection };
   const required = resolution.required ?? BASE_CREATE_INPUTS;
   const sources =
-    resolution.sources ?? (await readEnvironmentSources(dependencies, options));
+    resolution.sources ?? (await readInputSources(dependencies, options));
   const { input, githubCandidate } = await resolveBaseInputs(dependencies, {
     options,
     sources,
@@ -156,7 +156,7 @@ export async function resolveCreateInputs(
   options: CommandOptions,
   interaction?: Interaction,
 ): Promise<ResolvedInputs> {
-  const sources = await readEnvironmentSources(dependencies, options);
+  const sources = await readInputSources(dependencies, options);
   const resolution = await resolveCreateSelection(dependencies, {
     options,
     sources,

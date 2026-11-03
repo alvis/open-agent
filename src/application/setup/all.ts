@@ -8,7 +8,13 @@ import { traceStage } from '#kernel/operation';
 
 import { installSetupPlan } from './installation';
 import { setupNetwork } from './network';
-import { setupGit, setupGithub, setupAgent, stopService } from './sections';
+import {
+  setupEnvironment,
+  setupGit,
+  setupGithub,
+  setupAgent,
+  stopService,
+} from './sections';
 import { exposeWhenServing } from './serving';
 
 import type { AllSetupData } from '#application/data';
@@ -20,7 +26,7 @@ import type { SetupContext } from './context';
 /**
  * reconciles every managed guest section: the setup plan installs the tools,
  * then the guest is named after its workstation and the network, accounts,
- * and harnesses are configured before the plan
+ * harnesses and runtime environment are configured before the plan
  * installs and starts the services and jobs, the
  * agent is verified to serve and exposed, and only then is the installation
  * recorded ready
@@ -99,10 +105,14 @@ async function configureSections(
     drivers: harnessDrivers(dependencies.registry, context.profile.harnesses),
     awakeHook: awakeHookCommand(dependencies.guest.facts),
   });
+  const environment = options.envFile
+    ? await setupEnvironment(dependencies, guest, context)
+    : undefined;
 
   return {
     ...network,
     ...github,
     ...git,
+    ...environment,
   };
 }
