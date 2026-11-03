@@ -19,6 +19,19 @@ EXAMPLES
   open-agent create --name devbox --non-interactive`,
 } as const;
 
+/** setup sections remain explicit */
+export const setupDocumentation = {
+  brief: 'configure an existing workstation',
+  customUsage: ['[<workstation>] [--section SECTION] [options]'],
+  fullDescription: `Changes only the selected setup section. Without a workstation name,
+interactive mode offers a selection. --section all can change the harnesses
+and network; the provider and ACP agent are fixed at creation.
+
+EXAMPLES
+  open-agent setup devbox --section agent
+  open-agent setup devbox --section all --network none --yes`,
+} as const;
+
 /** list guidance keeps the provider-only read and output modes clear */
 export const listDocumentation = {
   brief: 'list owned workstations on every provider with credentials',

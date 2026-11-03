@@ -1,7 +1,12 @@
 import { buildApplication, buildCommand, run } from '@stricli/core';
 import { describe, expect, it } from 'vitest';
 
-import { commonFlags, consentFlags, selectionFlags } from '#cli/flags';
+import {
+  commonFlags,
+  consentFlags,
+  selectionFlags,
+  setupFlags,
+} from '#cli/flags';
 
 import type { StricliProcess } from '@stricli/core';
 
@@ -21,23 +26,29 @@ const parserFlags = {
   ...commonFlags,
   ...consentFlags,
   ...selectionFlags,
+  ...setupFlags,
 };
 
-describe('selection flags', () => {
-  it('should preserve an explicit network choice', async () => {
-    const parsed = await parseFlags(['--network', 'none']);
+describe('cmd:setup', () => {
+  it('should parse a network choice with a setup section', async () => {
+    const parsed = await parseFlags(['--network', 'none', '--section', 'all']);
 
     expect(parsed).toEqual(
       expect.objectContaining({
-        options: [expect.objectContaining({ network: 'none' })],
+        options: [
+          expect.objectContaining({
+            network: 'none',
+            section: 'all',
+          }),
+        ],
         diagnostics: [],
         exitCode: 0,
       }),
     );
   });
 
-  it('should reject unknown network values before a command handler runs', async () => {
-    const parsed = await parseFlags(['--network', 'unsupported']);
+  it('should reject unknown section values before a command handler runs', async () => {
+    const parsed = await parseFlags(['--section', 'unsupported']);
 
     expect(parsed.options).toEqual([]);
     expect(parsed.exitCode).not.toBe(0);

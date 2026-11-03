@@ -4,6 +4,7 @@ import {
   createDocumentation,
   doctorDocumentation,
   listDocumentation,
+  setupDocumentation,
   showDocumentation,
   terminateDocumentation,
 } from './documentation';
@@ -15,6 +16,7 @@ import {
   providerCredentialFlags,
   providerFlags,
   selectionFlags,
+  setupFlags,
 } from './flags';
 
 import type { Command } from '@stricli/core';
@@ -40,6 +42,7 @@ type ConfigurationFlags = FlagsFor<
     typeof outputFlags
 >;
 type CreateFlags = ConfigurationFlags & Pick<CommandOptions, 'name'>;
+type SetupFlags = ConfigurationFlags & FlagsFor<typeof setupFlags>;
 type InspectFlags = ProviderCommonFlags &
   Required<Pick<CommandOptions, 'inspect'>>;
 type TerminateFlags = FlagsFor<
@@ -93,6 +96,40 @@ const createCommand = buildCommand({
     },
   },
   docs: createDocumentation,
+});
+const setupCommand = buildCommand({
+  /**
+   * executes the selected workstation command
+   * @param flags parsed command options
+   * @param machine optional exact workstation name
+   * @returns completion after final output
+   */
+  async func(
+    this: InvocationContext,
+    flags: SetupFlags,
+    machine?: string,
+  ): Promise<void> {
+    return execute({
+      dependencies: this.dependencies,
+      request: {
+        command: 'setup',
+        machine,
+        options: flags,
+      },
+      state: this.state,
+    });
+  },
+  parameters: {
+    flags: {
+      ...setupFlags,
+      ...consentFlags,
+      ...selectionFlags,
+      ...providerCredentialFlags,
+      ...outputFlags,
+    },
+    positional: machinePositional,
+  },
+  docs: setupDocumentation,
 });
 const listCommand = buildCommand({
   /**
@@ -218,6 +255,7 @@ function withRootUsage(
 
 export const commandRoutes = {
   create: withRootUsage(createCommand, '[--name NAME]'),
+  setup: withRootUsage(setupCommand, '[<workstation>]'),
   list: listCommand,
   show: withRootUsage(showCommand, '[<workstation>]'),
   terminate: withRootUsage(terminateCommand, '[<workstation>]'),

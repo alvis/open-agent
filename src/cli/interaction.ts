@@ -136,7 +136,11 @@ function createPromptPresenter(
   { show, activateNext }: { show: () => void; activateNext: () => void },
 ): PresentPrompt {
   return async <T>(
-    build: (submit: (value: T) => void, cancel: () => void) => ReactElement,
+    build: (
+      submit: (value: T) => void,
+      cancel: (back?: boolean) => void,
+    ) => ReactElement,
+    backLabel?: string,
   ): Promise<T> => {
     if (state.disposed || port.signal.aborted) {
       return Promise.reject(new InteractionExit('cancel'));
@@ -160,12 +164,15 @@ function createPromptPresenter(
           settle(() => resolve(value));
         }
       }
-      function cancel(): void {
+      function cancel(back = false): void {
         if (state.active !== request) {
           return;
         }
-        settle(() => reject(new InteractionExit('cancel')));
-        port.cancel();
+        const action = back && backLabel ? 'back' : 'cancel';
+        settle(() => reject(new InteractionExit(action)));
+        if (action === 'cancel') {
+          port.cancel();
+        }
       }
       state.queue.push(request);
       activateNext();

@@ -26,7 +26,11 @@ export interface PromptMethodsParams {
 
 /** queues one mounted prompt and resolves its submitted value */
 export type PresentPrompt = <T>(
-  build: (submit: (value: T) => void, cancel: () => void) => ReactElement,
+  build: (
+    submit: (value: T) => void,
+    cancel: (back?: boolean) => void,
+  ) => ReactElement,
+  backLabel?: string,
 ) => Promise<T>;
 
 /**
@@ -64,20 +68,24 @@ function textPromptMethods(
 ): Pick<Interaction, 'input' | 'secret'> {
   return {
     input: async (prompt) =>
-      present((submit, cancel) =>
-        inputPromptElement({
-          prompt,
-          onSubmit: submit,
-          onCancel: cancel,
-        }),
+      present(
+        (submit, cancel) =>
+          inputPromptElement({
+            prompt,
+            onSubmit: submit,
+            onCancel: cancel,
+          }),
+        prompt.backLabel,
       ),
     secret: async (prompt) =>
-      present((submit, cancel) =>
-        secretPromptElement({
-          prompt,
-          onSubmit: submit,
-          onCancel: cancel,
-        }),
+      present(
+        (submit, cancel) =>
+          secretPromptElement({
+            prompt,
+            onSubmit: submit,
+            onCancel: cancel,
+          }),
+        prompt.backLabel,
       ),
   };
 }
@@ -92,30 +100,36 @@ function choicePromptMethods(
 ): Pick<Interaction, 'select' | 'multiselect' | 'confirm'> {
   return {
     select: async (prompt, choices) =>
-      present((submit, cancel) =>
-        selectPromptElement({
-          prompt,
-          choices,
-          onSubmit: submit,
-          onCancel: cancel,
-        }),
+      present(
+        (submit, cancel) =>
+          selectPromptElement({
+            prompt,
+            choices,
+            onSubmit: submit,
+            onCancel: cancel,
+          }),
+        prompt.backLabel,
       ),
     multiselect: async (prompt, choices) =>
-      present((submit, cancel) =>
-        multiselectPromptElement({
-          prompt,
-          choices,
-          onSubmit: submit,
-          onCancel: cancel,
-        }),
+      present(
+        (submit, cancel) =>
+          multiselectPromptElement({
+            prompt,
+            choices,
+            onSubmit: submit,
+            onCancel: cancel,
+          }),
+        prompt.backLabel,
       ),
     confirm: async (prompt) =>
-      present((submit, cancel) =>
-        confirmPromptElement({
-          prompt,
-          onSubmit: submit,
-          onCancel: cancel,
-        }),
+      present(
+        (submit, cancel) =>
+          confirmPromptElement({
+            prompt,
+            onSubmit: submit,
+            onCancel: cancel,
+          }),
+        prompt.backLabel,
       ),
   };
 }

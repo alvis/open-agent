@@ -73,9 +73,43 @@ export interface TerminateData {
   workstation: { status: 'deleted'; id: string; name: string };
 }
 
+/** native agent setup */
+export interface AgentSetupData {
+  service?: 'configured';
+}
+
+/** selected native networking outcome */
+export interface NetworkSetupData {
+  network: { status: 'disabled'; readiness: 'skipped' };
+}
+
+/** all-section recovery retains each independently selected outcome */
+export interface AllSetupData
+  extends Partial<AgentSetupData>, NetworkSetupData {}
+
+/** concrete outcomes keyed by the executed guest setup section */
+interface SetupSectionData {
+  all: AllSetupData;
+  agent: AgentSetupData;
+  network: NetworkSetupData;
+}
+
+/** section identity stays correlated with its concrete result */
+export type AppliedSetupSection = {
+  [Section in keyof SetupSectionData]: {
+    section: Section;
+  } & SetupSectionData[Section];
+}[keyof SetupSectionData];
+
+/** setup configures one guest */
+export type SetupData = AppliedSetupSection & {
+  machine: MachineSummary;
+};
+
 /** success payload for each executed command */
 export interface CommandData {
   create: CreateData;
+  setup: SetupData;
   list: ListData;
   show: ShowData;
   terminate: TerminateData;
@@ -96,6 +130,10 @@ export interface CreateFailureData {
 /** typed observations that remain meaningful after failure */
 export interface CommandFailureData {
   create: CreateFailureData;
+  setup: {
+    readiness?: ReadinessAssessment;
+    recovery?: { incompleteLabel: 'confirmed' | 'unconfirmed' };
+  };
   list: never;
   show: never;
   terminate: TerminateData;

@@ -1,17 +1,43 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveCreateSelection } from '#application/input/selection';
+import {
+  readSetupSelection,
+  resolveCreateSelection,
+  resolveSetupSelection,
+} from '#application/input/selection';
+import { suppliedSelectionViolations } from '#application/input/selection/supplied';
+import { defaults } from '#composition/defaults';
+import { defaultProfile } from '#domain/profile';
 
 import { dependencies } from '../../mocks/dependencies';
 
+import type { SetupSection } from '#application/contracts';
+import type { SelectionContext } from '#application/input/selection/sources';
 import type { InputSources } from '#application/input/sources';
 import type {
   Interaction,
   InteractionChoice,
   InteractionPrompt,
 } from '#application/ports/interaction';
+import type { WorkstationProfile } from '#domain/profile';
 
 const empty: InputSources = { processEnv: {}, fileEnv: {} };
+
+/**
+ * reads a setup run's supplied values, then merges them with the recorded profile
+ * @param context flags, sources, prompts, recorded profile and targeted section
+ * @returns the resolved setup selection
+ */
+async function resolveSetup(
+  context: SelectionContext & {
+    recorded: WorkstationProfile;
+    section: SetupSection;
+  },
+): ReturnType<typeof resolveSetupSelection> {
+  const supplied = readSetupSelection(dependencies, context);
+
+  return resolveSetupSelection(dependencies, { ...context, supplied });
+}
 
 /**
  * records the prompts a selection run asks, answering each with its default
@@ -120,5 +146,51 @@ describe('fn:resolveCreateSelection', () => {
 
     expect(fromEnvironment.candidate.network).toBe('file-network');
     expect(fromFlag.candidate.network).toBe('none');
+  });
+});
+
+describe('fn:resolveSetupSelection', () => {
+  it('should keep the recorded selection and take provider and agent only from flags', async () => {
+    const recorded = defaultProfile(defaults);
+
+    const { candidate } = await resolveSetup({
+      options: { agent: 't3' },
+      sources: {
+        processEnv: { OPEN_AGENT_NETWORK: 'unregistered-network' },
+        fileEnv: {},
+      },
+      recorded,
+      section: 'agent',
+    });
+
+    expect(candidate).toMatchObject({
+      provider: 'sprite',
+      agent: 't3',
+      harnesses: recorded.harnesses,
+      network: 'none',
+    });
+  });
+});
+
+describe('fn:suppliedSelectionViolations', () => {
+  it('should accept a complete compatible selection before workstation lookup', () => {
+    const violations = suppliedSelectionViolations(dependencies, {
+      provider: 'sprite',
+      agent: 't3',
+      harnesses: ['claude'],
+      network: 'none',
+    });
+
+    expect(violations).toEqual([]);
+  });
+
+  it('should report an unknown supplied driver id', () => {
+    const violations = suppliedSelectionViolations(dependencies, {
+      agent: 'nope',
+    });
+
+    expect(violations.map(({ message }) => message)).toEqual([
+      expect.stringContaining('Unknown ACP agent "nope"'),
+    ]);
   });
 });

@@ -16,6 +16,7 @@ export interface InteractionPrompt {
   description?: string;
   defaultValue?: string;
   defaultAnswer?: boolean;
+  backLabel?: string;
   required?: boolean;
 }
 

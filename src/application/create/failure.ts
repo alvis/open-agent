@@ -4,6 +4,7 @@ import { WorkstationCreationFault } from '#domain/creation';
 import { agentPort } from '#domain/services';
 import { sanitizeGuestDiagnostic } from '#kernel/diagnostics';
 import { ensureError, retainRecoveryFailure } from '#kernel/faults';
+import { InteractionExit } from '#kernel/navigation';
 import { recoverOperation } from '#kernel/operation';
 import { redactResolved } from '#kernel/redaction';
 import { OPEN_AGENT_VERSION } from '#kernel/version';
@@ -30,7 +31,7 @@ interface RecoverCreateStepParams {
 
 /** the named inputs of mark create incomplete */
 export interface MarkCreateIncompleteParams {
-  /** created workstation that is retained */
+  /** created workstation that must remain available for setup */
   workstation: WorkstationRecord;
   /** inputs that may occur in diagnostic text */
   context: CreateContext;
@@ -143,7 +144,7 @@ export async function markCreateIncomplete(
       details: [
         ...(failure.details ?? []),
         ...unconfirmedRecovery({ privacy, incompleteLabel }),
-        `Workstation ${workstation.name} was retained.`,
+        `Workstation ${workstation.name} was retained. Run open-agent setup ${workstation.name} to recover.`,
       ],
     },
   };
@@ -173,9 +174,12 @@ async function recoverCreateStep(
 /**
  * reports typed consent or enrollment failures before workstation creation
  * @param error consent or enrollment rejection
- * @returns safe preparation failure
+ * @returns safe preparation failure, preserving local back navigation
  */
 export function authorizationFailure(error: unknown): CreatePreparation {
+  if (error instanceof InteractionExit && error.action === 'back') {
+    throw error;
+  }
   const failure = commandError(error);
 
   return {

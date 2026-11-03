@@ -90,6 +90,12 @@ describe('command route dispatch', () => {
       options: { name: 'new-box' },
     },
     {
+      argv: ['setup', 'dev-box', '--section', 'network'],
+      command: 'setup',
+      machine: 'dev-box',
+      options: { section: 'network' },
+    },
+    {
       argv: ['list', '--provider', 'sprite'],
       command: 'list',
       machine: undefined,
@@ -135,7 +141,14 @@ describe('command route dispatch', () => {
     const { output, exitCode } = await route(['--help']);
 
     expect(exitCode).toBe(0);
-    for (const command of ['create', 'list', 'show', 'terminate', 'doctor']) {
+    for (const command of [
+      'create',
+      'setup',
+      'list',
+      'show',
+      'terminate',
+      'doctor',
+    ]) {
       expect(output).toContain(`open-agent ${command} `);
     }
   });

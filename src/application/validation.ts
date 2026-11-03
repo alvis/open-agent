@@ -3,7 +3,7 @@ import { promptUnavailableDetail } from '#kernel/operation';
 
 import { validateMachineName } from './machine';
 
-import type { CommandRequest } from '#application/contracts';
+import type { CommandOptions, CommandRequest } from '#application/contracts';
 
 import type { CommandFaultParams } from '#kernel/faults';
 
@@ -46,6 +46,65 @@ export function validateCommandRequest(
       ]
         .filter(Boolean)
         .join('. '),
+    });
+  }
+  if (request.command === 'setup') {
+    validateSetupOptions(options);
+  } else {
+    validateNonSetupOptions(options);
+  }
+}
+
+/**
+ * keeps setup mutations on the setup command
+ * @param options parsed flags for a command other than setup
+ */
+function validateNonSetupOptions(options: CommandOptions): void {
+  if (options.section) {
+    throw new CommandValidationError({
+      message: 'Setup-only options require the setup command',
+    });
+  }
+}
+
+/**
+ * requires a usable setup section
+ * @param options parsed setup flags
+ */
+function validateSetupOptions(options: CommandOptions): void {
+  validateSetupIntegrationOptions(options, options.section);
+  if (!options.section && options.nonInteractive) {
+    throw new CommandValidationError({
+      message: [
+        'Non-interactive setup requires --section',
+        promptUnavailableDetail(),
+      ]
+        .filter(Boolean)
+        .join('. '),
+    });
+  }
+}
+
+/**
+ * keeps explicit integration choices within sections that apply their side effects
+ * @param options parsed setup flags
+ * @param section explicit or inferred setup section
+ */
+export function validateSetupIntegrationOptions(
+  options: CommandOptions,
+  section: CommandOptions['section'],
+): void {
+  if (!section || section === 'all') {
+    return;
+  }
+  if (section !== 'network' && options.network !== undefined) {
+    throw new CommandValidationError({
+      message: 'Network switches require --section network or --section all',
+    });
+  }
+  if (options.harness !== undefined) {
+    throw new CommandValidationError({
+      message: 'Harness switches require --section all',
     });
   }
 }

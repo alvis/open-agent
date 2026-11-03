@@ -76,7 +76,7 @@ describe('rc:Select', () => {
       act(() => view.stdin.write('\r'));
       expect(onSubmit.mock.calls).toEqual([['alpha']]);
       act(() => view.stdin.write('\x1b'));
-      await vi.waitFor(() => expect(onCancel.mock.calls).toEqual([[]]));
+      await vi.waitFor(() => expect(onCancel.mock.calls).toEqual([[true]]));
     } finally {
       view.unmount();
     }
@@ -111,12 +111,13 @@ describe('rc:Select', () => {
 
 describe('rc:ConfirmInput', () => {
   it.each([false, true])(
-    'should apply the displayed default and preserve explicit refusal and Escape cancellation (%s)',
+    'should apply the displayed default and preserve explicit refusal and back navigation (%s)',
     async (defaultAnswer) => {
       const onSubmit = vi.fn();
       const onCancel = vi.fn();
       const view = render(
         <ConfirmInput
+          backLabel="setup"
           defaultAnswer={defaultAnswer}
           description="The workstation will briefly stop"
           label="Restart?"
@@ -134,7 +135,7 @@ describe('rc:ConfirmInput', () => {
         act(() => view.stdin.write('N'));
         expect(onSubmit.mock.calls).toEqual([[defaultAnswer], [false]]);
         act(() => view.stdin.write('\x1b'));
-        await vi.waitFor(() => expect(onCancel.mock.calls).toEqual([[]]));
+        await vi.waitFor(() => expect(onCancel.mock.calls).toEqual([[true]]));
       } finally {
         view.unmount();
       }

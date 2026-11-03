@@ -2,6 +2,7 @@ import { projectCreate, projectCreateFailure } from './create';
 import { projectDoctor } from './doctor';
 import { projectError } from './failure';
 import { projectList } from './list';
+import { projectSetup, projectSetupFailure } from './setup';
 import { projectShow } from './show';
 import { projectTerminate } from './terminate';
 
@@ -32,6 +33,12 @@ function projectSuccess(result: CommandSuccess): SuccessOutput {
         command: 'create',
         ok: true,
         data: projectCreate(result.data),
+      };
+    case 'setup':
+      return {
+        command: 'setup',
+        ok: true,
+        data: projectSetup(result.data),
       };
     case 'list':
       return {
@@ -77,6 +84,13 @@ function projectFailure(result: Failed): FailureOutput {
         ok: false,
         error,
         data: optional(result.data, projectCreateFailure),
+      };
+    case 'setup':
+      return {
+        command: 'setup',
+        ok: false,
+        error,
+        data: optional(result.data, projectSetupFailure),
       };
     case 'list':
       return { command: 'list', ok: false, error };

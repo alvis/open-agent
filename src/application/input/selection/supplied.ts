@@ -1,8 +1,11 @@
+import { AGENT_IDS } from '#domain/ids';
+import { validateProfile } from '#domain/profile';
 import { selectionInputs } from '#domain/selection-inputs';
 
 import { environmentReader } from './sources';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { ProfileField, ProfileViolation } from '#domain/profile';
 import type { SelectionField } from '#domain/selection-inputs';
 
 import type { SelectionContext } from './sources';
@@ -17,6 +20,44 @@ export interface SuppliedSelection {
   harnesses?: readonly string[];
   /** requested network driver id */
   network?: string;
+}
+
+/**
+ * validates what can be known before the workstation's recorded profile is:
+ * catalog ids and each capability whose drivers are all
+ * determined, because they were supplied or the catalog registers only one
+ * @param dependencies the registered drivers, the profile defaults
+ * @param supplied values a setup run supplies
+ * @returns every violation the supplied values alone raise
+ */
+export function suppliedSelectionViolations(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
+  supplied: SuppliedSelection,
+): ProfileViolation[] {
+  const provider = supplied.provider;
+  const agent = supplied.agent ?? AGENT_IDS[0];
+  const determined = new Set<ProfileField>([
+    ...(provider === undefined ? [] : (['provider'] as const)),
+    'agent',
+    ...(supplied.harnesses === undefined ? [] : (['harnesses'] as const)),
+    ...(supplied.network === undefined ? [] : (['network'] as const)),
+  ]);
+  const validation = validateProfile({
+    declarations: dependencies.registry,
+    candidate: {
+      provider: provider ?? dependencies.defaults.selection.provider,
+      agent,
+      harnesses:
+        supplied.harnesses ?? dependencies.defaults.selection.harnesses,
+      network: supplied.network ?? dependencies.defaults.selection.network,
+    },
+  });
+
+  return validation.isValid
+    ? []
+    : validation.violations.filter(({ fields }) =>
+        fields.every((field) => determined.has(field)),
+      );
 }
 
 /**
