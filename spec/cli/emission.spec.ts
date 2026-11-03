@@ -172,6 +172,24 @@ describe('fn:emitResult', () => {
       stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\n  Inspect: open-agent show "dev box" --inspect\n`,
     },
     {
+      label: 'terminate',
+      result: {
+        command: 'terminate',
+        ok: true,
+        data: {
+          machine: MACHINE,
+          workstation: {
+            get status(): 'deleted' {
+              throw new Error('unreadable workstation status');
+            },
+            id: 'machine-1',
+            name: 'dev box',
+          },
+        },
+      } satisfies CommandResult,
+      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete.\n  Workstation deleted; do not retry the deletion.\n`,
+    },
+    {
       label: 'list',
       result: {
         command: 'list',

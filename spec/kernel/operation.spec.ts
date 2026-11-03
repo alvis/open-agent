@@ -492,6 +492,40 @@ describe('invocation-scoped operations', () => {
     expect(context.closed).toBe(true);
   });
 
+  it('should stop deletion when cancellation arrives after the awaited provider lookup', async () => {
+    const controller = new AbortController();
+    const context = new OperationContext({ signal: controller.signal });
+    const client = new SpritesClient('sdk-only-delete-token');
+    const sprite = Object.assign(new Sprite('disposable', client), {
+      id: 'exact-id',
+      organizationName: 'isolated-organization',
+      labels: [MANAGED_LABEL],
+    });
+    const lookup = vi
+      .spyOn(client, 'getSprite')
+      .mockImplementation(async () => {
+        controller.abort();
+
+        return sprite;
+      });
+    const remove = vi.spyOn(client, 'deleteSprite');
+
+    await expect(
+      withOperation(context, async () =>
+        providerOf(client).delete({
+          id: sprite.id,
+          name: sprite.name,
+          organization: sprite.organizationName,
+          state: 'running',
+          metadata: { setup: 'not recorded' },
+        }),
+      ),
+    ).rejects.toMatchObject({ action: 'cancel' });
+
+    expect(lookup).toHaveBeenCalledExactlyOnceWith(sprite.name);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
   it('should wait for create settlement before reporting exact retained identity', async () => {
     const controller = new AbortController();
     const context = new OperationContext({ signal: controller.signal });

@@ -65,6 +65,7 @@ const boundary = {
   getSprite: vi.fn<SpritesClient['getSprite']>(async () =>
     createProviderSprite(),
   ),
+  deleteSprite: vi.fn<SpritesClient['deleteSprite']>(async () => undefined),
   createSprite: vi.fn(
     async (
       name: string,
@@ -358,6 +359,35 @@ describe('mt:SpriteProvider.get', () => {
       id: 'sprite-primary',
       organization: 'test-organization',
     });
+  });
+});
+
+describe('mt:SpriteProvider.delete', () => {
+  it('should refuse changed IDs and organizations before deleting the exact validated name', async () => {
+    const expected = await provider.get('primary');
+    boundary.getSprite.mockResolvedValueOnce(
+      createProviderSprite({ id: 'replacement' }),
+    );
+
+    await expect(provider.delete(expected)).rejects.toMatchObject({
+      code: 'ownership-mismatch',
+      message:
+        'Sprite primary changed identity or organization before deletion',
+    });
+    expect(boundary.deleteSprite.mock.calls).toEqual([]);
+
+    boundary.getSprite.mockResolvedValueOnce(
+      createProviderSprite({ organizationName: 'another-organization' }),
+    );
+
+    await expect(provider.delete(expected)).rejects.toMatchObject({
+      code: 'ownership-mismatch',
+    });
+    expect(boundary.deleteSprite.mock.calls).toEqual([]);
+
+    await provider.delete(expected);
+
+    expect(boundary.deleteSprite.mock.calls).toEqual([['primary']]);
   });
 });
 

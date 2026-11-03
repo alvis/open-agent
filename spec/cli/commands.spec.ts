@@ -55,7 +55,7 @@ async function route(argv: string[]): Promise<{
 }
 
 describe('provider flag on workstation commands', () => {
-  it.each(['list', 'show', 'doctor'])(
+  it.each(['list', 'show', 'doctor', 'terminate'])(
     'should list --provider with every provider choice in %s help',
     async (command) => {
       const { output, exitCode } = await route([command, '--help']);
@@ -66,7 +66,7 @@ describe('provider flag on workstation commands', () => {
     },
   );
 
-  it.each(['list', 'show', 'doctor'])(
+  it.each(['list', 'show', 'doctor', 'terminate'])(
     'should refuse an unknown provider for %s before the command runs',
     async (command) => {
       const { output, exitCode } = await route([
@@ -102,6 +102,12 @@ describe('command route dispatch', () => {
       options: { inspect: true },
     },
     {
+      argv: ['terminate', 'dev-box', '--yes'],
+      command: 'terminate',
+      machine: 'dev-box',
+      options: { yes: true },
+    },
+    {
       argv: ['doctor', 'dev-box'],
       command: 'doctor',
       machine: 'dev-box',
@@ -129,7 +135,7 @@ describe('command route dispatch', () => {
     const { output, exitCode } = await route(['--help']);
 
     expect(exitCode).toBe(0);
-    for (const command of ['create', 'list', 'show', 'doctor']) {
+    for (const command of ['create', 'list', 'show', 'terminate', 'doctor']) {
       expect(output).toContain(`open-agent ${command} `);
     }
   });

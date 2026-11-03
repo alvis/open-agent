@@ -157,6 +157,28 @@ export class SpriteProvider implements ProviderDriver<'sprite'> {
   }
 
   /**
+   * revalidates the immutable identity before permanent deletion
+   * @param workstation previously reviewed workstation
+   */
+  public async delete(workstation: WorkstationRecord): Promise<void> {
+    const { client } = this.#bound();
+    const { name } = workstation;
+    const sprite = await this.#fetchVerified(name);
+    if (
+      sprite.id !== workstation.id ||
+      sprite.organizationName !== workstation.organization
+    ) {
+      throw new ProviderFault({
+        code: 'ownership-mismatch',
+        message: `Sprite ${name} changed identity or organization before deletion`,
+      });
+    }
+    await runOperation(async () =>
+      callSprites(async () => client.deleteSprite(name)),
+    );
+  }
+
+  /**
    * merges owned labels without disturbing labels installed by other systems
    * @param workstation managed workstation
    * @param metadata setup state and optional profile summary to record

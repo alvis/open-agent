@@ -67,11 +67,18 @@ export interface DoctorData {
   currentReadiness: CurrentReadiness;
 }
 
+/** completed workstation deletion */
+export interface TerminateData {
+  machine: MachineSummary;
+  workstation: { status: 'deleted'; id: string; name: string };
+}
+
 /** success payload for each executed command */
 export interface CommandData {
   create: CreateData;
   list: ListData;
   show: ShowData;
+  terminate: TerminateData;
   doctor: DoctorData;
 }
 
@@ -91,5 +98,6 @@ export interface CommandFailureData {
   create: CreateFailureData;
   list: never;
   show: never;
+  terminate: TerminateData;
   doctor: DoctorData;
 }

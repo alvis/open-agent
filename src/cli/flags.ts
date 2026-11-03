@@ -35,7 +35,7 @@ export const commonFlags = {
   ...outputFlags,
 } as const;
 
-/** consent for selected create actions */
+/** consent for selected create and terminate actions */
 export const consentFlags = {
   yes: {
     kind: 'boolean',

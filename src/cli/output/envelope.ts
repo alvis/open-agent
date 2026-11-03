@@ -5,12 +5,14 @@ import type { DoctorDataOutput } from './doctor';
 import type { ErrorOutput } from './failure';
 import type { ListDataOutput } from './list';
 import type { ShowDataOutput } from './show';
+import type { TerminateDataOutput } from './terminate';
 
 /** success payload each command reports */
 export interface CommandDataOutput {
   create: CreateDataOutput;
   list: ListDataOutput;
   show: ShowDataOutput;
+  terminate: TerminateDataOutput;
   doctor: DoctorDataOutput;
 }
 
@@ -19,6 +21,7 @@ export interface CommandFailureDataOutput {
   create: CreateFailureDataOutput;
   list: never;
   show: never;
+  terminate: TerminateDataOutput;
   doctor: DoctorDataOutput;
 }
 

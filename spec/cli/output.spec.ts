@@ -325,14 +325,14 @@ describe('fn:prepareResult', () => {
 
   it('should write a human cancellation only to stderr', () => {
     const output = captureResult({
-      command: 'create',
+      command: 'terminate',
       ok: false,
-      error: { code: 'CANCELLED', message: 'Creation was cancelled' },
+      error: { code: 'CANCELLED', message: 'Typed name did not match' },
     });
 
     expect(output).toEqual({
       stdout: '',
-      stderr: 'Creation was cancelled\n',
+      stderr: 'Typed name did not match\n',
     });
   });
 

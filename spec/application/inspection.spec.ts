@@ -108,6 +108,7 @@ async function installedSprite(
   serveServiceRegistry(sprite);
   vi.spyOn(client, 'listAllSprites').mockResolvedValue([sprite]);
   vi.spyOn(client, 'getSprite').mockResolvedValue(sprite);
+  vi.spyOn(client, 'deleteSprite').mockResolvedValue(undefined);
   await sprite
     .filesystem()
     .writeFile(ENVIRONMENT_PATH, JSON.stringify(environmentOf(PROFILE)));

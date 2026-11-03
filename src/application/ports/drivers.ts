@@ -95,6 +95,11 @@ export interface ProviderDriver<
     port: number,
   ): Promise<WorkstationRecord>;
   /**
+   * deletes after rechecking immutable identity
+   * @param workstation previously observed workstation
+   */
+  delete(workstation: WorkstationRecord): Promise<void>;
+  /**
    * writes ownership, schema, setup state and profile summary; never credentials
    * @param workstation managed workstation
    * @param metadata setup state and profile summary to record

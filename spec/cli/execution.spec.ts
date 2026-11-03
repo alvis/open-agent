@@ -377,11 +377,10 @@ describe('fn:execute', () => {
     expect(run.mock.calls).toEqual([]);
   });
 
-  it('should reject an invalid workstation name before reading a credential file', async () => {
+  it('should reject a real flag conflict before reading a credential file', async () => {
     const selected: CommandRequest = {
       ...request,
-      command: 'show',
-      machine: 'Not A Name',
+      command: 'terminate',
       options: {
         ...request.options,
         credentialFile: 'credentials.env',
@@ -396,8 +395,8 @@ describe('fn:execute', () => {
       exitCode: captured.exitCode,
     }).toEqual({
       stdout: '',
-      stderr: expect.stringContaining('Workstation name must be'),
-      exitCode: 1,
+      stderr: expect.stringContaining('Non-interactive termination requires'),
+      exitCode: 2,
     });
     expect(readInputFile.mock.calls).toEqual([]);
     expect(run.mock.calls).toEqual([]);

@@ -49,6 +49,21 @@ EXAMPLES
   open-agent show devbox --inspect`,
 } as const;
 
+/** deletion consent is command-specific and exact-name scoped */
+export const terminateDocumentation = {
+  brief: 'permanently delete a managed workstation',
+  customUsage: ['[<workstation>] [--yes] [options]'],
+  fullDescription: `Deletes a managed workstation after confirmation. In
+non-interactive mode, provide an exact workstation name and --yes.
+Credentials and output controls follow the operation flag. --yes confirms
+only the already selected deletion.
+${PROVIDER_SELECTION}
+
+EXAMPLES
+  open-agent terminate devbox
+  open-agent terminate devbox --yes --non-interactive`,
+} as const;
+
 /** readiness checks are separate from control-plane details */
 export const doctorDocumentation = {
   brief: 'check current workstation readiness',

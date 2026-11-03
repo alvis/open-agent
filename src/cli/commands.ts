@@ -5,6 +5,7 @@ import {
   doctorDocumentation,
   listDocumentation,
   showDocumentation,
+  terminateDocumentation,
 } from './documentation';
 import { execute } from './execution';
 import {
@@ -41,6 +42,12 @@ type ConfigurationFlags = FlagsFor<
 type CreateFlags = ConfigurationFlags & Pick<CommandOptions, 'name'>;
 type InspectFlags = ProviderCommonFlags &
   Required<Pick<CommandOptions, 'inspect'>>;
+type TerminateFlags = FlagsFor<
+  typeof consentFlags &
+    typeof providerFlags &
+    typeof providerCredentialFlags &
+    typeof outputFlags
+>;
 
 const machinePositional = {
   kind: 'tuple',
@@ -139,6 +146,35 @@ const showCommand = buildCommand({
   },
   docs: showDocumentation,
 });
+const terminateCommand = buildCommand({
+  /**
+   * executes the selected workstation command
+   * @param flags parsed command options
+   * @param machine optional exact workstation name
+   * @returns completion after final output
+   */
+  async func(
+    this: InvocationContext,
+    flags: TerminateFlags,
+    machine?: string,
+  ): Promise<void> {
+    return execute({
+      dependencies: this.dependencies,
+      request: { command: 'terminate', machine, options: flags },
+      state: this.state,
+    });
+  },
+  parameters: {
+    flags: {
+      ...consentFlags,
+      ...providerFlags,
+      ...providerCredentialFlags,
+      ...outputFlags,
+    },
+    positional: machinePositional,
+  },
+  docs: terminateDocumentation,
+});
 const doctorCommand = buildCommand({
   /**
    * executes the selected workstation command
@@ -184,5 +220,6 @@ export const commandRoutes = {
   create: withRootUsage(createCommand, '[--name NAME]'),
   list: listCommand,
   show: withRootUsage(showCommand, '[<workstation>]'),
+  terminate: withRootUsage(terminateCommand, '[<workstation>]'),
   doctor: withRootUsage(doctorCommand, '[<workstation>]'),
 };
