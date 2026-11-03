@@ -6,16 +6,77 @@ import type { CommandOptions } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { Interaction } from '#application/ports/interaction';
 
+import type {
+  CredentialSaveResult,
+  CredentialStoreLocation,
+  ManagementCredentialName,
+} from '#domain/credentials';
+
 import type { RequiredInput, ResolvedInputs } from './types';
 
 interface PromptContext {
   options: CommandOptions;
   interaction?: Interaction;
   required: readonly RequiredInput[];
+  credentialStore?: CredentialStoreLocation;
 }
 
 interface ActivePromptContext extends PromptContext {
   interaction: Interaction;
+}
+
+/** consent context for an entered provider credential */
+interface RetainEnteredProviderTokenContext {
+  interaction?: Interaction;
+  options: CommandOptions;
+}
+
+/** the named inputs of retain management credential */
+export interface RetainManagementCredentialParams {
+  /** management service holding the new credential */
+  name: ManagementCredentialName;
+  /** secret value entered by the caller */
+  value: string;
+  /** inline consent prompt */
+  interaction: Interaction;
+  /** parsed consent options */
+  options: CommandOptions;
+  /** optional exact real store for an isolated caller */
+  credentialStore?: CredentialStoreLocation;
+}
+
+/**
+ * asks before retaining a newly entered local management credential
+ * @param dependencies what this computer provides
+ * @param params the call's inputs: name, value, interaction, options, credentialStore
+ * @returns observed backend and fallback reason when retention was accepted
+ */
+export async function retainManagementCredential(
+  dependencies: Pick<ApplicationDependencies, 'host'>,
+  params: RetainManagementCredentialParams,
+): Promise<CredentialSaveResult | undefined> {
+  const { name, value, credentialStore } = params;
+  const { interaction, options } = params;
+  if (
+    !options.yes &&
+    !(await interaction.confirm({
+      message: `Save the ${name} management credential in the OS credential store (or a protected file if unavailable)?`,
+    }))
+  ) {
+    return undefined;
+  }
+  const saved = await dependencies.host.credentials.save(name, value, {
+    consent: true,
+    allowProtectedFileFallback: true,
+    location: credentialStore,
+  });
+  const fallbackText = saved.fallbackReason ? ` (${saved.fallbackReason})` : '';
+  interaction.status({
+    kind: saved.fallbackReason ? 'warning' : 'success',
+    message: `${name} management credential saved in ${saved.storage}${fallbackText}.`,
+  });
+
+  return saved;
 }
 
 /**
@@ -38,6 +99,7 @@ export async function resolveInteractiveInputs(
     options,
     required,
     interaction,
+    credentialStore: context.credentialStore,
   });
 }
 
@@ -74,7 +136,7 @@ async function promptPublicInputs(
  * prompts only for missing management credentials
  * @param dependencies the registered drivers, what this computer provides
  * @param input values to complete in place
- * @param context active secret prompts
+ * @param context local credential policy and active secret prompts
  */
 async function promptSecrets(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'host'>,
@@ -98,6 +160,74 @@ async function promptSecrets(
         }),
     });
     rememberSecret(input.providerToken);
+    // saved only after the provider accepts it; see retainEnteredProviderToken
+    input.isProviderTokenEntered = true;
     input.sources[credential.environment] = 'the entered token';
   }
+}
+
+/** the named inputs of retain prompted credential */
+interface RetainPromptedCredentialParams {
+  /** resolved workflow inputs */
+  input: ResolvedInputs;
+  /** management identity and newly entered secret */
+  credential: { name: ManagementCredentialName; value: string | undefined };
+  /** prompt and local retention policy */
+  context: ActivePromptContext;
+}
+
+/**
+ * records a prompted secret and its consented local storage outcome
+ * @param dependencies what this computer provides
+ * @param params the call's inputs: input, credential, context
+ */
+async function retainPromptedCredential(
+  dependencies: Pick<ApplicationDependencies, 'host'>,
+  params: RetainPromptedCredentialParams,
+): Promise<void> {
+  const { input, credential, context } = params;
+  const { name, value } = credential;
+  rememberSecret(value);
+  if (!value || context.options.localCredentials === false) {
+    return;
+  }
+  const retained = await retainManagementCredential(dependencies, {
+    name,
+    value,
+    ...context,
+  });
+  if (retained) {
+    input.retainedCredentials = {
+      ...input.retainedCredentials,
+      [name]: retained,
+    };
+  }
+}
+
+/**
+ * offers to save a provider credential entered in this run, once the provider
+ * has accepted it, and records the storage outcome
+ * @param dependencies the registered drivers, what this computer provides
+ * @param input resolved workflow inputs holding the entered credential
+ * @param context consent prompt and local retention policy
+ * @param context.interaction consent prompt
+ * @param context.options parsed consent options
+ */
+export async function retainEnteredProviderToken(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'host'>,
+  input: ResolvedInputs,
+  context: RetainEnteredProviderTokenContext,
+): Promise<void> {
+  const { interaction, options } = context;
+  if (!input.isProviderTokenEntered || !interaction || options.nonInteractive) {
+    return;
+  }
+  const { credential } =
+    dependencies.registry.providers[input.profile.provider].prerequisites;
+  await retainPromptedCredential(dependencies, {
+    input,
+    credential: { name: credential.store, value: input.providerToken },
+    context: { options, interaction, required: [] },
+  });
+  input.isProviderTokenEntered = false;
 }

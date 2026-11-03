@@ -5,7 +5,7 @@ import {
   validateSetupIntegrationOptions,
 } from '#application/validation';
 
-import type { CommandRequest } from '#application/contracts';
+import type { CommandOptions, CommandRequest } from '#application/contracts';
 
 describe('fn:validateCommandRequest', () => {
   it.each([
@@ -18,6 +18,21 @@ describe('fn:validateCommandRequest', () => {
       );
     },
   );
+
+  it('should reject conflicting requests before credentials or remote access', () => {
+    const conflicts: CommandOptions[] = [
+      {
+        localCredentials: false,
+        providerTokenSource: 'keychain:test/account',
+      },
+    ];
+
+    for (const options of conflicts) {
+      expect(() =>
+        validateCommandRequest({ command: 'create', options }),
+      ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+    }
+  });
 
   it('should restrict section selection to setup', () => {
     expect(() =>

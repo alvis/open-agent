@@ -11,6 +11,8 @@ import { readEnvironmentSources } from './input/sources';
 import type { CommandOptions } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { Interaction } from '#application/ports/interaction';
+
+import type { CredentialStoreLocation } from '#domain/credentials';
 import type { WorkstationProfile } from '#domain/profile';
 
 import type { SelectionResolution } from './input/selection';
@@ -21,6 +23,7 @@ import type { ResolvedInputs, RequiredInput } from './input/types';
 const BASE_CREATE_INPUTS: readonly RequiredInput[] = ['name', 'providerToken'];
 
 interface ResolveInputsOptions {
+  credentialStore?: CredentialStoreLocation;
   profile?: WorkstationProfile;
   required?: readonly RequiredInput[];
   sources?: InputSources;
@@ -62,12 +65,14 @@ export async function resolveInputs(
     sources,
     selection: {
       profile: resolution.profile,
+      credentialStore: resolution.credentialStore,
     },
   });
   await resolveInteractiveInputs(dependencies, input, {
     options,
     interaction,
     required,
+    credentialStore: resolution.credentialStore,
   });
 
   return { ...input, missing: missingProvisioningInputs(input, required) };

@@ -1,3 +1,4 @@
+import { projectRetainedCredentials } from './credentials';
 import { each, projectFields, same } from './fields';
 import {
   projectNative,
@@ -11,6 +12,7 @@ import { projectReadiness } from './readiness';
 import type { CreatePreflight } from '#application/create/context';
 import type { CreateData, CreateFailureData } from '#application/data';
 
+import type { RetainedCredentialsOutput } from './credentials';
 import type {
   NativeOutput,
   NetworkOutput,
@@ -28,6 +30,7 @@ export interface PreflightOutput {
 
 /** a created workstation with verified preflight and current guest evidence */
 export interface CreateDataOutput {
+  retainedCredentials?: RetainedCredentialsOutput;
   machine: MachineOutput;
   preflight: PreflightOutput;
   profile: ProfileOutput;
@@ -67,6 +70,7 @@ export function projectPreflight(preflight: CreatePreflight): PreflightOutput {
  */
 export function projectCreate(data: CreateData): CreateDataOutput {
   return projectFields<CreateData, CreateDataOutput>(data, {
+    retainedCredentials: projectRetainedCredentials,
     machine: projectMachine,
     preflight: projectPreflight,
     profile: projectProfile,

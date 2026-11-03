@@ -170,6 +170,7 @@ async function setupGuestSection(
     return setupSuccess(dependencies, {
       workstation: await recordSetupMetadata(section, context),
       result,
+      context,
     });
   } catch (error) {
     if (
@@ -223,25 +224,28 @@ interface SetupSuccessParams {
   workstation: WorkstationRecord;
   /** non-secret section outcome */
   result: AppliedSetupSection;
+  /** setup inputs carrying retained credential outcomes */
+  context: SetupContext;
 }
 
 /**
  * reports a completed section with the current control-plane summary
  * @param dependencies the registered drivers
- * @param params the call's inputs: workstation, result
+ * @param params the call's inputs: workstation, result, context
  * @returns successful setup result
  */
 function setupSuccess(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   params: SetupSuccessParams,
 ): CommandResult {
-  const { workstation, result } = params;
+  const { workstation, result, context } = params;
 
   return {
     command: 'setup',
     ok: true,
     data: {
       machine: summarizeMachine(dependencies, workstation),
+      retainedCredentials: context.input.retainedCredentials,
       ...result,
     },
   };

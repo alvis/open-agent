@@ -96,7 +96,7 @@ export async function parseApplication({
   }
 }
 
-const PAIRED_BOOLEAN_FLAGS = ['color'];
+const PAIRED_BOOLEAN_FLAGS = ['color', 'local-credentials'];
 
 /**
  * spells a camel-case flag name the way users type it

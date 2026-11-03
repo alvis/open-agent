@@ -13,6 +13,7 @@ describe('fn:resolveBaseInputs', () => {
     const resolved = await resolveBaseInputs(dependencies, {
       options: {
         name: 'chosen',
+        localCredentials: false,
         credentialFile: 'selected.env',
       },
       sources: {
@@ -46,6 +47,7 @@ describe('fn:resolveBaseInputs', () => {
 
     const resolved = await resolveBaseInputs(dependencies, {
       options: {
+        localCredentials: false,
         providerTokenSource: 'env:OPEN_AGENT_BASE_SPRITES',
       },
       sources: { processEnv: {}, fileEnv: {} },

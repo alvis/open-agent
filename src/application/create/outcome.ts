@@ -3,6 +3,10 @@ import { assessReadiness } from '#application/readiness';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { CommandResult } from '#application/result';
+import type {
+  CredentialSaveResult,
+  ManagementCredentialName,
+} from '#domain/credentials';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { WorkstationRecord } from '#domain/workstation';
 
@@ -13,6 +17,9 @@ export interface ResultContext {
   workstation: WorkstationRecord;
   observed: GuestInspection;
   preflight: CreatePreflight;
+  retainedCredentials?: Partial<
+    Record<ManagementCredentialName, CredentialSaveResult>
+  >;
 }
 
 /**
@@ -25,7 +32,7 @@ export function createResult(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: ResultContext,
 ): CommandResult {
-  const { workstation, observed, preflight } = context;
+  const { workstation, observed, preflight, retainedCredentials } = context;
 
   return {
     command: 'create',
@@ -33,6 +40,7 @@ export function createResult(
     data: {
       machine: summarizeMachine(dependencies, workstation),
       preflight,
+      retainedCredentials,
       profile: observed.environment.profile,
       readiness: assessReadiness(dependencies, observed),
       network: {

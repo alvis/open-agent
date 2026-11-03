@@ -13,7 +13,7 @@ import type { ProviderId } from '#domain/ids';
 const workstation = workstationOf(
   createFilesystemSprite({ root: tmpdir() }),
 ).workstation;
-const options = {};
+const options = { localCredentials: false };
 const failure = new Error('Provider inventory unavailable');
 
 /**

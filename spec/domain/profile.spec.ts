@@ -37,6 +37,7 @@ vi.mock('#composition/registry', async (importOriginal) => {
       credential: {
         label: 'Fixture token',
         environment: 'FIXTURE_TOKEN',
+        store: 'fixture',
         scope: 'fixture access',
         obtain: 'the fixture console',
         refused: [],

@@ -73,6 +73,7 @@ describe('scoped setup', () => {
               command: 'setup',
               options: {
                 section: 'network',
+                localCredentials: false,
               },
             },
             provider: providerOf(client),

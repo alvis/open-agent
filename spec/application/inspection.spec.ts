@@ -160,7 +160,7 @@ describe('cmd:show', () => {
     const result = await runCommand(dependencies, {
       command: 'show',
       machine: 'primary',
-      options: { json: true, nonInteractive: true },
+      options: { json: true, nonInteractive: true, localCredentials: false },
     });
     const stdout = new PassThrough();
     const stderr = new PassThrough();
@@ -459,7 +459,7 @@ describe('cmd:show', () => {
         {
           command: 'doctor',
           machine: 'temporary',
-          options: { nonInteractive: true },
+          options: { nonInteractive: true, localCredentials: false },
         },
         { operation: context },
       );
@@ -524,6 +524,7 @@ describe('cmd:show', () => {
             options: {
               yes: true,
               inspect: true,
+              localCredentials: false,
             },
           },
           provider: providerOf(client),
@@ -748,6 +749,7 @@ describe('provider choice on an existing workstation', () => {
         providerTokenSource: 'env:OPEN_AGENT_TEST_SOURCE',
         json: true,
         nonInteractive: true,
+        localCredentials: false,
       },
     });
 

@@ -18,6 +18,7 @@ import type {
 const credential: CredentialPrerequisite = {
   label: 'Example API token',
   environment: 'EXAMPLE_TOKEN',
+  store: 'example',
   scope: 'an Example organization token',
   obtain: 'Get one at https://example.test/account.',
   refused: [{ pattern: /^FlyV1\s/u, holds: 'a Fly API token' }],

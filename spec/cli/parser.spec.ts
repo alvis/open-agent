@@ -228,7 +228,7 @@ describe('fn:applicationText', () => {
       text.exceptionWhileParsingArguments(
         new FlagNotFoundError('nonInteractiv', [
           'nonInteractive',
-          'credentialFile',
+          'localCredentials',
         ]),
         false,
       ),
@@ -237,7 +237,7 @@ describe('fn:applicationText', () => {
       {
         code: 'USAGE',
         message: expect.stringContaining(
-          '--non-interactive or --credential-file',
+          '--non-interactive or --local-credentials',
         ),
       },
     ]);

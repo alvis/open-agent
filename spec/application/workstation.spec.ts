@@ -34,7 +34,7 @@ vi.mock(
 );
 
 const TOKEN = 'workflow-org/1234/0123abcd/4567ef89';
-const options = { nonInteractive: true } as const;
+const options = { nonInteractive: true, localCredentials: false } as const;
 
 function withoutProviderCredentials(): void {
   vi.stubEnv('SPRITES_TOKEN', undefined);
@@ -209,7 +209,7 @@ describe('fn:runCommand', () => {
     const secret = vi.fn(async () => 'FlyV1 fm2_generated-macaroon');
     const result = await runCommand(
       dependencies,
-      { command: 'list', options: {} },
+      { command: 'list', options: { localCredentials: false } },
       { interaction: { ...interaction, secret } },
     );
 
@@ -230,7 +230,7 @@ describe('fn:runCommand', () => {
 
     const result = await runCommand(
       dependencies,
-      { command: 'list', options: {} },
+      { command: 'list', options: { localCredentials: false } },
       { interaction: { ...interaction, secret } },
     );
 
@@ -329,7 +329,7 @@ describe('fn:runCommand', () => {
       {
         command: 'terminate',
         machine: 'workstation',
-        options: { provider: 'sprite', yes: false },
+        options: { provider: 'sprite', localCredentials: false, yes: false },
       },
       { interaction: { ...interaction, input } },
     );
@@ -359,7 +359,7 @@ describe('fn:runCommand', () => {
       {
         command: 'show',
         machine: 'workstation',
-        options: { provider: 'sprite' },
+        options: { provider: 'sprite', localCredentials: false },
       },
       {
         interaction: {

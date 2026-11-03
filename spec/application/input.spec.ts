@@ -75,6 +75,7 @@ describe('fn:resolveInputs', () => {
       const selected = await resolveCreateInputs(dependencies, {
         network: 'none',
         nonInteractive: true,
+        localCredentials: false,
       });
 
       expect({
@@ -106,16 +107,16 @@ describe('fn:resolveInputs', () => {
     try {
       const values = [
         await resolveProviderCredential(dependencies, {
-          options: { credentialFile: path },
+          options: { credentialFile: path, localCredentials: false },
           provider: 'sprite',
         }),
         await resolveProviderCredential(dependencies, {
-          options: { credentialFile: path },
+          options: { credentialFile: path, localCredentials: false },
           provider: 'sprite',
           selection: { reference: `file:${secretPath}` },
         }),
         await resolveProviderCredential(dependencies, {
-          options: {},
+          options: { localCredentials: false },
           provider: 'sprite',
         }),
       ];

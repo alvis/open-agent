@@ -1,4 +1,5 @@
 import { copyUrl } from './clipboard';
+import { readLocalCredential, saveLocalCredential } from './credentials';
 import { environmentVariables } from './environment';
 import { readInputFile } from './input-file';
 import { runLocal, sendLocalInput } from './process';
@@ -8,7 +9,7 @@ import type { HostPorts } from '#application/ports/host';
 
 /**
  * builds what the application asks of this computer
- * @returns host ports backed by local processes, files and the network
+ * @returns host ports backed by local processes, files, credential stores and the network
  */
 export function createHostPorts(): HostPorts {
   return {
@@ -16,6 +17,7 @@ export function createHostPorts(): HostPorts {
     sendInput: sendLocalInput,
     readInputFile,
     clipboard: { copyUrl },
+    credentials: { read: readLocalCredential, save: saveLocalCredential },
     tools: { findTool },
     environment: { variables: environmentVariables },
   };

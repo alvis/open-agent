@@ -42,7 +42,10 @@ export function serializeResult(result: ResultOutput): SerializedResult {
       schemaVersion: 1,
       command: result.command,
       ok: true,
-      data: serializeObject(result.data),
+      data: serializeObject({
+        ...result.data,
+        retainedCredential: result.retainedCredential,
+      }),
     };
   }
   const { error } = result;

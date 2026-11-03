@@ -51,7 +51,7 @@ describe('fn:runLocal', () => {
     ]);
   });
 
-  it('should keep the caller timeout inside an operation', async () => {
+  it('should preserve raw output and the caller timeout inside an operation', async () => {
     const context = new OperationContext({
       signal: new AbortController().signal,
     });
@@ -61,10 +61,11 @@ describe('fn:runLocal', () => {
         program: 'generated-program',
         arguments: [],
         timeoutMs: 100,
+        trimOutput: false,
       }),
     );
 
-    expect(output).toBe('generated output');
+    expect(output).toBe('  generated output\n');
     expect(execa.mock.calls).toEqual([
       [
         'generated-program',
@@ -150,4 +151,21 @@ describe('fn:sendLocalInput', () => {
       );
     },
   );
+
+  it('should defer unsuccessful delivery verification when the caller will read back externally', async () => {
+    execa.mockReturnValueOnce(
+      Promise.resolve({
+        exitCode: 2,
+      } satisfies Partial<Result> as Result) as ResultPromise,
+    );
+
+    await expect(
+      sendLocalInput({
+        program: 'generated-program',
+        arguments: [],
+        input: 'generated-secret',
+        verifyResultExternally: true,
+      }),
+    ).resolves.toBeUndefined();
+  });
 });

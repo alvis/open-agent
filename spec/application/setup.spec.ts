@@ -103,6 +103,7 @@ describe('fn:setupWorkstation', () => {
           section: 'all',
           network: 'none',
           nonInteractive: true,
+          localCredentials: false,
         },
       },
       provider,

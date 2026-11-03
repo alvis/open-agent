@@ -1,3 +1,9 @@
+import type {
+  CredentialSaveOptions,
+  CredentialSaveResult,
+  CredentialStoreLocation,
+  ManagementCredentialName,
+} from '#domain/credentials';
 import type { OperationContext } from '#kernel/operation';
 
 /** local executable invocation with a bounded timeout */
@@ -5,6 +11,7 @@ export interface LocalProcessParams {
   program: string;
   arguments: string[];
   timeoutMs?: number;
+  trimOutput?: boolean;
 }
 
 /** local executable invocation receiving private standard input */
@@ -13,9 +20,10 @@ export interface LocalInputParams extends Omit<
   'timeoutMs'
 > {
   input: string;
+  verifyResultExternally?: boolean;
 }
 
-/** what the application asks of this computer: processes, files and the network */
+/** what the application asks of this computer: processes, files, credentials and the network */
 export interface HostPorts {
   /** runs a noninteractive program with bounded execution time and returns its standard output */
   run(params: LocalProcessParams): Promise<string>;
@@ -26,6 +34,19 @@ export interface HostPorts {
   clipboard: {
     /** copies one URL through the platform clipboard tool */
     copyUrl(url: string): Promise<void>;
+  };
+  credentials: {
+    /** returns an explicitly retained management secret, or undefined when none was stored */
+    read(
+      name: ManagementCredentialName,
+      location?: CredentialStoreLocation,
+    ): Promise<string | undefined>;
+    /** retains a local secret after explicit consent */
+    save(
+      name: ManagementCredentialName,
+      value: string,
+      options: CredentialSaveOptions,
+    ): Promise<CredentialSaveResult>;
   };
   tools: {
     /** locates an executable on PATH without running it */

@@ -27,6 +27,8 @@ export interface CredentialPrerequisite {
   label: string;
   /** environment variable read from the process or the selected credential file */
   environment: string;
+  /** entry name in the local credential store */
+  store: string;
   /** what the credential must be allowed to do */
   scope: string;
   /** where to obtain a correctly scoped credential */

@@ -34,6 +34,8 @@ export interface CommandOptions {
   verbose?: boolean;
   /** hides routine status and progress */
   quiet?: boolean;
+  /** reads and saves credentials on this computer when enabled */
+  localCredentials?: boolean;
   /** adds a live guest inspection to show */
   inspect?: boolean;
   /** source reference of the provider management credential */

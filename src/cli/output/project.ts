@@ -1,4 +1,5 @@
 import { projectCreate, projectCreateFailure } from './create';
+import { projectCredentialSave } from './credentials';
 import { projectDoctor } from './doctor';
 import { projectError } from './failure';
 import { projectList } from './list';
@@ -27,42 +28,51 @@ export function projectResult(result: CommandResult): ResultOutput {
  * @returns output success
  */
 function projectSuccess(result: CommandSuccess): SuccessOutput {
+  const retainedCredential = result.retainedCredential
+    ? projectCredentialSave(result.retainedCredential)
+    : undefined;
   switch (result.command) {
     case 'create':
       return {
         command: 'create',
         ok: true,
         data: projectCreate(result.data),
+        retainedCredential,
       };
     case 'setup':
       return {
         command: 'setup',
         ok: true,
         data: projectSetup(result.data),
+        retainedCredential,
       };
     case 'list':
       return {
         command: 'list',
         ok: true,
         data: projectList(result.data),
+        retainedCredential,
       };
     case 'show':
       return {
         command: 'show',
         ok: true,
         data: projectShow(result.data),
+        retainedCredential,
       };
     case 'terminate':
       return {
         command: 'terminate',
         ok: true,
         data: projectTerminate(result.data),
+        retainedCredential,
       };
     case 'doctor':
       return {
         command: 'doctor',
         ok: true,
         data: projectDoctor(result.data),
+        retainedCredential,
       };
     // no default
   }

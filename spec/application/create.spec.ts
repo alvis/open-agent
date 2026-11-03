@@ -69,6 +69,7 @@ const REQUEST = {
     provider: 'sprite',
     nonInteractive: true,
     yes: true,
+    localCredentials: false,
     harness: ['claude'],
     network: 'none',
   },

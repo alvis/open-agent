@@ -56,6 +56,7 @@ describe('fn:cli', () => {
         'list',
         '--provider',
         'sprite',
+        '--no-local-credentials',
         '--non-interactive',
         '--quiet',
         '--json',

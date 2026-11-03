@@ -48,10 +48,26 @@ export function validateCommandRequest(
         .join('. '),
     });
   }
+  validateCommonOptions(options);
   if (request.command === 'setup') {
     validateSetupOptions(options);
   } else {
     validateNonSetupOptions(options);
+  }
+}
+
+/**
+ * rejects mutually exclusive options shared across commands
+ * @param options parsed flags common to every command
+ */
+function validateCommonOptions(options: CommandOptions): void {
+  if (
+    options.localCredentials === false &&
+    options.providerTokenSource?.startsWith('keychain:')
+  ) {
+    throw new CommandValidationError({
+      message: '--no-local-credentials conflicts with a keychain source',
+    });
   }
 }
 

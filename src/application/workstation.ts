@@ -25,6 +25,7 @@ import { chooseWorkstationAction } from './workstation/actions';
 import {
   enterCommandCredential,
   resolveCommandCredential,
+  retainAcceptedCredential,
 } from './workstation/credentials';
 import {
   locateProvider,
@@ -104,10 +105,16 @@ export async function runCommand(
     if (!credential.token || problems.length > 0) {
       return prerequisiteFailure(request, problems);
     }
-
-    return await dispatchAuthenticated(dependencies, {
+    const result = await dispatchAuthenticated(dependencies, {
       request: { ...request, command: request.command },
       provider: bindProvider(dependencies.registry, provider, credential.token),
+      interaction,
+    });
+
+    return await retainAcceptedCredential(dependencies, result, {
+      request,
+      provider,
+      credential,
       interaction,
     });
   } catch (error) {
@@ -241,12 +248,16 @@ async function listAvailableProviders(
     return prerequisiteFailure(request, problems);
   }
 
-  return listWorkstations(dependencies, [
-    {
-      id: provider,
-      driver: bindProvider(dependencies.registry, provider, credential.token),
-    },
-  ]);
+  return retainAcceptedCredential(
+    dependencies,
+    await listWorkstations(dependencies, [
+      {
+        id: provider,
+        driver: bindProvider(dependencies.registry, provider, credential.token),
+      },
+    ]),
+    { request, provider, credential, interaction },
+  );
 }
 
 /**

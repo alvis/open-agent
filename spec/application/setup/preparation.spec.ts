@@ -77,6 +77,7 @@ describe('fn:prepareGuestSection', () => {
       section: 'all',
       options: {
         nonInteractive: true,
+        localCredentials: false,
       },
       mutation,
     });

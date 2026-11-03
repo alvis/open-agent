@@ -30,7 +30,10 @@ const parserFlags = {
 };
 
 describe('cmd:setup', () => {
-  it.each([['color', 'color']] as const)(
+  it.each([
+    ['color', 'color'],
+    ['local-credentials', 'localCredentials'],
+  ] as const)(
     'should preserve omitted, positive and negative values for --%s',
     async (flag, property) => {
       const omitted = await parseFlags([]);
