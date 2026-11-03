@@ -1,0 +1,188 @@
+import process from 'node:process';
+
+import { describe, expect, it, vi } from 'vitest';
+
+import { emitResult } from '#cli/emission';
+
+import { CORPUS } from '../fixtures/output/corpus';
+
+import type { MachineSummary } from '#application/machine';
+import type { CommandResult } from '#application/result';
+
+const MACHINE = {
+  id: 'machine-1',
+  name: 'dev box',
+  organization: 'test',
+  state: 'running',
+  setup: 'incomplete',
+  readiness: 'not inspected',
+} satisfies MachineSummary;
+
+/**
+ * creates a machine with an unreadable presentation field
+ * @param setup provider-recorded setup state
+ * @returns machine whose unreadable state fails the first projection
+ */
+function machineWithUnreadableState(
+  setup: MachineSummary['setup'],
+): MachineSummary {
+  return {
+    ...MACHINE,
+    setup,
+    get state(): string {
+      throw new Error('unreadable machine state');
+    },
+  };
+}
+
+/**
+ * a successful create result reporting the given machine
+ * @param machine summary that replaces the corpus machine
+ * @returns the corpus's default create success with that machine
+ */
+function createdWith(machine: MachineSummary): CommandResult {
+  const created = CORPUS.find(({ name }) => name === 'create-success-default');
+  if (!created?.result.ok) {
+    throw new Error('The corpus has no default create success');
+  }
+
+  return { ...created.result, data: { ...created.result.data, machine } };
+}
+
+/**
+ * captures one real emission at the process stream boundary
+ * @param action emission to observe
+ * @returns complete output and exact exit status
+ */
+function captureEmission(action: () => void): {
+  stdout: string;
+  stderr: string;
+  exitCode: typeof process.exitCode;
+} {
+  const originalExitCode = process.exitCode;
+  let stdout = '';
+  let stderr = '';
+  using output = vi
+    .spyOn(process.stdout, 'write')
+    .mockImplementation((...args) => {
+      stdout += String(args[0]);
+      args.find(
+        (argument): argument is () => void => typeof argument === 'function',
+      )?.();
+
+      return true;
+    });
+  using errors = vi
+    .spyOn(process.stderr, 'write')
+    .mockImplementation((...args) => {
+      stderr += String(args[0]);
+      args.find(
+        (argument): argument is () => void => typeof argument === 'function',
+      )?.();
+
+      return true;
+    });
+  void output;
+  void errors;
+  try {
+    action();
+
+    return { stdout, stderr, exitCode: process.exitCode };
+  } finally {
+    process.exitCode = originalExitCode;
+  }
+}
+
+describe('fn:emitResult', () => {
+  it('should render one input failure and set the exact exit code', () => {
+    const result: CommandResult = {
+      command: 'create',
+      ok: false,
+      error: { code: 'INPUT', message: 'bad input' },
+    };
+
+    const output = captureEmission(() => {
+      emitResult(result);
+    });
+
+    expect(output).toEqual({
+      stdout: '',
+      stderr: 'bad input\n',
+      exitCode: 1,
+    });
+  });
+
+  it('should render a success on stdout with zero exit code', () => {
+    const output = captureEmission(() => emitResult(createdWith(MACHINE)));
+
+    expect(output).toEqual({
+      stdout: expect.stringContaining('dev box'),
+      stderr: '',
+      exitCode: 0,
+    });
+  });
+
+  it('should write cancellation to stderr with exit code 130', () => {
+    const result: CommandResult = {
+      command: 'create',
+      ok: false,
+      error: { code: 'CANCELLED', message: 'Cancelled by user' },
+    };
+
+    const output = captureEmission(() => emitResult(result));
+
+    expect(output).toEqual({
+      stdout: '',
+      stderr: 'Cancelled by user\n',
+      exitCode: 130,
+    });
+  });
+
+  it('should retain workstation identity in human render recovery', () => {
+    const result: CommandResult = {
+      command: 'create',
+      ok: false,
+      error: {
+        code: 'INPUT',
+        get message(): string {
+          throw new Error('private render failure');
+        },
+        machine: 'dev box',
+        machineId: 'machine-1',
+        setupIncomplete: true,
+        outcome: 'unknown',
+        details: ['Inspect provider state.'],
+      },
+    };
+
+    const output = captureEmission(() => emitResult(result));
+
+    expect(output).toEqual({
+      stdout: '',
+      stderr: expect.stringMatching(
+        /dev box[\s\S]*machine-1[\s\S]*incomplete[\s\S]*Inspect provider state\./,
+      ),
+      exitCode: 1,
+    });
+  });
+
+  it.each([
+    {
+      label: 'create incomplete',
+      result: createdWith(machineWithUnreadableState('incomplete')),
+      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete.\n`,
+    },
+    {
+      label: 'create ready',
+      result: createdWith(machineWithUnreadableState('ready')),
+      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\n`,
+    },
+  ])(
+    'should retain $label recovery from success render failure',
+    ({ result, stderr }) => {
+      const output = captureEmission(() => emitResult(result));
+
+      expect(output).toEqual({ stdout: '', stderr, exitCode: 1 });
+    },
+  );
+});

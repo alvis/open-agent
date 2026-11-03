@@ -1,0 +1,187 @@
+import { ENVIRONMENT_SCHEMA } from './contracts';
+import { environmentProblem } from './validation';
+
+import type { AcpAdapterSpec, ProductDeclarations } from '#domain/declarations';
+import type { OsFamilyId } from '#domain/guest';
+import type {
+  EnvironmentHarness,
+  EnvironmentSetupState,
+  EnvironmentTool,
+  GuestEnvironment,
+  SkippedTool,
+} from '#domain/observations/environment';
+import type { WorkstationProfile } from '#domain/profile';
+import type { ServiceDefinition } from '#domain/services';
+import type {
+  Resolution,
+  ToolOwner,
+  ToolSource,
+  ToolSpec,
+} from '#domain/tools';
+
+/** what {@link buildEnvironment} records */
+interface EnvironmentParams {
+  /** the running open-agent version */
+  version: string;
+  /** when setup finished, as an ISO 8601 timestamp */
+  setupAt: string;
+  /** how setup ended */
+  state: EnvironmentSetupState;
+  /** the guest's OS family */
+  family: OsFamilyId;
+  /** the workstation's profile */
+  profile: WorkstationProfile;
+  /** every tool setup resolved */
+  tools: readonly ToolSpec[];
+  /** the source picked for each tool, or why none is usable */
+  resolutions: readonly Resolution[];
+  /** the selected agent and its service, as the backend runs it */
+  agent: {
+    /** agent identifier */
+    id: string;
+    /** the agent's service */
+    service: ServiceDefinition;
+  };
+  /** the selected harnesses, in selection order */
+  harnesses: ReadonlyArray<{
+    /** harness identifier */
+    id: string;
+    /** environment the agent passes when spawning the harness */
+    spawnEnvironment: Readonly<Record<string, string>>;
+    /** the ACP adapter the harness provides */
+    acpAdapter?: AcpAdapterSpec;
+  }>;
+  /** the services the backend runs */
+  services: readonly ServiceDefinition[];
+}
+
+/**
+ * builds the environment record from the selection and what setup resolved;
+ * a tool without a usable source is recorded as skipped
+ * @param declarations the data every registered driver declares, which the record is validated against
+ * @param params version, outcome, selection, tools and services
+ * @returns the record, validated
+ * @throws {Error} when a resolution names an undeclared tool, the agent
+ * publishes no port, or the record is inconsistent
+ */
+export function buildEnvironment(
+  declarations: ProductDeclarations,
+  params: EnvironmentParams,
+): GuestEnvironment {
+  const { profile, agent } = params;
+  const { httpPort } = agent.service;
+  if (httpPort === undefined) {
+    throw new Error(`Agent ${agent.id} publishes no port`);
+  }
+  const { tools, skipped } = recordTools(params.tools, params.resolutions);
+  const environment: GuestEnvironment = {
+    schema: ENVIRONMENT_SCHEMA,
+    openAgent: { version: params.version, setupAt: params.setupAt },
+    setup: { state: params.state, skipped },
+    os: { family: params.family },
+    profile,
+    tools,
+    agent: {
+      id: agent.id,
+      service: agent.service.name,
+      account: agent.service.account,
+      port: httpPort,
+      harnesses: params.harnesses.map(harnessEntry),
+    },
+    services: params.services,
+  };
+  const problem = environmentProblem(declarations, environment);
+  if (problem) {
+    throw new Error(`The guest environment is inconsistent: ${problem}`);
+  }
+
+  return environment;
+}
+
+/**
+ * records each resolved tool with its source and owner, and each tool no
+ * source of which is usable as skipped
+ * @param specs every tool setup resolved
+ * @param resolutions the source picked for each tool, or why none is usable
+ * @returns the installed and the skipped tools
+ * @throws {Error} when a resolution names an undeclared tool
+ */
+function recordTools(
+  specs: readonly ToolSpec[],
+  resolutions: readonly Resolution[],
+): { tools: EnvironmentTool[]; skipped: SkippedTool[] } {
+  const declared = new Map(specs.map((spec) => [spec.name, spec]));
+  const tools: EnvironmentTool[] = [];
+  const skipped: SkippedTool[] = [];
+  for (const resolution of resolutions) {
+    const spec = declared.get(resolution.tool);
+    if (!spec) {
+      throw new Error(`No tool ${resolution.tool} was declared`);
+    }
+    if ('unavailable' in resolution) {
+      skipped.push({ name: spec.name, reason: resolution.unavailable });
+    } else {
+      tools.push({
+        name: spec.name,
+        required: spec.required,
+        account: sourceOwner(resolution.source),
+        executables: [...spec.executables],
+        source: resolution.source,
+      });
+    }
+  }
+
+  return { tools, skipped };
+}
+
+/**
+ * names the account a source installs a tool as
+ * @param source the resolved source
+ * @returns `linuxbrew` for a formula, root for system packages, the agent for its own
+ */
+function sourceOwner(source: ToolSource): ToolOwner {
+  switch (source.kind) {
+    case 'brew':
+      return 'linuxbrew';
+    case 'system':
+      return 'root';
+    default:
+      return source.account;
+  }
+}
+
+/**
+ * describes a harness for the agent's launcher
+ * @param harness the harness's id, spawn environment and adapter
+ * @param harness.id the id the launcher names it by
+ * @param harness.spawnEnvironment environment the agent passes when spawning it
+ * @param harness.acpAdapter the ACP adapter it provides
+ * @returns its id, spawn environment and adapter launch, as recorded
+ */
+function harnessEntry(harness: {
+  id: string;
+  spawnEnvironment: Readonly<Record<string, string>>;
+  acpAdapter?: AcpAdapterSpec;
+}): EnvironmentHarness {
+  const { id, spawnEnvironment, acpAdapter } = harness;
+
+  return {
+    id,
+    environment: { ...spawnEnvironment },
+    ...(acpAdapter && {
+      adapter: {
+        tool: acpAdapter.tool.name,
+        launch: {
+          program: acpAdapter.launch.program,
+          arguments: [...acpAdapter.launch.arguments],
+          ...(acpAdapter.launch.account && {
+            account: acpAdapter.launch.account,
+          }),
+          ...(acpAdapter.launch.environment && {
+            environment: { ...acpAdapter.launch.environment },
+          }),
+        },
+      },
+    }),
+  };
+}

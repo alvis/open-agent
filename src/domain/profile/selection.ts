@@ -1,0 +1,155 @@
+import { selectionLabel } from '#domain/selection-inputs';
+
+import type { ProductDeclarations } from '#domain/declarations';
+import type { AgentId, DriverId, DriverKind, HarnessId } from '#domain/ids';
+
+import type { ProfileCandidate, ProfileViolation } from '../profile';
+
+/** catalog section used to narrow a requested driver id */
+export interface DriverIdContext<Kind extends DriverKind> {
+  declarations: ProductDeclarations;
+  kind: Kind;
+}
+
+/** known agent selection */
+export interface AgentViolationsParams {
+  declarations: ProductDeclarations;
+  selected: { agent: AgentId; harnesses: readonly HarnessId[] };
+}
+
+/** one driver id a selection requests */
+interface RequestedDriver {
+  /** catalog section the id belongs to */
+  kind: DriverKind;
+  /** profile field the id was selected through */
+  field: 'provider' | 'agent' | 'harnesses' | 'network';
+  /** how the driver kind is named to the caller */
+  label: string;
+  /** requested id */
+  id: string;
+}
+
+/**
+ * tells whether an id names a registered driver of one kind
+ * @param id identifier requested by a flag, prompt or stored profile
+ * @param context catalog and section to look in
+ * @param context.declarations the data every registered driver declares
+ * @param context.kind registry section checked for the identifier
+ * @returns true when the catalog registers the id under the kind
+ */
+export function isDriverId<Kind extends DriverKind>(
+  id: string,
+  { declarations, kind }: DriverIdContext<Kind>,
+): id is DriverId<Kind> & string {
+  return Object.hasOwn(declarations[kind], id);
+}
+
+/**
+ * reports every requested id the catalog does not register
+ * @param declarations the data every registered driver declares
+ * @param candidate requested selection
+ * @returns one violation per id the catalog does not register
+ */
+export function unknownDriverViolations(
+  declarations: ProductDeclarations,
+  candidate: ProfileCandidate,
+): ProfileViolation[] {
+  const requested: RequestedDriver[] = [
+    {
+      kind: 'providers',
+      field: 'provider',
+      label: 'provider',
+      id: candidate.provider,
+    },
+    {
+      kind: 'agents',
+      field: 'agent',
+      label: 'ACP agent',
+      id: candidate.agent,
+    },
+    ...candidate.harnesses.map((id): RequestedDriver => ({
+      kind: 'harnesses',
+      field: 'harnesses',
+      label: 'harness',
+      id,
+    })),
+    {
+      kind: 'networks',
+      field: 'network',
+      label: 'network',
+      id: candidate.network,
+    },
+  ];
+
+  return requested
+    .filter(({ kind, id }) => !isDriverId(id, { declarations, kind }))
+    .map(({ kind, field, label, id }) => ({
+      code: 'unknown-driver',
+      message: `Unknown ${label} "${id}"; available: ${Object.keys(declarations[kind]).join(', ')}`,
+      fields: [field],
+    }));
+}
+
+/**
+ * requires at least one harness, each selected once
+ * @param harnesses requested harness ids
+ * @returns violations for an empty selection and each repeated id
+ */
+export function harnessSetViolations(
+  harnesses: readonly string[],
+): ProfileViolation[] {
+  const duplicates = harnesses.filter(
+    (id, index) => harnesses.indexOf(id) !== index,
+  );
+
+  return [
+    ...(harnesses.length === 0
+      ? [
+          {
+            code: 'no-harness' as const,
+            message: `At least one harness must be selected with ${selectionLabel('harnesses')}`,
+            fields: ['harnesses' as const],
+          },
+        ]
+      : []),
+    ...[...new Set(duplicates)].map((id) => ({
+      code: 'duplicate-harness' as const,
+      message: `Harness "${id}" is selected more than once`,
+      fields: ['harnesses' as const],
+    })),
+  ];
+}
+
+/**
+ * checks harness support and ACP adapter availability for the agent
+ * @param params known ACP agent and harness ids
+ * @param params.declarations the data every registered driver declares
+ * @param params.selected agent is the known ACP agent id; harnesses are known requested ids
+ * @returns violations the selected ACP agent's declarations raise
+ */
+export function agentViolations({
+  declarations,
+  selected,
+}: AgentViolationsParams): ProfileViolation[] {
+  const { agent, harnesses } = selected;
+  const declaration = declarations.agents[agent];
+
+  return [
+    ...harnesses
+      .filter((id) => !declaration.supportedHarnesses.includes(id))
+      .map((id) => ({
+        code: 'unsupported-harness' as const,
+        message: `ACP agent "${agent}" does not support harness "${id}"`,
+        fields: ['agent' as const, 'harnesses' as const],
+      })),
+    ...(declaration.harnessLaunchMode === 'acp-adapter'
+      ? harnesses
+          .filter((id) => declarations.harnesses[id].acpAdapter === undefined)
+          .map((id) => ({
+            code: 'missing-acp-adapter' as const,
+            message: `ACP agent "${agent}" launches ACP adapters, but harness "${id}" provides none`,
+            fields: ['agent' as const, 'harnesses' as const],
+          }))
+      : []),
+  ];
+}

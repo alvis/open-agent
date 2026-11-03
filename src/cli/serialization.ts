@@ -1,0 +1,122 @@
+import { redactResolved } from '#kernel/redaction';
+
+import type { CommandName } from '#kernel/commands';
+
+import type { ResultOutput } from './output/envelope';
+import type { ErrorOutput } from './output/failure';
+
+/** JSON values after registered credential redaction */
+export type JsonValue =
+  string | number | boolean | null | JsonValue[] | JsonObject;
+
+/** a serialized output group, never a domain result escape hatch */
+export interface JsonObject {
+  [key: string]: JsonValue | undefined;
+}
+
+/** printable result */
+export type SerializedResult =
+  | {
+      command: CommandName;
+      ok: true;
+      data: JsonObject;
+      error?: never;
+    }
+  | {
+      command: CommandName | null;
+      ok: false;
+      error: ErrorOutput;
+      data?: JsonObject;
+    };
+
+/**
+ * projects one typed outcome into its redacted printable form
+ * @param result completed domain or parser result
+ * @returns printable payload with no internal output controls
+ */
+export function serializeResult(result: ResultOutput): SerializedResult {
+  if (result.ok) {
+    return {
+      command: result.command,
+      ok: true,
+      data: serializeObject(result.data),
+    };
+  }
+  const { error } = result;
+
+  return {
+    command: result.command,
+    ok: false,
+    error: {
+      ...error,
+      message: redactResolved(error.message),
+      machine:
+        error.machine === undefined ? undefined : redactResolved(error.machine),
+      machineId:
+        error.machineId === undefined
+          ? undefined
+          : redactResolved(error.machineId),
+      details: error.details?.map((detail) => redactResolved(detail)),
+    },
+    data: result.data === undefined ? undefined : serializeObject(result.data),
+  };
+}
+
+/**
+ * narrows a serialized group for presentation without record casts
+ * @param value serialized value
+ * @returns whether the value is a named field group
+ */
+export function isJsonObject(
+  value: JsonValue | undefined,
+): value is JsonObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * sanitizes every field while preserving its public key
+ * @param value typed domain object or nested SDK observation
+ * @returns named JSON fields
+ */
+function serializeObject(value: object): JsonObject {
+  const entries: Array<[string, unknown]> = Object.entries(value);
+
+  return Object.fromEntries(
+    entries.flatMap(([key, nested]) => {
+      const value = serializeValue(nested);
+
+      return value === undefined ? [] : [[redactResolved(key), value]];
+    }),
+  );
+}
+
+/**
+ * converts nested runtime observations at the serialization boundary
+ * @param value domain field or external SDK value
+ * @returns safe JSON value, omitting unsupported values as JSON does
+ */
+function serializeValue(value: unknown): JsonValue | undefined {
+  if (typeof value === 'string') {
+    return redactResolved(value);
+  }
+  if (
+    value === null ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.toJSON();
+  }
+  if (Array.isArray(value)) {
+    const values: unknown[] = value;
+
+    return values.map((nested) => serializeValue(nested) ?? null);
+  }
+  if (typeof value === 'object') {
+    return serializeObject(value);
+  }
+
+  return undefined;
+}

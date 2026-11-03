@@ -1,0 +1,35 @@
+import { describe, expect, it } from 'vitest';
+
+import { T3_LAUNCHER } from '#adapters/drivers/agents/t3/service';
+import { guestAsset, readAsset } from '#adapters/guest/platform/assets';
+
+describe('fn:readAsset', () => {
+  it('should reject a guest asset that escapes the package tree', () => {
+    expect(() => guestAsset('../outside.sh', 0o755)).toThrow(/relative/iu);
+  });
+
+  it('should assign the variables an asset adds after the layout in its header', async () => {
+    const launcher = await readAsset(T3_LAUNCHER);
+    const plain = await readAsset({ path: 'tools/links.sh' });
+
+    expect(launcher).toContain(
+      "\nOA_ENVIRONMENT_PATH='/opt/open-agent/environment.json'\n",
+    );
+    expect(launcher).toContain("\nOA_T3_MIN_FREE_MB='64'\n");
+    expect(plain).toContain(
+      "\nOA_ENVIRONMENT_PATH='/opt/open-agent/environment.json'\n",
+    );
+    expect(plain).not.toContain('OA_T3_MIN_FREE_MB=');
+  });
+
+  it('should refuse an added variable that is not an OA_ name or redefines the layout', async () => {
+    await expect(
+      readAsset({
+        path: 'tools/links.sh',
+        variables: { OA_ENVIRONMENT_PATH: '/srv', PATH: '/srv/bin' },
+      }),
+    ).rejects.toThrow(
+      'Guest asset tools/links.sh adds invalid header variables: OA_ENVIRONMENT_PATH, PATH',
+    );
+  });
+});

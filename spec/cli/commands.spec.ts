@@ -1,0 +1,115 @@
+import { buildApplication, buildRouteMap, run } from '@stricli/core';
+import { describe, expect, it, vi } from 'vitest';
+
+import { commandRoutes } from '#cli/commands';
+import { execute } from '#cli/execution';
+import { PROVIDER_IDS } from '#domain/ids';
+
+import { dependencies } from '../mocks/dependencies';
+
+import type { StricliProcess } from '@stricli/core';
+
+import type { InvocationContext } from '#cli/parser';
+
+vi.mock(
+  '#cli/execution',
+  () =>
+    ({
+      execute: vi.fn<typeof execute>(async () => undefined),
+    }) satisfies Partial<typeof import('#cli/execution')>,
+);
+
+const executeCommand = vi.mocked(execute);
+
+const application = buildApplication(
+  buildRouteMap({ routes: commandRoutes, docs: { brief: 'route fixture' } }),
+  { name: 'open-agent', scanner: { caseStyle: 'allow-kebab-for-camel' } },
+);
+
+/**
+ * routes one invocation through the production commands and Stricli's scanner
+ * @param argv command-line arguments after the executable name
+ * @returns everything Stricli printed and its exit status
+ */
+async function route(argv: string[]): Promise<{
+  output: string;
+  exitCode: StricliProcess['exitCode'];
+}> {
+  const chunks: string[] = [];
+  const write = (text: string): void => {
+    chunks.push(text);
+  };
+  const stricliProcess: StricliProcess = {
+    stdout: { write },
+    stderr: { write },
+  };
+  const context: InvocationContext = {
+    process: stricliProcess,
+    state: { emitted: false, command: null, errors: [] },
+    dependencies,
+  };
+
+  await run(application, argv, context);
+
+  return { output: chunks.join(''), exitCode: stricliProcess.exitCode };
+}
+
+describe('provider flag on workstation commands', () => {
+  it.each(['create'])(
+    'should list --provider with every provider choice in %s help',
+    async (command) => {
+      const { output, exitCode } = await route([command, '--help']);
+
+      expect(exitCode).toBe(0);
+      expect(output).toContain(`PROVIDER · ${PROVIDER_IDS.join(', ')}`);
+    },
+  );
+
+  it.each(['create'])(
+    'should refuse an unknown provider for %s before the command runs',
+    async (command) => {
+      const { output, exitCode } = await route([
+        command,
+        '--provider',
+        'bogus',
+      ]);
+
+      expect(exitCode).not.toBe(0);
+      expect(output).toContain('bogus');
+    },
+  );
+});
+
+describe('command route dispatch', () => {
+  it.each([
+    {
+      argv: ['create', '--name', 'new-box'],
+      command: 'create',
+      options: { name: 'new-box' },
+    },
+  ])(
+    'should dispatch $command with parsed request and invocation state',
+    async ({ argv, command, options }) => {
+      const routed = await route(argv);
+
+      expect(routed.exitCode).toBe(0);
+      expect(executeCommand).toHaveBeenCalledExactlyOnceWith({
+        dependencies,
+        request: {
+          command,
+          options: expect.objectContaining(options),
+        },
+        state: { emitted: false, command: null, errors: [] },
+      });
+    },
+  );
+
+  it('should list every supported command in root help', async () => {
+    const { output, exitCode } = await route(['--help']);
+
+    expect(exitCode).toBe(0);
+    for (const command of ['create']) {
+      expect(output).toContain(`open-agent ${command} `);
+    }
+  });
+});
