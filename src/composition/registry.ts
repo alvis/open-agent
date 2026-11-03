@@ -1,4 +1,5 @@
 import { t3 } from '#adapters/drivers/agents/t3';
+import { cliproxyapi } from '#adapters/drivers/gateways/cliproxyapi';
 import { claude } from '#adapters/drivers/harnesses/claude';
 import { none } from '#adapters/drivers/networks/none';
 import { sprite as spriteProvider } from '#adapters/drivers/providers/sprite';
@@ -18,4 +19,5 @@ export const registry = {
   harnesses: { claude },
   agents: { t3 },
   networks: { none },
+  gateways: { cliproxyapi },
 } as const satisfies DriverRegistry;

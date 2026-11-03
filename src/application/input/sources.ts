@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { parse } from 'dotenv';
 
 import { harnessEnvironmentNames } from '#domain/environment-names';
@@ -11,7 +13,7 @@ import { rememberSecret } from '#kernel/redaction';
 import type { CommandOptions } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 
-/** process and file inputs available to selection resolution */
+/** process, file, and profile inputs available to selection resolution */
 export interface InputSources {
   processEnv: NodeJS.ProcessEnv;
   /** entries of the selected credential file */
@@ -20,6 +22,7 @@ export interface InputSources {
   runtimeFileEnv?: Record<string, string>;
   /** exact bytes of the selected setup file; absent without --setup-file */
   setupFile?: Buffer;
+  profile: Record<string, string>;
 }
 
 /**
@@ -34,7 +37,12 @@ function reservedEnv(
     ...Object.values(dependencies.registry.providers).map(
       ({ prerequisites }) => prerequisites.credential.environment,
     ),
-    ...Object.values(selectionInputs()).map(({ environment }) => environment),
+    ...Object.values(selectionInputs(dependencies.registry)).map(
+      ({ environment }) => environment,
+    ),
+    ...Object.values(dependencies.registry.gateways.cliproxyapi.inputs).map(
+      ({ environment }) => environment,
+    ),
     'GH_TOKEN',
     'GITHUB_TOKEN',
     'GIT_AUTHOR_NAME',
@@ -45,6 +53,18 @@ function reservedEnv(
     'CI',
     'TERM',
     'NO_COLOR',
+  ]);
+}
+/**
+ * non-secret values the local input profile may hold
+ * @param dependencies the registered drivers
+ * @returns the names
+ */
+function profileKeys(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+): Set<string> {
+  return new Set([
+    dependencies.registry.gateways.cliproxyapi.inputs.baseUrl.environment,
   ]);
 }
 /**
@@ -119,13 +139,13 @@ export function runtimeEnvironment(
 }
 
 /**
- * reads process, selected credential and guest env files
- * @param dependencies what this computer provides
+ * reads process, selected credential and guest env files, and non-secret profile values
+ * @param dependencies the registered drivers, what this computer provides
  * @param options parsed credential-file and env-file options
  * @returns sources in documented precedence order
  */
 export async function readInputSources(
-  dependencies: Pick<ApplicationDependencies, 'host'>,
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'host'>,
   options: CommandOptions,
 ): Promise<InputSources> {
   const environment = await readEnvironmentSources(dependencies, options);
@@ -135,12 +155,48 @@ export async function readInputSources(
   const setupFile = options.setupFile
     ? await readSetupFile(dependencies, options.setupFile)
     : undefined;
+  const profilePath = join(
+    dependencies.host.environment.homeDirectory(),
+    '.config',
+    'open-agent',
+    'profile.json',
+  );
+  const profileText = await dependencies.host
+    .readInputFile(profilePath)
+    .catch((error: NodeJS.ErrnoException) => {
+      checkOperation();
+      if (error.code === 'ENOENT') {
+        return '{}';
+      }
+      throw new CommandFault({
+        code: 'INPUT',
+        message: 'The local input profile must be a readable regular file.',
+        cause: error,
+      });
+    });
+  const profileValue: unknown = parseProfile(profileText);
+  if (
+    typeof profileValue !== 'object' ||
+    profileValue === null ||
+    Array.isArray(profileValue)
+  ) {
+    throw new CommandFault({
+      code: 'INPUT',
+      message: `Invalid non-secret profile: ${profilePath}`,
+    });
+  }
+  const profile = Object.fromEntries(
+    Object.entries(profileValue).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === 'string' && profileKeys(dependencies).has(entry[0]),
+    ),
+  );
 
-  return { ...environment, runtimeFileEnv, setupFile };
+  return { ...environment, runtimeFileEnv, setupFile, profile };
 }
 
 /**
- * reads credential environment sources
+ * reads credential environment sources without unrelated integration profiles
  * @param dependencies what this computer provides
  * @param options explicitly selected credential file
  * @returns process and file values; the file takes precedence
@@ -315,4 +371,21 @@ export async function readSetupFile(
   }
 
   return contents;
+}
+
+/**
+ * parses the local non-secret profile with a typed input boundary
+ * @param text local profile JSON
+ * @returns parsed profile for structural validation
+ */
+function parseProfile(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (cause) {
+    throw new CommandFault({
+      code: 'INPUT',
+      message: 'The local input profile is not valid JSON.',
+      cause,
+    });
+  }
 }

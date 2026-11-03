@@ -79,6 +79,8 @@ const NATIVE: NativeConfigurationInspection = {
     (['claude'] as const).map((harness) => [
       harness,
       {
+        gatewayConfigured: false,
+        modelDiscoveryEnabled: false,
         pluginListAvailable: false,
         awakeHooksInstalled: true,
         authentication: 'not-configured' as const,
@@ -103,6 +105,7 @@ const READY: GuestInspection = {
   },
   native: NATIVE,
 
+  hub: { skipped: true, reachable: false },
   environment: environmentOf(STABLE_PROFILE, {
     tools: [
       {

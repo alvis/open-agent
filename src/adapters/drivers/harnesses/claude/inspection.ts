@@ -3,13 +3,17 @@ import {
   enabledSelections,
   listNativePlugins,
 } from '#adapters/drivers/harnesses/shared/plugin-state';
-import { awakeHooksReadiness } from '#adapters/drivers/harnesses/shared/readiness';
+import {
+  awakeHooksReadiness,
+  proxyReadiness,
+} from '#adapters/drivers/harnesses/shared/readiness';
 import { HOME } from '#adapters/guest/platform/account';
 import { AWAKE_COMMAND } from '#adapters/guest/platform/awake';
 import {
   readJsonObject,
   readSelectedPlugins,
 } from '#adapters/guest/platform/native/configuration';
+import { isRecord } from '#kernel/guards';
 import { runBoundedIO } from '#kernel/operation';
 
 import { CLAUDE_WORK_HOOKS } from './hooks';
@@ -21,6 +25,7 @@ import {
 } from './paths';
 
 import type { GuestCommandResult } from '#adapters/guest/platform/run';
+import type { HarnessReadinessContext } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type {
   HarnessInspection,
@@ -65,7 +70,7 @@ export async function inspectClaude(
 }
 
 /**
- * evaluates non-secret plugin and authentication state
+ * evaluates non-secret gateway, discovery, plugin and authentication state
  * @param evidence settings, plugin-list result and native authentication presence
  * @param evidence.settings parsed Claude user settings
  * @param evidence.plugins native plugin-list command result
@@ -78,10 +83,21 @@ function claudeConfiguration(evidence: {
   authenticated: boolean;
 }): NativeHarnessInspection {
   const { settings, plugins, authenticated } = evidence;
+  const env = isRecord(settings.env) ? settings.env : {};
+  const isProxyConfigured =
+    typeof env.ANTHROPIC_BASE_URL === 'string' &&
+    typeof env.ANTHROPIC_AUTH_TOKEN === 'string';
   const authentication: NativeHarnessInspection['authentication'] =
-    authenticated ? 'native' : 'not-configured';
+    isProxyConfigured
+      ? 'managed-proxy'
+      : authenticated
+        ? 'native'
+        : 'not-configured';
 
   return {
+    gatewayConfigured: isProxyConfigured,
+    modelDiscoveryEnabled:
+      env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY === '1',
     pluginListAvailable: plugins.exitCode === 0,
     awakeHooksInstalled: hasWorkHooks(settings.hooks, {
       owned: CLAUDE_WORK_HOOKS,
@@ -92,12 +108,17 @@ function claudeConfiguration(evidence: {
 }
 
 /**
- * derives Claude's readiness from gathered native evidence
+ * derives Claude's gateway readiness from gathered native evidence
  * @param inspection native configuration evidence, absent when inspection failed
- * @returns the awake-hook finding
+ * @param context facts the checks depend on
+ * @returns gateway, model-discovery and awake-hook findings
  */
 export function claudeReadiness(
   inspection: NativeHarnessInspection | undefined,
+  context: HarnessReadinessContext,
 ): ReadinessFinding[] {
-  return [awakeHooksReadiness('Claude', inspection)];
+  return [
+    ...proxyReadiness('Claude', inspection, context),
+    awakeHooksReadiness('Claude', inspection),
+  ];
 }

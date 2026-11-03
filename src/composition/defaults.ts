@@ -11,6 +11,7 @@ export const defaults = {
     network: NO_NETWORK,
   },
   options: {
+    isProxyEnabled: false,
     idleTimeoutMinutes: 5,
     holdMaxMinutes: 60,
     // an update is due a day after the last successful one

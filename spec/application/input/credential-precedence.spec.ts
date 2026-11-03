@@ -17,7 +17,7 @@ import { dependencies } from '../../mocks/dependencies';
 
 import type { CredentialStoreLocation } from '#domain/credentials';
 
-const emptySources = { processEnv: {}, fileEnv: {} };
+const emptySources = { processEnv: {}, fileEnv: {}, profile: {} };
 
 describe('fn:management credential precedence', () => {
   it.each([
@@ -120,11 +120,17 @@ describe('fn:management credential precedence', () => {
     },
   );
 
-  it('should prefer the selected env file over the process environment for credentials', async () => {
+  it('should prefer the selected env file over the process environment for credentials and values', async () => {
     const sources = {
       ...emptySources,
-      processEnv: { SPRITES_TOKEN: 'process-selected-token' },
-      fileEnv: { SPRITES_TOKEN: 'file-selected-token' },
+      processEnv: {
+        SPRITES_TOKEN: 'process-selected-token',
+        CLIPROXYAPI_BASE_URL: 'https://process.example.test',
+      },
+      fileEnv: {
+        SPRITES_TOKEN: 'file-selected-token',
+        CLIPROXYAPI_BASE_URL: 'https://file.example.test',
+      },
     };
 
     const credential = await resolveProviderCredential(dependencies, {
@@ -145,7 +151,11 @@ describe('fn:management credential precedence', () => {
       token: 'file-selected-token',
       source: 'SPRITES_TOKEN in selected.env',
     });
-    expect(input).toMatchObject({ providerToken: 'file-selected-token' });
+    expect(input).toMatchObject({
+      providerToken: 'file-selected-token',
+      proxyUrl: 'https://file.example.test',
+      sources: { CLIPROXYAPI_BASE_URL: 'selected.env' },
+    });
   });
 
   it('should use a generated absent Keychain location without touching the default Keychain', async () => {

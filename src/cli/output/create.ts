@@ -1,6 +1,7 @@
 import { projectRetainedCredentials } from './credentials';
 import { each, projectFields, same } from './fields';
 import {
+  projectHub,
   projectNative,
   projectNetworkStatus,
   projectServiceSummary,
@@ -15,6 +16,7 @@ import type { CreateData, CreateFailureData } from '#application/data';
 
 import type { RetainedCredentialsOutput } from './credentials';
 import type {
+  HubOutput,
   NativeOutput,
   NetworkOutput,
   ServiceSummaryOutput,
@@ -38,6 +40,7 @@ export interface CreateDataOutput {
   profile: ProfileOutput;
   readiness: ReadinessOutput;
   network: NetworkOutput;
+  hub: HubOutput;
   services: ServiceSummaryOutput[];
   native?: NativeOutput;
   pairing: PairingOutput;
@@ -79,6 +82,7 @@ export function projectCreate(data: CreateData): CreateDataOutput {
     profile: projectProfile,
     readiness: projectReadiness,
     network: projectNetworkStatus,
+    hub: projectHub,
     services: each(projectServiceSummary),
     native: projectNative,
     pairing: projectPairing,

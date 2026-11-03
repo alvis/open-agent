@@ -6,13 +6,20 @@ import type {
   AgentDeclaration,
   AgentPairing,
   ExposureVisibility,
+  GatewayDeclaration,
   HarnessDeclaration,
   MachineOffer,
   NetworkDeclaration,
   ProviderDeclaration,
 } from '#domain/declarations';
 import type { GuestAsset } from '#domain/guest';
-import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
+import type {
+  AgentId,
+  GatewayId,
+  HarnessId,
+  NetworkId,
+  ProviderId,
+} from '#domain/ids';
 import type { AgentEnvironments } from '#domain/observations/agent';
 import type {
   HarnessInspection,
@@ -159,6 +166,63 @@ export interface ProviderDriver<
   awaitGuestReady(workstation: WorkstationRecord): Promise<void>;
 }
 
+/** documented native client endpoints derived from one gateway hub URL */
+export interface GatewayEndpoints {
+  /** hub root, without a version prefix */
+  root: string;
+  /** hub root with the versioned API prefix */
+  versioned: string;
+  /** non-billable model catalogue endpoint */
+  models: string;
+}
+
+/** the gateway credentials a run resolved, absent when no source holds them */
+export interface GatewayPreflightParams {
+  /** hub URL */
+  url?: string;
+  /** hub client key */
+  apiKey?: string;
+}
+
+/** a model gateway harnesses can route through, with the rules for its hub URL and credentials */
+export interface GatewayDriver<
+  Name extends string = string,
+> extends GatewayDeclaration<Name> {
+  /**
+   * derives the hub root and the versioned API base without duplicate prefixes; a malformed URL, or one carrying credentials, a query or a fragment, is refused
+   * @param baseUrl hub URL, optionally ending in /v1
+   * @returns client bases and the non-billable model catalogue endpoint
+   */
+  endpoints(baseUrl: string): GatewayEndpoints;
+  /**
+   * reports invalid direct gateway inputs without exposing their contents
+   * @param baseUrl optional supplied hub URL
+   * @returns aggregate-preflight diagnostics for a malformed hub URL
+   */
+  urlProblems(baseUrl?: string): string[];
+  /**
+   * checks, offline, that every credential a harness routed through the
+   * gateway needs is present
+   * @param params the resolved hub URL and client key
+   * @returns one problem per absent credential, each with its fix
+   */
+  preflight(params: GatewayPreflightParams): PrerequisiteProblem[];
+}
+
+/** CLIProxyAPI routing applied to a proxy-capable harness */
+export interface ProxyRoute {
+  /** the endpoints derived from the hub base URL */
+  endpoints: GatewayEndpoints;
+  /** hub client API key, persisted only in protected native configuration */
+  apiKey: string;
+}
+
+/** inputs for one native configuration merge */
+export interface HarnessConfigureParams {
+  /** CLIProxyAPI route, or undefined to restore native authentication */
+  proxy?: ProxyRoute;
+}
+
 /** command the idle-governor hooks call on the guest */
 export interface AwakeHookCommand {
   /**
@@ -204,6 +268,12 @@ export interface HarnessHookInstaller {
   install(guest: GuestChannel, command: AwakeHookCommand): Promise<void>;
 }
 
+/** facts the readiness checks of one harness depend on */
+export interface HarnessReadinessContext {
+  /** the workstation routes proxy-capable harnesses through CLIProxyAPI */
+  proxy: boolean;
+}
+
 /** a coding CLI the user works through */
 export interface HarnessDriver<
   Name extends string = string,
@@ -219,8 +289,9 @@ export interface HarnessDriver<
   /**
    * merges native configuration, preserving unrelated user settings
    * @param guest guest channel
+   * @param params proxy routing to apply or restore
    */
-  configure(guest: GuestChannel): Promise<void>;
+  configure(guest: GuestChannel, params: HarnessConfigureParams): Promise<void>;
   /**
    * observes the harness's current native state
    * @param guest guest channel
@@ -230,10 +301,12 @@ export interface HarnessDriver<
   /**
    * derives readiness findings from already gathered native evidence
    * @param inspection configuration evidence, absent when inspection failed
+   * @param context facts the checks depend on
    * @returns readiness findings in reporting order
    */
   readiness(
     inspection: NativeHarnessInspection | undefined,
+    context: HarnessReadinessContext,
   ): ReadinessFinding[];
 }
 
@@ -247,7 +320,7 @@ export interface AgentReadinessEvidence<Environment = unknown> {
 
 /**
  * agent readiness findings, grouped so core can interleave them with the
- * network findings without changing the reporting order
+ * network and gateway findings without changing the reporting order
  */
 export interface AgentReadiness {
   /** the agent service itself */
@@ -354,4 +427,5 @@ export interface DriverRegistry {
     [Id in AgentId]: AgentDriver<Id, HarnessId, AgentEnvironments[Id]>;
   };
   networks: { [Id in NetworkId]: NetworkDriver<Id, NetworkStatuses[Id]> };
+  gateways: { [Id in GatewayId]: GatewayDriver<Id> };
 }

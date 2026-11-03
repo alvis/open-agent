@@ -102,9 +102,11 @@ function validateCommonOptions(options: CommandOptions): void {
   }
   if (
     options.localCredentials === false &&
-    [options.providerTokenSource, options.githubTokenSource].some((source) =>
-      source?.startsWith('keychain:'),
-    )
+    [
+      options.providerTokenSource,
+      options.githubTokenSource,
+      options.proxyApiKeySource,
+    ].some((source) => source?.startsWith('keychain:'))
   ) {
     throw new CommandValidationError({
       message: '--no-local-credentials conflicts with a keychain source',
@@ -249,6 +251,11 @@ export function validateSetupIntegrationOptions(
   if (section !== 'system' && options.setupFile !== undefined) {
     throw new CommandValidationError({
       message: 'The setup file requires --section system or --section all',
+    });
+  }
+  if (section !== 'proxy' && options.proxy !== undefined) {
+    throw new CommandValidationError({
+      message: 'Proxy switches require --section proxy or --section all',
     });
   }
 }

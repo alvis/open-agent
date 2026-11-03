@@ -1,3 +1,4 @@
+import { isHarnessId } from '#domain/harnesses';
 import { machineViolations, isDriverId } from '#domain/profile';
 
 import { releaseChoices } from './choices';
@@ -15,6 +16,7 @@ interface OptionContext {
   selected: {
     provider: string;
     agent: string;
+    harnesses: readonly string[];
   };
   /** options the caller supplied */
   supplied: SuppliedSelection['options'];
@@ -23,6 +25,10 @@ interface OptionContext {
   prompts?: Prompts;
   /** recorded options for setup, default options for a new workstation */
   base: ProfileOptions;
+  /** options inferred from supplied inputs, also the prompt defaults */
+  inferred?: { isProxyEnabled: boolean };
+  /** option the targeted setup section turns on unless a flag says otherwise */
+  enables?: 'proxy';
 }
 
 /** release inputs and the selected agent */
@@ -36,7 +42,8 @@ type MachineContext = Pick<OptionContext, 'supplied' | 'prompts' | 'base'> & {
 };
 
 /**
- * resolves the capability-driven options the run owns: idle minutes only when the provider keeps workstations awake; hold-max
+ * resolves the capability-driven options the run owns: CLIProxyAPI only when
+ * a selected harness supports it, idle minutes only when the provider keeps workstations awake; hold-max
  * and the update due interval are never asked
  * @param dependencies the registered drivers
  * @param context selected drivers, supplied values, prompts and base options
@@ -58,6 +65,9 @@ export async function resolveOptions(
   return {
     ...base,
     ...(agentRelease !== undefined && { agentRelease }),
+    isProxyEnabled: fields.includes('isProxyEnabled')
+      ? await resolveProxy(dependencies, context)
+      : base.isProxyEnabled,
     idleTimeoutMinutes: fields.includes('idleTimeoutMinutes')
       ? await resolveIdleMinutes(dependencies, context)
       : base.idleTimeoutMinutes,
@@ -149,6 +159,40 @@ export async function resolveMachine(
     base.minMemoryGb;
 
   return { minCpus, minMemoryGb };
+}
+
+/**
+ * resolves whether harnesses use CLIProxyAPI, asked only when a selected harness supports it
+ * @param dependencies the registered drivers
+ * @param context selected drivers, supplied values, prompts and the section's implied option
+ * @returns whether the model gateway is used
+ */
+async function resolveProxy(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  context: OptionContext,
+): Promise<boolean> {
+  const { selected, supplied, prompts, inferred, base } = context;
+  const explicit =
+    supplied.isProxyEnabled ?? (context.enables === 'proxy' ? true : undefined);
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  if (
+    !selected.harnesses.some(
+      (id) =>
+        isHarnessId(id) && dependencies.registry.harnesses[id].supportsProxy,
+    )
+  ) {
+    return false;
+  }
+  const fallback = inferred?.isProxyEnabled ?? base.isProxyEnabled;
+
+  return (
+    (await prompts?.confirm(
+      'Route harnesses through CLIProxyAPI?',
+      fallback,
+    )) ?? fallback
+  );
 }
 
 /**

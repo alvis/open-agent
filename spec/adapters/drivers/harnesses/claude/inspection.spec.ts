@@ -21,19 +21,45 @@ describe('fn:inspectClaude', () => {
       settings: undefined,
       authenticated: false,
       configuration: {
+        gatewayConfigured: false,
+        modelDiscoveryEnabled: false,
         pluginListAvailable: true,
         awakeHooksInstalled: false,
         authentication: 'not-configured',
       },
     },
     {
-      name: 'a native credential with settings',
-      settings: { env: {} },
+      name: 'a native credential with incomplete proxy settings',
+      settings: {
+        env: {
+          ANTHROPIC_BASE_URL: 'https://gateway.example',
+          CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: '1',
+        },
+      },
       authenticated: true,
       configuration: {
+        gatewayConfigured: false,
+        modelDiscoveryEnabled: true,
         pluginListAvailable: false,
         awakeHooksInstalled: false,
         authentication: 'native',
+      },
+    },
+    {
+      name: 'complete proxy settings alongside a native credential',
+      settings: {
+        env: {
+          ANTHROPIC_BASE_URL: 'https://gateway.example',
+          ANTHROPIC_AUTH_TOKEN: 'managed-token',
+        },
+      },
+      authenticated: true,
+      configuration: {
+        gatewayConfigured: true,
+        modelDiscoveryEnabled: false,
+        pluginListAvailable: true,
+        awakeHooksInstalled: false,
+        authentication: 'managed-proxy',
       },
     },
   ])('should report $name from the guest configuration', async (scenario) => {

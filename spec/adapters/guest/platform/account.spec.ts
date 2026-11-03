@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   ensurePrivateDirectory,
+  removeOwnedFile,
   runAsAgent,
   writeOwnedFile,
 } from '#adapters/guest/platform/account';
@@ -73,6 +74,7 @@ describe('native account SDK boundary', () => {
       '/home/agent/.config/native.json',
       'private',
     );
+    await removeOwnedFile(guestOf(sprite), '/home/agent/.config/native.json');
 
     // each runs the home files program inline as its account, `$0` then its operation
     const { mock: plain } = vi.mocked(sprite.execFile);
@@ -126,6 +128,17 @@ describe('native account SDK boundary', () => {
         '/bin/sh',
         '-c',
         'write',
+        '/home/agent',
+        '/home/agent/.config/native.json',
+      ],
+      [
+        '/usr/sbin/runuser',
+        '-u',
+        'agent',
+        '--',
+        '/bin/sh',
+        '-c',
+        'remove',
         '/home/agent',
         '/home/agent/.config/native.json',
       ],

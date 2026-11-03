@@ -76,7 +76,8 @@ function workstationActions(
     {
       label: 'Configure a section',
       value: 'setup',
-      description: 'Choose plugins, network, Git, tools or another setup area',
+      description:
+        'Choose plugins, network, proxy, Git, tools or another setup area',
     },
     { label: `Copy ${agent.displayName} URL`, value: 'copy' },
     { label: 'Permanently terminate', value: 'terminate' },

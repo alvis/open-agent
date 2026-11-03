@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   defaultHarnesses,
   harnessChoices,
+  inferredOptions,
 } from '#application/input/selection/choices';
 
 import { dependencies } from '../../../mocks/dependencies';
@@ -27,5 +28,20 @@ describe('fn:defaultHarnesses', () => {
     };
 
     expect(defaultHarnesses(configured, 't3')).toEqual(['claude']);
+  });
+});
+
+describe('fn:inferredOptions', () => {
+  it('should infer the proxy from a supplied CLIProxyAPI hub', () => {
+    expect(
+      inferredOptions(dependencies, {
+        options: {},
+        sources: {
+          processEnv: { CLIPROXYAPI_BASE_URL: 'https://hub.example.test' },
+          fileEnv: {},
+          profile: {},
+        },
+      }),
+    ).toEqual({ isProxyEnabled: true });
   });
 });

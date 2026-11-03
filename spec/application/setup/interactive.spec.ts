@@ -24,7 +24,7 @@ import { OPEN_AGENT_VERSION } from '#kernel/version';
 import { environmentOf } from '../../fixtures/environment';
 import { driveInk } from '../../fixtures/ink';
 import { pluginFlags } from '../../fixtures/plugin-flags';
-import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
+import { DISABLED_NETWORK_PROFILE, profileWith } from '../../fixtures/profile';
 import { dependencies } from '../../mocks/dependencies';
 import {
   createFilesystemSprite,
@@ -45,7 +45,9 @@ vi.mock(
 );
 
 /** the profile the set-up workstation recorded */
-const PROFILE = DISABLED_NETWORK_PROFILE;
+const PROFILE = profileWith({
+  cliproxyapi: false,
+});
 
 /**
  * records the environment of a set-up workstation

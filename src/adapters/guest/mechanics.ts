@@ -1,4 +1,5 @@
 import { createEnvironmentAccess } from './environment/store';
+import { recordHub } from './hub';
 import { createInspection } from './inspection';
 import { writeWorkstationLabel } from './label';
 import {
@@ -94,5 +95,6 @@ export function createGuestMechanics(
       assertSupported: assertSupportedRelease,
       newerMetadata: newerMetadataRelease,
     },
+    hub: { record: recordHub },
   };
 }

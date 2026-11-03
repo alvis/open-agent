@@ -3,11 +3,15 @@ import type { GuestCommand } from '#domain/guest-command';
 import type {
   AgentId,
   DriverKind,
+  GatewayId,
   HarnessId,
   NetworkId,
   ProviderId,
 } from '#domain/ids';
-import type { ProviderPrerequisites } from '#domain/prerequisites';
+import type {
+  InputPrerequisite,
+  ProviderPrerequisites,
+} from '#domain/prerequisites';
 import type { WorkstationProfile } from '#domain/profile';
 import type { ServiceDefinition } from '#domain/services';
 import type { ToolSpec } from '#domain/tools';
@@ -142,10 +146,14 @@ export interface AcpAdapterSpec {
 export interface HarnessDeclaration<
   Name extends string = string,
 > extends DriverDescriptor<'harnesses', Name> {
+  /** can route through CLIProxyAPI */
+  supportsProxy: boolean;
   /** ACP adapter the harness provides, when it provides one */
   acpAdapter?: AcpAdapterSpec;
   /** environment the ACP agent passes when spawning the harness */
   spawnEnvironment: Readonly<Record<string, string>>;
+  /** model-gateway variables the harness owns, which a runtime environment must not override */
+  reservedEnvironment: readonly string[];
 }
 
 /** short-lived pairing credential an ACP agent issues */
@@ -195,6 +203,24 @@ export type NetworkDeclaration<Name extends string = string> = DriverDescriptor<
   Name
 >;
 
+/** caller-side inputs a model gateway needs, declared as data */
+export interface GatewayInputs {
+  /** turns gateway routing on or off, like --proxy and --no-proxy */
+  enabled: Pick<InputPrerequisite, 'environment'>;
+  /** hub URL, non-secret and allowed in the saved input profile */
+  baseUrl: InputPrerequisite;
+  /** client key the guest uses to reach the hub */
+  apiKey: InputPrerequisite;
+}
+
+/** model-gateway identity, declared as data */
+export interface GatewayDeclaration<
+  Name extends string = string,
+> extends DriverDescriptor<'gateways', Name> {
+  /** caller-side inputs, read and prompted for by core */
+  inputs: GatewayInputs;
+}
+
 /**
  * the data every registered driver declares, keyed by kind and identifier;
  * domain rules read it as a parameter, and the driver registry is assignable to it
@@ -204,4 +230,5 @@ export interface ProductDeclarations {
   harnesses: { [Id in HarnessId]: HarnessDeclaration<Id> };
   agents: { [Id in AgentId]: AgentDeclaration<Id, HarnessId> };
   networks: { [Id in NetworkId]: NetworkDeclaration<Id> };
+  gateways: { [Id in GatewayId]: GatewayDeclaration<Id> };
 }

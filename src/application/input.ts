@@ -11,7 +11,10 @@ import {
   missingProvisioningInputs,
 } from './input/missing';
 import { resolveInteractiveInputs } from './input/prompts';
-import { resolveCreateSelection } from './input/selection';
+import {
+  resolveCreateSelection,
+  selectionRequirements,
+} from './input/selection';
 import { suppliedSelectionViolations } from './input/selection/supplied';
 import { readInputSources } from './input/sources';
 
@@ -88,7 +91,12 @@ export async function resolveInputs(
     required,
     credentialStore: resolution.credentialStore,
   });
-  const missingBeforeRemote = [...missingProvisioningInputs(input, required)];
+  const missingBeforeRemote = [
+    ...missingProvisioningInputs(dependencies, input, required),
+    ...(required.includes('proxyUrl')
+      ? dependencies.registry.gateways.cliproxyapi.urlProblems(input.proxyUrl)
+      : []),
+  ];
   if (options.nonInteractive && missingBeforeRemote.length > 0) {
     return withLocalIdentity(dependencies, {
       options,
@@ -163,12 +171,16 @@ export async function resolveCreateInputs(
     interaction,
   });
   const profile = requireValidProfile(dependencies, resolution, options);
+  const required = selectionRequirements(dependencies, {
+    profile,
+    base: BASE_CREATE_INPUTS,
+  });
 
   return resolveInputs(dependencies, {
     options,
     interaction,
     requirementSelection: {
-      required: BASE_CREATE_INPUTS,
+      required,
       discoverGithub: true,
       profile,
       sources,

@@ -17,11 +17,12 @@ import type { WorkstationProfile } from '#domain/profile';
 import type { InputSources } from './sources';
 import type { ResolvedInputs } from './types';
 
-type SourceReader = (name: string) => string | undefined;
+type SourceReader = (name: string, explicit?: string) => string | undefined;
 
 interface SecretValues {
   providerToken?: string;
   providerTokenSource?: string;
+  proxyApiKey?: string;
   githubCandidate?: string;
 }
 
@@ -75,11 +76,18 @@ export async function resolveBaseInputs(
   });
   annotateSecretSources(options, secrets, {
     names,
+    proxyApiKey:
+      dependencies.registry.gateways.cliproxyapi.inputs.apiKey.environment,
     sources: sourceNames,
   });
   const input: ResolvedInputs = {
     name: options.name,
     providerToken: secrets.providerToken,
+    proxyUrl: value(
+      dependencies.registry.gateways.cliproxyapi.inputs.baseUrl.environment,
+      options.proxyUrl,
+    ),
+    proxyApiKey: secrets.proxyApiKey,
     profile,
     runtimeEnv,
     setupFile: sources.setupFile,
@@ -109,9 +117,9 @@ function declaredNames(
 }
 
 /**
- * selects non-secret values in credential file, process order
+ * selects non-secret values in explicit, credential file, process, profile order
  * @param options parsed selected credential file path
- * @param sources process and dotenv values
+ * @param sources process, dotenv, and profile values
  * @param names output map of selected source descriptions
  * @returns a precedence-aware value reader
  */
@@ -120,13 +128,15 @@ function sourceReader(
   sources: InputSources,
   names: Record<string, string>,
 ): SourceReader {
-  return (name) => {
+  return (name, explicit) => {
     const ordered = [
+      { value: explicit, description: 'flag' },
       {
         value: sources.fileEnv[name],
         description: options.credentialFile ?? 'credential file',
       },
       { value: sources.processEnv[name], description: 'process environment' },
+      { value: sources.profile[name], description: 'saved profile' },
     ];
     const selected = ordered.find((entry) => Boolean(entry.value));
     if (selected) {
@@ -162,30 +172,40 @@ async function resolveSelectedSecrets(
   params: ResolveSelectedSecretsParams,
 ): Promise<SecretValues> {
   const { options, value, profile, sources, credentialStore } = params;
-  const [provider, githubCandidate] = await runOperation(async () =>
-    Promise.all([
-      resolveProviderCredential(dependencies, {
-        options,
-        provider: profile.provider,
-        selection: {
-          reference: options.providerTokenSource,
-          sources,
-          credentialStore,
-        },
-      }),
-      options.github === false
-        ? Promise.resolve(undefined)
-        : resolveSecret(
-            dependencies,
-            options.githubTokenSource,
-            value('GH_TOKEN') ?? value('GITHUB_TOKEN'),
+  const [provider, proxyApiKey, githubCandidate] = await runOperation(
+    async () =>
+      Promise.all([
+        resolveProviderCredential(dependencies, {
+          options,
+          provider: profile.provider,
+          selection: {
+            reference: options.providerTokenSource,
+            sources,
+            credentialStore,
+          },
+        }),
+        resolveSecret(
+          dependencies,
+          options.proxyApiKeySource,
+          value(
+            dependencies.registry.gateways.cliproxyapi.inputs.apiKey
+              .environment,
           ),
-    ]),
+        ),
+        options.github === false
+          ? Promise.resolve(undefined)
+          : resolveSecret(
+              dependencies,
+              options.githubTokenSource,
+              value('GH_TOKEN') ?? value('GITHUB_TOKEN'),
+            ),
+      ]),
   );
 
   return {
     providerToken: provider.token,
     providerTokenSource: provider.source,
+    proxyApiKey,
     githubCandidate,
   };
 }
@@ -196,6 +216,7 @@ async function resolveSelectedSecrets(
  * @param secrets resolved secret presence
  * @param context declared credential names and the source descriptions updated in place
  * @param context.names credential names the selected drivers declare
+ * @param context.proxyApiKey environment variable the gateway reads its API key from
  * @param context.sources source descriptions keyed by environment name
  */
 function annotateSecretSources(
@@ -203,12 +224,16 @@ function annotateSecretSources(
   secrets: SecretValues,
   context: {
     names: DeclaredNames;
+    proxyApiKey: string;
     sources: Record<string, string>;
   },
 ): void {
-  const { names, sources } = context;
+  const { names, proxyApiKey, sources } = context;
   if (secrets.providerTokenSource) {
     sources[names.provider.environment] = secrets.providerTokenSource;
+  }
+  if (options.proxyApiKeySource) {
+    sources[proxyApiKey] = 'explicit secret reference';
   }
   if (options.githubTokenSource) {
     sources.GH_TOKEN = 'explicit secret reference';

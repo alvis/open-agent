@@ -16,6 +16,13 @@ export const CLAUDE_SPAWN_ENVIRONMENT: Readonly<Record<string, string>> = {
   CLAUDE_CONFIG_DIR,
 };
 
+/** model-gateway variables Claude Code reads, owned by its proxy configuration */
+export const CLAUDE_RESERVED_ENVIRONMENT = [
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+] as const;
+
 /** shape of the Claude CLI's plugin and marketplace inventories */
 export const CLAUDE_INVENTORY: PluginInventory = {
   name: 'claude',

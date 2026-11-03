@@ -47,6 +47,16 @@ interface EnvironmentReader {
    */
   list(environment: string): string[] | undefined;
   /**
+   * reads a boolean
+   * @param flag explicit flag value
+   * @param environment environment variable
+   * @returns the boolean when supplied, and why a supplied value is unreadable
+   */
+  flag(
+    flag: boolean | undefined,
+    environment: string,
+  ): Resolved<boolean | undefined>;
+  /**
    * reads a whole number
    * @param flag explicit flag value
    * @param environment environment variable
@@ -63,7 +73,7 @@ interface EnvironmentReader {
  * @param sources process and credential file values
  * @param scope whether environment values apply to this run
  * @param scope.isEnabled false when only flags apply
- * @returns accessors for ids, lists and whole numbers
+ * @returns accessors for ids, lists, booleans and whole numbers
  */
 export function environmentReader(
   sources: InputSources,
@@ -83,10 +93,40 @@ export function environmentReader(
         ?.split(',')
         .map((entry) => entry.trim())
         .filter(Boolean),
+    flag: (flag, environment) =>
+      flag === undefined
+        ? parseBoolean(environment, raw(environment))
+        : { value: flag, problems: [] },
     number: (flag, environment) =>
       flag === undefined
         ? parseWholeNumber(environment, raw(environment))
         : { value: flag, problems: [] },
+  };
+}
+
+/**
+ * parses a tri-state environment boolean
+ * @param name environment variable
+ * @param value raw value
+ * @returns the boolean, or undefined with a problem when the value is not a recognised boolean
+ */
+function parseBoolean(
+  name: string,
+  value: string | undefined,
+): Resolved<boolean | undefined> {
+  if (value === undefined) {
+    return { value: undefined, problems: [] };
+  }
+  if (/^(?:1|true|yes|on)$/iu.test(value)) {
+    return { value: true, problems: [] };
+  }
+  if (/^(?:0|false|no|off)$/iu.test(value)) {
+    return { value: false, problems: [] };
+  }
+
+  return {
+    value: undefined,
+    problems: [`${name} must be a boolean value (true or false)`],
   };
 }
 
@@ -146,6 +186,13 @@ export interface Prompts {
     choices: ReadonlyArray<InteractionChoice<V>>,
   ): Promise<V[] | undefined>;
   /**
+   * asks a yes/no question
+   * @param message prompt label
+   * @param defaultAnswer answer Enter keeps
+   * @returns the answer
+   */
+  confirm(message: string, defaultAnswer: boolean): Promise<boolean>;
+  /**
    * asks for a whole number
    * @param message prompt label
    * @param defaultValue value Enter keeps
@@ -180,6 +227,8 @@ export function activePrompts(context: SelectionContext): Prompts | undefined {
       choices.length > 1
         ? interaction.multiselect({ message }, choices)
         : undefined,
+    confirm: async (message, defaultAnswer) =>
+      interaction.confirm({ message, defaultAnswer }),
     number: async (message, defaultValue, rule = MINUTES_RULE) => {
       const floor =
         rule.minimum > 0 ? ` of at least ${String(rule.minimum)}` : '';
@@ -196,4 +245,16 @@ export function activePrompts(context: SelectionContext): Prompts | undefined {
       );
     },
   };
+}
+
+/**
+ * tells whether a process or credential file value is nonblank
+ * @param sources process and credential file values
+ * @param name environment variable
+ * @returns true when either source has text
+ */
+export function hasValue(sources: InputSources, name: string): boolean {
+  return [sources.processEnv[name], sources.fileEnv[name]].some((value) =>
+    Boolean(value?.trim()),
+  );
 }

@@ -1,9 +1,16 @@
 import { requireValidProfile, resolveInputs } from '#application/input';
-import { resolveSetupSelection } from '#application/input/selection';
+import {
+  resolveSetupSelection,
+  selectionRequirements,
+} from '#application/input/selection';
 import { CommandFault } from '#kernel/faults';
 import { promptUnavailableDetail, traceStage } from '#kernel/operation';
 
-import { persistSetupProfile, profileUpdateSelected } from './integrations';
+import {
+  persistSetupProfile,
+  profileUpdateSelected,
+  targetedProfile,
+} from './integrations';
 import {
   assertSameWorkstationKind,
   readSetupEnvironment,
@@ -93,6 +100,8 @@ interface ResolvedSetup {
   profile: WorkstationProfile;
   /** whether the run writes the profile back */
   persistsProfile: boolean;
+  /** the part of the profile the section targets */
+  targeted: ReturnType<typeof targetedProfile>;
   /** whether this run moves the agent's installed release */
   isReleaseChanged: boolean;
   /** the inputs the run needs, resolved */
@@ -105,6 +114,8 @@ interface SetupInputsParams {
   setup: SetupPreparationParams;
   /** the validated profile this run applies */
   profile: WorkstationProfile;
+  /** whether the run writes the profile back and what the section targets */
+  state: Pick<ResolvedSetup, 'persistsProfile' | 'targeted'>;
 }
 
 /**
@@ -208,7 +219,7 @@ async function persistPreparedProfile(
     await persistSetupProfile(dependencies, {
       guest,
       profile: resolved.profile,
-      context: { mutation },
+      context: { mutation, expected: resolved.recorded },
     });
   }
 }
@@ -262,20 +273,25 @@ async function reconnect(
 /**
  * resolves every input the setup run needs, refusing when any stays unresolved
  * @param dependencies the registered drivers, the profile defaults, what this computer provides
- * @param params the call's inputs: setup, profile
+ * @param params the call's inputs: setup, profile, state
  * @returns the resolved inputs
  */
 async function resolveSetupInputs(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults' | 'host'>,
   params: SetupInputsParams,
 ): Promise<ResolvedSetup['input']> {
-  const { setup, profile } = params;
+  const { setup, profile, state } = params;
   const { options, interaction, sources } = setup;
   const input = await resolveInputs(dependencies, {
     options,
     interaction,
     requirementSelection: {
-      required: [],
+      required: state.persistsProfile
+        ? selectionRequirements(dependencies, {
+            profile: state.targeted,
+            base: [],
+          })
+        : [],
       profile,
       sources,
     },
@@ -320,9 +336,12 @@ async function resolveSetup(
     options,
   );
   const persistsProfile = profileUpdateSelected(section, profile, recorded);
+  const targeted = targetedProfile(section, profile);
+  const state = { persistsProfile, targeted };
   const input = await resolveSetupInputs(dependencies, {
     setup: params,
     profile,
+    state,
   });
 
   return {
@@ -330,6 +349,7 @@ async function resolveSetup(
     recorded,
     profile,
     persistsProfile,
+    targeted,
     isReleaseChanged: await isAgentReleaseChanged(dependencies, {
       section,
       connection: params.connection,

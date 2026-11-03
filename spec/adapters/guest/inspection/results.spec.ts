@@ -18,6 +18,7 @@ describe('fn:settleInspectionResults', () => {
       rejected,
       rejected,
       rejected,
+      rejected,
     ]);
 
     expect(result).toEqual({
@@ -29,10 +30,14 @@ describe('fn:settleInspectionResults', () => {
         skipped: false,
         reason: 'network probe unavailable',
       },
-      probeFailures: ['services', 'network', 'native'].map((probe) => ({
-        probe,
-        reason: `${probe} probe unavailable`,
-      })),
+      hub: {
+        reachable: false,
+        skipped: false,
+        reason: 'proxy probe unavailable',
+      },
+      probeFailures: ['services', 'network', 'native', 'proxy'].map(
+        (probe) => ({ probe, reason: `${probe} probe unavailable` }),
+      ),
     });
   });
 
@@ -46,7 +51,12 @@ describe('fn:settleInspectionResults', () => {
     const rejected = { status: 'rejected', reason: error } as const;
 
     expect(() =>
-      settleInspectionResults(RECORDED, [rejected, rejected, rejected]),
+      settleInspectionResults(RECORDED, [
+        rejected,
+        rejected,
+        rejected,
+        rejected,
+      ]),
     ).toThrow(error);
   });
 });

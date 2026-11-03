@@ -2,6 +2,7 @@ import { awakeHookCommand } from '#application/catalog/awake';
 import {
   configureHarnesses,
   harnessDrivers,
+  proxyRoute,
 } from '#application/catalog/harnesses';
 import { networkDriver } from '#application/catalog/networks';
 import { installWorkstation } from '#application/installation';
@@ -24,6 +25,8 @@ interface NewWorkstationConfiguration {
   hostname: string;
   /** validated selection the workstation is created with */
   profile: WorkstationProfile;
+  proxyUrl?: string;
+  proxyApiKey?: string;
   githubToken?: string;
   githubHost?: string;
   gitIdentity?: GitIdentity;
@@ -139,7 +142,7 @@ async function enrolAndConfigure(
 }
 
 /**
- * applies selected native account and plugin configuration
+ * applies selected native account, routing, and plugin configuration
  * @param dependencies the registered drivers, the guest mechanics
  * @param guest guest channel of the managed workstation
  * @param configuration selected non-secret and transient secret inputs
@@ -175,6 +178,14 @@ async function configureNative(
   }
   await configureHarnesses(guest, {
     drivers,
+    proxy: proxyRoute({
+      enabled: profile.options.isProxyEnabled,
+      gateway: dependencies.registry.gateways.cliproxyapi,
+      url: configuration.proxyUrl,
+      apiKey: configuration.proxyApiKey,
+      drivers,
+    }),
+    hub: dependencies.guest.hub,
     awakeHook: awakeHookCommand(dependencies.guest.facts),
   });
   for (const driver of drivers) {

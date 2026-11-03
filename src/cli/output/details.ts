@@ -124,6 +124,7 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
     'unavailable probes': inspection.probeFailures,
     'services': serviceDetails(inspection.services),
     'network': inspection.network,
+    'cliproxyapi': inspection.hub,
     ...Object.fromEntries(
       harnessDrivers(registry, harnessIds()).map((driver) => {
         const state = asRecord(agentState[driver.id]);

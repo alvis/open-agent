@@ -170,6 +170,7 @@ export function assertRuntimeEnv(
   const forbidden = new Set([
     ...driverCredentialNames(declarations),
     ...harnessEnvironmentNames(declarations, HARNESS_IDS),
+    declarations.gateways.cliproxyapi.inputs.apiKey.environment,
     'GH_TOKEN',
     'GITHUB_TOKEN',
     'HOME',

@@ -8,7 +8,7 @@ import {
 } from '#application/input/prompts';
 
 import { driveInk } from '../../fixtures/ink';
-import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
+import { DISABLED_NETWORK_PROFILE, profileWith } from '../../fixtures/profile';
 
 import { dependencies, dependenciesWith } from '../../mocks/dependencies';
 
@@ -213,6 +213,62 @@ describe('fn:resolveInteractiveInputs', () => {
     });
 
     expect(input.name).toBeUndefined();
+  });
+  it('should collect the selected gateway and secret inputs in dependency order', async () => {
+    const input = emptyInput();
+    input.profile = profileWith({ cliproxyapi: true });
+    const asked: string[] = [];
+    const nameChecks: Array<string | undefined> = [];
+    const interaction: Interaction = {
+      input: async ({ message, validate }) => {
+        asked.push(message);
+        if (message === 'Workstation name') {
+          nameChecks.push(validate?.('Bad_Name'), validate?.('valid-name'));
+
+          return 'valid-name';
+        }
+
+        return 'https://proxy.example.test';
+      },
+      secret: async ({ message, validate }) => {
+        asked.push(message);
+        if (message.includes('Sprites')) {
+          expect(validate?.('provider-token')).toBeUndefined();
+
+          return 'provider-token';
+        }
+
+        return 'proxy-key';
+      },
+      select: async () => {
+        throw new Error('Unexpected choice prompt');
+      },
+      multiselect: async () => {
+        throw new Error('Unexpected multiple-choice prompt');
+      },
+      confirm: async () => false,
+      progress: () => undefined,
+      status: () => undefined,
+    };
+
+    await resolveInteractiveInputs(dependencies, input, {
+      options: { localCredentials: false },
+      interaction,
+      required: ['name', 'proxyUrl', 'providerToken', 'proxyApiKey'],
+    });
+
+    expect(nameChecks).toEqual([
+      expect.stringContaining('lowercase DNS label'),
+      undefined,
+    ]);
+    expect(asked).toHaveLength(4);
+    expect(input).toMatchObject({
+      name: 'valid-name',
+      proxyUrl: 'https://proxy.example.test',
+      providerToken: 'provider-token',
+      proxyApiKey: 'proxy-key',
+      isProviderTokenEntered: true,
+    });
   });
   it('should keep an invalid workstation name in the real Ink input prompt', async () => {
     const input = emptyInput();

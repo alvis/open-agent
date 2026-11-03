@@ -58,7 +58,7 @@ export class Secret {
 
   /**
    * wraps guest file contents that hold a credential the host resolved, such
-   * as a file that embeds a runtime variable; the credential
+   * as a native configuration file that embeds a gateway key; the credential
    * within is registered for redaction already, so the contents are not
    * @param contents file contents that hold a resolved credential
    * @returns the contents, delivered only as a secret

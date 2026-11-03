@@ -1,3 +1,4 @@
+import type { HubStatus } from '#domain/observations/hub';
 import type { NativeConfigurationInspection } from '#domain/observations/native';
 import type { NetworkStatus } from '#domain/observations/network';
 import type { GuestServiceState } from '#domain/services';
@@ -11,6 +12,7 @@ export interface GuestInspection {
   services: GuestServiceState[];
   network: NetworkStatus;
   native?: NativeConfigurationInspection;
+  hub: HubStatus;
   /** the environment setup recorded */
   environment: GuestEnvironment;
   /** what the updater recorded about its last run; absent before it ran */
@@ -22,6 +24,6 @@ export interface GuestInspection {
 
 /** a live probe that could not establish its current guest state */
 export interface InspectionProbeFailure {
-  probe: 'services' | 'network' | 'native';
+  probe: 'services' | 'network' | 'native' | 'proxy';
   reason: string;
 }

@@ -54,8 +54,8 @@ export async function writeGuestFile(
 
 /**
  * hands a written file's contents to the guest: as a secret input when they
- * hold a credential the host resolved, such as a runtime variable, so it
- * reaches the guest only through a setup session's secret
+ * hold a credential the host resolved, such as a gateway key or a runtime
+ * variable, so it reaches the guest only through a setup session's secret
  * input, and as text otherwise
  * @param contents the file's contents
  * @returns the write command's input or secret
@@ -110,4 +110,19 @@ export async function guestFileExists(
   path: string,
 ): Promise<boolean> {
   return runBoundedIO(async () => guest.exists(path));
+}
+
+/**
+ * removes a root-controlled file, doing nothing when it is absent
+ * @param guest exact target guest
+ * @param path root-controlled guest path
+ */
+export async function removeGuestFile(
+  guest: GuestChannel,
+  path: string,
+): Promise<void> {
+  assertRootFilePath(path);
+  await runGuest(guest, ['rm', '-f', '--', path], {
+    step: 'guest file removal',
+  });
 }

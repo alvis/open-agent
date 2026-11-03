@@ -15,6 +15,8 @@ import type { HarnessInspection } from '#domain/observations/harness';
 
 const OBSERVATION = {
   configuration: {
+    gatewayConfigured: false,
+    modelDiscoveryEnabled: false,
     pluginListAvailable: true,
     awakeHooksInstalled: false,
     authentication: 'native',

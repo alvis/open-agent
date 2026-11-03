@@ -128,6 +128,8 @@ const OBSERVED = {
   },
   native: {
     claude: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
       pluginListAvailable: false,
       awakeHooksInstalled: true,
       authentication: 'not-configured',
@@ -144,6 +146,7 @@ const OBSERVED = {
       },
     },
   },
+  hub: { skipped: true, reachable: false },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
   governor: { recorded: false, reason: 'no awake event has been recorded yet' },
@@ -164,6 +167,8 @@ const observed = {
   },
   native: {
     claude: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
       pluginListAvailable: false,
       awakeHooksInstalled: true,
       authentication: 'not-configured',
@@ -180,6 +185,7 @@ const observed = {
       },
     },
   },
+  hub: { skipped: true, reachable: false },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
   governor: { recorded: false, reason: 'no awake event has been recorded yet' },

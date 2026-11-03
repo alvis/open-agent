@@ -319,7 +319,10 @@ describe('fn:persistSetupProfile tools section', () => {
     await persistSetupProfile(dependencies, {
       guest: guestOf(sprite),
       profile: withDueDays(3),
-      context: { mutation },
+      context: {
+        mutation,
+        expected: DISABLED_NETWORK_PROFILE,
+      },
     });
 
     expect({
@@ -348,7 +351,7 @@ describe('fn:profileUpdateSelected', () => {
     },
   );
 
-  it.each(['network', 'all'] as const)(
+  it.each(['network', 'proxy', 'all'] as const)(
     'should report the %s section as changing the profile whatever the intervals',
     (section) => {
       expect(profileUpdateSelected(section, recorded, recorded)).toBe(true);

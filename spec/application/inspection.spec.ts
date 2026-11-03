@@ -34,7 +34,7 @@ import { OPEN_AGENT_VERSION } from '#kernel/version';
 
 import { environmentOf } from '../fixtures/environment';
 import { driveInk } from '../fixtures/ink';
-import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
+import { profileWith } from '../fixtures/profile';
 
 import { dependencies } from '../mocks/dependencies';
 import {
@@ -59,7 +59,9 @@ vi.mock(
 );
 
 /** the profile the installed workstation recorded */
-const PROFILE = DISABLED_NETWORK_PROFILE;
+const PROFILE = profileWith({
+  cliproxyapi: false,
+});
 
 /**
  * creates a managed SDK boundary with one installed disposable workstation
@@ -342,7 +344,10 @@ describe('cmd:show', () => {
         currentReadiness: {
           ready: false,
           failures: expect.arrayContaining(['T3 service']),
-          skipped: expect.arrayContaining(['private network']),
+          skipped: expect.arrayContaining([
+            'private network',
+            'CLIProxyAPI gateway',
+          ]),
         },
       },
     });

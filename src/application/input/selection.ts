@@ -2,6 +2,7 @@ import {
   agentChoices,
   defaultHarnesses,
   harnessChoices,
+  inferredOptions,
   networkChoices,
   providerChoices,
 } from './selection/choices';
@@ -20,6 +21,7 @@ import type { SelectionField } from '#domain/selection-inputs';
 
 import type { Prompts, Resolved, SelectionContext } from './selection/sources';
 import type { SuppliedSelection } from './selection/supplied';
+import type { RequiredInput } from './types';
 
 /** what an existing workstation's setup run reads before reaching the workstation */
 interface SetupReadContext extends Omit<SelectionContext, 'interaction'> {
@@ -56,6 +58,7 @@ const CREATE_FIELDS: readonly SelectionField[] = [
   'agentRelease',
   'harnesses',
   'network',
+  'isProxyEnabled',
   'idleTimeoutMinutes',
   'holdMaxMinutes',
   'updateDueIntervalDays',
@@ -69,12 +72,14 @@ const SECTION_FIELDS: Readonly<
     'agentRelease',
     'harnesses',
     'network',
+    'isProxyEnabled',
     'idleTimeoutMinutes',
     'holdMaxMinutes',
     'updateDueIntervalDays',
   ],
   agent: ['agentRelease'],
   network: ['network'],
+  proxy: ['isProxyEnabled'],
   tools: ['updateDueIntervalDays'],
 };
 
@@ -148,6 +153,7 @@ export async function resolveCreateSelection(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
   context: SelectionContext,
 ): Promise<SelectionResolution> {
+  const { options, sources } = context;
   const { value: supplied, problems } = readCreateSelection(
     dependencies,
     context,
@@ -189,7 +195,7 @@ export async function resolveCreateSelection(
       harnesses,
       network,
       options: await resolveOptions(dependencies, {
-        selected: { provider, agent },
+        selected: { provider, agent, harnesses },
         supplied: {
           ...supplied.options,
           ...machine,
@@ -198,6 +204,7 @@ export async function resolveCreateSelection(
         fields: CREATE_FIELDS,
         prompts,
         base: dependencies.defaults.options,
+        inferred: inferredOptions(dependencies, { options, sources }),
       }),
     },
     problems,
@@ -256,16 +263,46 @@ export async function resolveSetupSelection(
         selected: {
           provider: recorded.provider,
           agent: recorded.agent,
+          harnesses,
         },
         supplied: supplied.options,
         fields: sectionFields(section),
         prompts,
         base: recorded.options,
+        enables: section === 'proxy' ? 'proxy' : undefined,
       }),
     },
     problems: [],
     isIdleTimeoutRequested: supplied.options.idleTimeoutMinutes !== undefined,
   };
+}
+
+/** the named inputs of selection requirements */
+export interface SelectionRequirementsParams {
+  /** resolved selection */
+  profile: WorkstationProfile;
+  /** requirements independent of the selection */
+  base?: readonly RequiredInput[];
+}
+
+/**
+ * lists the inputs the selected options need before provisioning
+ * @param dependencies the registered drivers
+ * @param params the call's inputs: profile, base
+ * @returns ordered requirements for aggregate preflight validation
+ */
+export function selectionRequirements(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  params: SelectionRequirementsParams,
+): RequiredInput[] {
+  const { profile, base = [] } = params;
+
+  return [
+    ...base,
+    ...(profile.options.isProxyEnabled
+      ? (['proxyUrl', 'proxyApiKey'] as const)
+      : []),
+  ];
 }
 
 /**

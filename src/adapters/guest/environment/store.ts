@@ -48,6 +48,8 @@ export function createEnvironmentAccess(
     write,
     writeProfile: async (guest, profile) =>
       writeGuestProfile(declarations, guest, profile),
+    assertProfile: async (guest, expected) =>
+      assertGuestProfile(declarations, guest, expected),
     readUpdateStatus,
   };
 }
@@ -99,7 +101,7 @@ async function writeGuestEnvironment(
 
 /**
  * records a profile whose change no tool, service or job follows, such as
- * the update due interval
+ * the model gateway toggle or the update due interval
  * @param declarations the data every registered driver declares
  * @param guest target guest
  * @param profile the profile to record
@@ -115,6 +117,29 @@ async function writeGuestProfile(
     profile,
     schedule: { dueDays: profile.options.updateDueIntervalDays },
   });
+}
+
+/**
+ * refuses to go on when the recorded integration choices changed while
+ * inputs were being collected
+ * @param declarations the data every registered driver declares
+ * @param guest target guest
+ * @param expected the profile the inputs were collected for
+ * @throws {CommandFault} when the gateway choice differs
+ */
+async function assertGuestProfile(
+  declarations: ProductDeclarations,
+  guest: GuestChannel,
+  expected: WorkstationProfile,
+): Promise<void> {
+  const { profile } = await readGuestEnvironment(declarations, guest);
+  if (profile.options.isProxyEnabled !== expected.options.isProxyEnabled) {
+    throw new CommandFault({
+      code: 'CONFLICT',
+      message:
+        'Guest integration choices changed while inputs were collected; run the command again.',
+    });
+  }
 }
 
 /**

@@ -12,6 +12,8 @@ export interface ResolvedInputs {
   providerToken?: string;
   /** the provider credential was entered at a prompt in this run and is not saved yet */
   isProviderTokenEntered?: boolean;
+  proxyUrl?: string;
+  proxyApiKey?: string;
   githubToken?: string;
   gitIdentity?: GitIdentity;
   /** driver selection and options this run resolved */
@@ -28,4 +30,9 @@ export interface ResolvedInputs {
 
 /** inputs a workflow needs before its first remote mutation */
 export type RequiredInput =
-  'name' | 'providerToken' | 'gitIdentity' | 'githubToken';
+  | 'name'
+  | 'providerToken'
+  | 'proxyUrl'
+  | 'proxyApiKey'
+  | 'gitIdentity'
+  | 'githubToken';

@@ -40,6 +40,7 @@ describe('fn:exposeWhenServing readiness', () => {
     const inspection = {
       services: [],
       network: { online: false, skipped: true },
+      hub: { reachable: false, skipped: true },
       environment: environmentOf(profile),
       probeFailures: [],
       governor: { recorded: false, reason: 'not recorded' },

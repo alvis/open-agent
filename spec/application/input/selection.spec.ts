@@ -4,6 +4,7 @@ import {
   readSetupSelection,
   resolveCreateSelection,
   resolveSetupSelection,
+  selectionRequirements,
 } from '#application/input/selection';
 import { suppliedSelectionViolations } from '#application/input/selection/supplied';
 import { defaults } from '#composition/defaults';
@@ -21,7 +22,7 @@ import type {
 } from '#application/ports/interaction';
 import type { WorkstationProfile } from '#domain/profile';
 
-const empty: InputSources = { processEnv: {}, fileEnv: {} };
+const empty: InputSources = { processEnv: {}, fileEnv: {}, profile: {} };
 
 /**
  * reads a setup run's supplied values, then merges them with the recorded profile
@@ -107,6 +108,7 @@ describe('fn:resolveCreateSelection', () => {
       'Minimum CPUs',
       'Minimum memory (GB)',
       'Release channel',
+      'Route harnesses through CLIProxyAPI?',
       'Suspend after idle (minutes, 0 = never)',
     ]);
     expect(candidate).toMatchObject({
@@ -128,6 +130,7 @@ describe('fn:resolveCreateSelection', () => {
         release: 'stable',
         harness: ['claude'],
         network: 'none',
+        proxy: false,
         idleMinutes: 0,
       },
       sources: empty,
@@ -142,6 +145,7 @@ describe('fn:resolveCreateSelection', () => {
     const sources: InputSources = {
       processEnv: { OPEN_AGENT_IDLE_MINUTES: '15' },
       fileEnv: { OPEN_AGENT_IDLE_MINUTES: '45', OPEN_AGENT_NETWORK: 'none' },
+      profile: {},
     };
 
     const fromEnvironment = await resolveCreateSelection(dependencies, {
@@ -164,6 +168,7 @@ describe('fn:resolveCreateSelection', () => {
       sources: {
         processEnv: { OPEN_AGENT_IDLE_MINUTES: 'soon' },
         fileEnv: {},
+        profile: {},
       },
     });
 
@@ -177,6 +182,7 @@ describe('fn:resolveCreateSelection', () => {
     const sources: InputSources = {
       processEnv: { OPEN_AGENT_UPDATE_DUE_DAYS: '3' },
       fileEnv: { OPEN_AGENT_UPDATE_DUE_DAYS: '9' },
+      profile: {},
     };
 
     const fromSources = await resolveCreateSelection(dependencies, {
@@ -207,6 +213,7 @@ describe('fn:resolveCreateSelection', () => {
       sources: {
         processEnv: { OPEN_AGENT_UPDATE_DUE_DAYS: '1.5' },
         fileEnv: {},
+        profile: {},
       },
     });
 
@@ -215,26 +222,43 @@ describe('fn:resolveCreateSelection', () => {
     ]);
   });
 
-  it('should report every unreadable number together without prompting', async () => {
+  it('should report every unreadable boolean and number together without prompting', async () => {
     const { interaction, asked } = recordingInteraction();
 
     const { problems } = await resolveCreateSelection(dependencies, {
       options: {},
       sources: {
         processEnv: {
-          OPEN_AGENT_IDLE_MINUTES: 'later',
+          CLIPROXYAPI_ENABLED: 'sometimes',
           OPEN_AGENT_HOLD_MAX_MINUTES: 'soon',
         },
         fileEnv: {},
+        profile: {},
       },
       interaction,
     });
 
     expect(asked).toEqual([]);
     expect(problems).toEqual([
-      'OPEN_AGENT_IDLE_MINUTES must be a whole number',
+      'CLIPROXYAPI_ENABLED must be a boolean value (true or false)',
       'OPEN_AGENT_HOLD_MAX_MINUTES must be a whole number',
     ]);
+  });
+
+  it('should default an option prompt to the value its inputs imply', async () => {
+    const { interaction } = recordingInteraction();
+
+    const { candidate } = await resolveCreateSelection(dependencies, {
+      options: {},
+      sources: {
+        processEnv: { CLIPROXYAPI_BASE_URL: 'https://hub.example.test' },
+        fileEnv: {},
+        profile: {},
+      },
+      interaction,
+    });
+
+    expect(candidate.options.isProxyEnabled).toBe(true);
   });
 });
 
@@ -247,6 +271,7 @@ describe('fn:resolveSetupSelection', () => {
       sources: {
         processEnv: { OPEN_AGENT_NETWORK: 'unregistered-network' },
         fileEnv: {},
+        profile: {},
       },
       recorded,
       section: 'git',
@@ -260,15 +285,36 @@ describe('fn:resolveSetupSelection', () => {
     });
   });
 
-  it('should keep the recorded idle minutes when only the network section is targeted', async () => {
+  it('should keep the recorded network when only the proxy section is targeted', async () => {
+    const recorded = defaultProfile(defaults);
+
+    const { candidate } = await resolveSetup({
+      options: { nonInteractive: true, proxy: false },
+      sources: {
+        processEnv: { OPEN_AGENT_IDLE_MINUTES: '5' },
+        fileEnv: {},
+        profile: {},
+      },
+      recorded,
+      section: 'proxy',
+    });
+
+    expect(candidate.network).toBe('none');
+    expect(candidate.options).toEqual({
+      ...recorded.options,
+      isProxyEnabled: false,
+    });
+  });
+
+  it('should keep the recorded proxy when only the network section is targeted', async () => {
     const profile = defaultProfile(defaults);
     const recorded = {
       ...profile,
-      options: { ...profile.options, idleTimeoutMinutes: 9 },
+      options: { ...profile.options, isProxyEnabled: true },
     };
 
     const { candidate } = await resolveSetup({
-      options: { nonInteractive: true, idleMinutes: 0 },
+      options: { nonInteractive: true, proxy: false },
       sources: empty,
       recorded,
       section: 'network',
@@ -281,18 +327,16 @@ describe('fn:resolveSetupSelection', () => {
     const { value, problems } = readSetupSelection(dependencies, {
       options: {},
       sources: {
-        processEnv: {
-          OPEN_AGENT_UPDATE_DUE_DAYS: '3',
-          OPEN_AGENT_IDLE_MINUTES: '5',
-        },
+        processEnv: { CLIPROXYAPI_ENABLED: 'true' },
         fileEnv: {},
+        profile: {},
       },
-      section: 'tools',
+      section: 'proxy',
     });
 
     expect(problems).toEqual([]);
     expect(value.options).toEqual({
-      updateDueIntervalDays: 3,
+      isProxyEnabled: true,
       idleTimeoutMinutes: undefined,
       holdMaxMinutes: undefined,
     });
@@ -322,13 +366,15 @@ describe('fn:resolveSetupSelection update intervals', () => {
       sources: {
         processEnv: { OPEN_AGENT_UPDATE_DUE_DAYS: 'often' },
         fileEnv: {},
+        profile: {},
       },
-      section: 'git',
+      section: 'proxy',
     });
 
     expect({ problems, options: value.options }).toEqual({
       problems: [],
       options: {
+        isProxyEnabled: undefined,
         idleTimeoutMinutes: undefined,
         holdMaxMinutes: undefined,
         updateDueIntervalDays: undefined,
@@ -432,6 +478,16 @@ describe('fn:suppliedSelectionViolations', () => {
     ]);
   });
 
+  it('should leave a capability that depends on the recorded profile for later', () => {
+    const violations = suppliedSelectionViolations(
+      dependencies,
+      { options: { isProxyEnabled: true } },
+      { isPairingRequested: false },
+    );
+
+    expect(violations).toEqual([]);
+  });
+
   it('should report an unknown supplied driver id', () => {
     const violations = suppliedSelectionViolations(
       dependencies,
@@ -442,5 +498,16 @@ describe('fn:suppliedSelectionViolations', () => {
     expect(violations.map(({ message }) => message)).toEqual([
       expect.stringContaining('Unknown ACP agent "nope"'),
     ]);
+  });
+});
+
+describe('fn:selectionRequirements', () => {
+  it('should add no input for a selection without the proxy', () => {
+    expect(
+      selectionRequirements(dependencies, {
+        profile: defaultProfile(defaults),
+        base: ['providerToken'],
+      }),
+    ).toEqual(['providerToken']);
   });
 });

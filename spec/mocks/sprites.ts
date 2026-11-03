@@ -434,6 +434,11 @@ async function emulateGuestFiles(
   if (home) {
     return emulateHomeFile(root, home, input);
   }
+  if (command[0] === 'rm' && command[1] === '-f' && command[2] === '--') {
+    await rm(join(root, command[3] ?? ''), { force: true });
+
+    return succeeded();
+  }
   if (releasePath !== undefined) {
     try {
       return succeeded(await readFile(join(root, releasePath), 'utf8'));
@@ -542,6 +547,10 @@ async function emulateHomeFile(
       // the program replaces the file with a private temporary one
       await writeFile(target, input ?? '');
       await chmod(target, PRIVATE_FILE_MODE);
+
+      return succeeded();
+    case 'remove':
+      await rm(target, { force: true });
 
       return succeeded();
     default:

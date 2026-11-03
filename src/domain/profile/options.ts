@@ -1,4 +1,7 @@
-import { selectionLabel } from '#domain/selection-inputs';
+import { proxySelectionLabel, selectionLabel } from '#domain/selection-inputs';
+
+import type { ProductDeclarations } from '#domain/declarations';
+import type { HarnessId } from '#domain/ids';
 
 import type { ProfileOptions, ProfileViolation } from '../profile';
 
@@ -16,9 +19,11 @@ interface OptionBound {
   unit: 'minutes' | 'days' | 'CPUs' | 'GB';
 }
 
-/** option values to validate */
+/** option values and selected drivers to validate */
 export interface OptionViolationsParams {
+  declarations: ProductDeclarations;
   options: ProfileOptions;
+  selected: { harnesses: readonly HarnessId[] };
 }
 
 /** longest update due interval: one year */
@@ -60,15 +65,31 @@ export const OPTION_BOUNDS: readonly OptionBound[] = [
 ];
 
 /**
- * checks option bounds
- * @param params options to check
+ * checks option bounds and that every enabled option has a declaring driver
+ * @param params options and known harness ids
+ * @param params.declarations the data every registered driver declares
  * @param params.options requested options
- * @returns violations for out-of-bound options
+ * @param params.selected harnesses are known requested ids
+ * @returns violations for out-of-bound or capability-less options
  */
 export function optionViolations({
+  declarations,
   options,
+  selected,
 }: OptionViolationsParams): ProfileViolation[] {
+  const { harnesses } = selected;
+
   return [
+    ...(options.isProxyEnabled &&
+    !harnesses.some((id) => declarations.harnesses[id].supportsProxy)
+      ? [
+          {
+            code: 'undeclared-capability' as const,
+            message: `${proxySelectionLabel(declarations)} needs a selected harness that supports CLIProxyAPI`,
+            fields: ['harnesses' as const, 'isProxyEnabled' as const],
+          },
+        ]
+      : []),
     ...OPTION_BOUNDS.filter(
       ({ key, minimum, maximum }) =>
         !Number.isSafeInteger(options[key]) ||

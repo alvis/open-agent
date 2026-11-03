@@ -54,6 +54,8 @@ const inspection: GuestInspection = {
   },
   native: {
     claude: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
       pluginListAvailable: false,
       awakeHooksInstalled: false,
       authentication: 'not-configured',
@@ -64,6 +66,11 @@ const inspection: GuestInspection = {
         evidence: { sdkPluginLoading: 'not-verified' },
       },
     },
+  },
+  hub: {
+    skipped: true,
+    reachable: false,
+    reason: 'CLIProxyAPI is disabled',
   },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
@@ -377,6 +384,7 @@ describe('fn:prepareResult', () => {
           skipped: ['private network'],
           probeFailures: [],
           network: inspection.network,
+          hub: inspection.hub,
           native: inspection.native,
           services: [{ name: 't3-code', state: 'running' }],
           environment: inspection.environment,
@@ -406,6 +414,8 @@ describe('fn:prepareResult', () => {
     );
 
     expect(output.stdout).toContain('No private network is selected');
+    expect(output.stdout).toContain('CLIProxyAPI is disabled');
+    expect(output.stdout).toContain('Reachable: No');
     expect(output.stderr).toBe('');
   });
 
@@ -682,6 +692,7 @@ describe('fn:prepareResult', () => {
       probeFailures: [],
       services: [{ name: 't3-code', state: 'running' }],
       network: inspection.network,
+      hub: inspection.hub,
       native: inspection.native,
       environment: inspection.environment,
       governor: inspection.governor,
@@ -719,7 +730,7 @@ describe('fn:prepareResult', () => {
 
   it('should disclose a marked pairing code and URL together but keeps other credentials redacted', () => {
     const pairing = new PairingSecret({ token: 'requested-pairing-token' });
-    rememberSecret('hidden-reason-secret');
+    rememberSecret('hidden-proxy-key');
     const result: CommandResult = {
       command: 'show',
       ok: true,
@@ -730,7 +741,7 @@ describe('fn:prepareResult', () => {
         },
         inspection: {
           ...inspection,
-          updates: { tools: [failedUpdate('gh', 'hidden-reason-secret')] },
+          updates: { tools: [failedUpdate('gh', 'hidden-proxy-key')] },
         },
         pairing: { status: 'created', token: pairing },
       },
@@ -755,7 +766,7 @@ describe('fn:prepareResult', () => {
         pairing: { token: 'requested-pairing-token' },
       },
     });
-    expect(marked.stdout).not.toContain('hidden-reason-secret');
+    expect(marked.stdout).not.toContain('hidden-proxy-key');
     expect(JSON.stringify(result)).not.toContain('requested-pairing-token');
     expect(disclosed.stderr).toBe('');
     expect(disclosed.stdout.trim().split('\n')).toHaveLength(1);
@@ -766,12 +777,12 @@ describe('fn:prepareResult', () => {
       pairing: { token: 'requested-pairing-token' },
       inspection: { updates: { tools: [{ reason: '[REDACTED]' }] } },
     });
-    expect(disclosed.stdout).not.toContain('hidden-reason-secret');
+    expect(disclosed.stdout).not.toContain('hidden-proxy-key');
     expect(disclosedHuman.stdout).toContain(
       'https://primary.sprites.app/#token=requested-pairing-token',
     );
     expect(disclosedHuman.stdout).toContain('requested-pairing-token');
-    expect(disclosedHuman.stdout).not.toContain('hidden-reason-secret');
+    expect(disclosedHuman.stdout).not.toContain('hidden-proxy-key');
   });
 
   it('should redact a resolved value in nested results and non-Error failures in both output modes', async () => {
@@ -843,6 +854,7 @@ describe('fn:prepareResult', () => {
             skipped: [],
             probeFailures: [],
             network: inspection.network,
+            hub: inspection.hub,
             native: inspection.native,
             services: [],
             environment: inspection.environment,

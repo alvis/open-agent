@@ -16,6 +16,7 @@ export interface ProfileSummaryOutput {
 
 /** numeric and boolean options a workstation recorded */
 export interface ProfileOptionsOutput {
+  isProxyEnabled: boolean;
   idleTimeoutMinutes: number;
   holdMaxMinutes: number;
   updateDueIntervalDays: number;
@@ -69,6 +70,7 @@ export function projectProfileOptions(
   options: ProfileOptions,
 ): ProfileOptionsOutput {
   return projectFields<ProfileOptions, ProfileOptionsOutput>(options, {
+    isProxyEnabled: same,
     idleTimeoutMinutes: same,
     holdMaxMinutes: same,
     updateDueIntervalDays: same,

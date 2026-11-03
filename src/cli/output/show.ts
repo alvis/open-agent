@@ -3,6 +3,7 @@ import { each, projectFields, same } from './fields';
 import {
   projectGovernor,
   projectGuestService,
+  projectHub,
   projectNative,
   projectNetworkStatus,
   projectUpdates,
@@ -45,6 +46,7 @@ function projectShownInspection(
     services: each(projectGuestService),
     network: projectNetworkStatus,
     native: projectNative,
+    hub: projectHub,
     environment: projectEnvironment,
     updates: projectUpdates,
     probeFailures: each(projectProbeFailure),

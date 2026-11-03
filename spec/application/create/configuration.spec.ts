@@ -219,6 +219,9 @@ describe('fn:configureNewWorkstation', () => {
       .mockImplementation(async () => {
         calls.push('git configured');
       });
+    vi.spyOn(wired.guest.hub, 'record').mockImplementation(async () => {
+      calls.push('hub recorded');
+    });
     vi.spyOn(registry.harnesses.claude, 'configure').mockImplementation(
       async () => {
         calls.push('harness configured');
@@ -266,6 +269,7 @@ describe('fn:configureNewWorkstation', () => {
         'configureNative',
         'github configured',
         'git configured',
+        'hub recorded',
         'harness configured',
         'hook installed',
         'plugin applied',

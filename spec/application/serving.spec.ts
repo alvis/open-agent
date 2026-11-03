@@ -17,6 +17,8 @@ const FULL_INSPECTION = {
   },
   native: {
     claude: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
       pluginListAvailable: false,
       awakeHooksInstalled: false,
       authentication: 'not-configured',
@@ -28,6 +30,7 @@ const FULL_INSPECTION = {
       },
     },
   },
+  hub: { skipped: true, reachable: false },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
   governor: { recorded: false, reason: 'no awake event has been recorded yet' },

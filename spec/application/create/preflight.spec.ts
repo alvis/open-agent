@@ -27,6 +27,7 @@ const request = {
     gitIdentity: false,
     harness: ['claude'],
     network: 'none',
+    proxy: false,
     idleMinutes: 5,
   },
 } satisfies CommandRequest;

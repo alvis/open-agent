@@ -12,6 +12,9 @@ export const AGENT_IDS = ['t3'] as const;
 /** every registered network driver, in catalog order */
 export const NETWORK_IDS = ['none'] as const;
 
+/** every registered model-gateway driver, in catalog order */
+export const GATEWAY_IDS = ['cliproxyapi'] as const;
+
 /** identifier of a registered provider driver */
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
@@ -24,8 +27,12 @@ export type AgentId = (typeof AGENT_IDS)[number];
 /** identifier of a registered network driver */
 export type NetworkId = (typeof NETWORK_IDS)[number];
 
-/** the kinds of driver a workstation selects */
-export type DriverKind = 'providers' | 'harnesses' | 'agents' | 'networks';
+/** identifier of a registered model-gateway driver */
+export type GatewayId = (typeof GATEWAY_IDS)[number];
+
+/** the kinds of driver; a workstation selects the first four, and routes through a gateway only when asked */
+export type DriverKind =
+  'providers' | 'harnesses' | 'agents' | 'networks' | 'gateways';
 
 /** registered identifiers, keyed by driver kind */
 interface DriverIds {
@@ -33,6 +40,7 @@ interface DriverIds {
   harnesses: HarnessId;
   agents: AgentId;
   networks: NetworkId;
+  gateways: GatewayId;
 }
 
 /** identifier of a registered driver of one kind, or of any kind */

@@ -39,6 +39,7 @@ export interface CreateData {
   profile: WorkstationProfile;
   readiness: ReadinessAssessment;
   network: GuestInspection['network'];
+  hub: GuestInspection['hub'];
   services: ServiceSummary[];
   native: GuestInspection['native'];
   pairing: PairingData;
@@ -78,6 +79,7 @@ export interface ShowData {
 /** readiness evidence retained even when the workstation is not ready */
 export interface CurrentReadiness extends ReadinessAssessment {
   network: GuestInspection['network'];
+  hub: GuestInspection['hub'];
   native: GuestInspection['native'];
   services: ServiceSummary[];
   environment: GuestInspection['environment'];
@@ -116,6 +118,11 @@ export interface GithubSetupData {
 /** native Git identity outcome */
 export interface GitSetupData {
   gitIdentity: 'configured' | 'preserved';
+}
+
+/** selected native gateway outcome */
+export interface ProxySetupData {
+  proxy: { status: 'configured'; baseUrl?: string } | { status: 'disabled' };
 }
 
 /** names of configured environment values without their secret contents */
@@ -173,6 +180,7 @@ export interface AllSetupData
     Partial<SystemSetupData>,
     Partial<PluginsSetupData>,
     NetworkSetupData,
+    ProxySetupData,
     ToolsSetupData {}
 
 /** concrete outcomes keyed by the executed guest setup section */
@@ -182,6 +190,7 @@ interface SetupSectionData {
   network: NetworkSetupData;
   github: GithubSetupData;
   git: GitSetupData;
+  proxy: ProxySetupData;
   env: EnvironmentSetupData;
   system: SystemSetupData;
   plugins: PluginsSetupData;

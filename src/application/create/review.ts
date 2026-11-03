@@ -59,6 +59,9 @@ export function reviewCreatePlan(
         ...releaseSummary(dependencies, profile),
         `Harnesses: ${profile.harnesses.map((id) => harnessLabel(id)).join(', ')}`,
         'No private network',
+        profile.options.isProxyEnabled
+          ? `CLIProxyAPI ${input.proxyUrl}`
+          : 'CLIProxyAPI disabled',
         `Suspend after idle: ${idleSummary(profile.options.idleTimeoutMinutes)}`,
         `${dependencies.registry.agents[profile.agent].displayName} exposed after readiness`,
         `${credential.label}: ${input.sources[credential.environment] ?? 'prompt/session'}`,

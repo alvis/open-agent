@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import process from 'node:process';
 
 /**
@@ -6,4 +7,12 @@ import process from 'node:process';
  */
 export function environmentVariables(): NodeJS.ProcessEnv {
   return process.env;
+}
+
+/**
+ * reads the home directory of the user running the process
+ * @returns the absolute home directory
+ */
+export function homeDirectory(): string {
+  return homedir();
 }
