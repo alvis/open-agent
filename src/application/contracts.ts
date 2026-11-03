@@ -21,19 +21,22 @@ export interface CommandOptions {
   nonInteractive?: boolean;
   /** confirms prompts that would otherwise ask for consent */
   yes?: boolean;
+  /** adds a live guest inspection to show */
+  inspect?: boolean;
   /** source reference of the provider management credential */
   providerTokenSource?: string;
 }
 
-/** parsed command and its options */
+/** parsed command and its optional machine selection */
 export interface CommandRequest {
   command: CommandName;
+  machine?: string;
   options: CommandOptions;
 }
 
 /** the request, the provider it targets and the optional interaction one workstation command acts with */
 export interface WorkstationCommandParams<Provider = ProviderDriver> {
-  /** parsed command and options */
+  /** parsed command, options and optional machine selection */
   request: CommandRequest;
   /** the provider the command targets, authenticated unless a credential is still being resolved */
   provider: Provider;

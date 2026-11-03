@@ -317,7 +317,7 @@ describe('fn:createInteraction', () => {
     expect(cancelled.matchedSteps).toBe(1);
     expect(cancelled.result.code).toBe('CANCELLED');
     expect(
-      resultExitCode({ command: 'create', ok: false, error: cancelled.result }),
+      resultExitCode({ command: 'show', ok: false, error: cancelled.result }),
     ).toBe(130);
   });
 

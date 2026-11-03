@@ -1,3 +1,9 @@
+/** how a command on an existing workstation finds its provider */
+const PROVIDER_SELECTION = `Without --provider, each provider with a ready credential is asked for the
+workstation. --provider PROVIDER names the provider instead, and it is the
+provider a --provider-token-source belongs to; with a token source and no
+--provider, sprite answers.`;
+
 /** complete create guidance without turning optional integrations into defaults */
 export const createDocumentation = {
   brief: 'create one new coding workstation',
@@ -20,11 +26,24 @@ export const listDocumentation = {
   fullDescription: `Lists current managed workstations from every provider whose credential
 is available, without waking their guests. A provider whose query fails is
 reported as unavailable. A workstation a newer open-agent set up is listed and
-marked. --provider PROVIDER names the provider a
+marked, but no other command acts on it until open-agent is upgraded. --provider PROVIDER names the provider a
 --provider-token-source belongs to (sprite when omitted); every other provider
 is still listed.
 
 EXAMPLES
   open-agent list
   open-agent list --provider-token-source env:MY_TOKEN`,
+} as const;
+
+/** documents workstation details and explicit inspection */
+export const showDocumentation = {
+  brief: 'show a workstation from current control-plane state',
+  customUsage: ['[<workstation>] [--inspect] [options]'],
+  fullDescription: `Shows current provider details and the ordinary agent URL without
+waking the guest. --inspect checks live guest services and may wake it.
+${PROVIDER_SELECTION} Credentials precede output controls below.
+
+EXAMPLES
+  open-agent show devbox
+  open-agent show devbox --inspect`,
 } as const;

@@ -36,13 +36,28 @@ const MACHINE: MachineSummary = {
   readiness: 'not inspected',
 };
 
+const DETAILED_MACHINE: MachineSummary = {
+  id: 'sprite-atlas',
+  name: 'atlas',
+  organization: 'personal',
+  createdAt: '2026-10-12T08:30:00.000Z',
+  state: 'running',
+  agentUrl: 'https://atlas.sprites.app/',
+  setup: 'ready',
+  profile: {
+    provider: 'sprite',
+    agent: 't3',
+    harnesses: ['claude'],
+    network: 'none',
+  },
+  readiness: 'not inspected',
+};
+
 const SPRITE_LISTED: ListedMachine = { ...MACHINE, provider: 'sprite' };
 
 const PREFLIGHT: CreatePreflight = {
   checks: ['Provider token verified', 'Workstation name is available'],
-  reminders: [
-    'Claude Code uses native sign-in; configure their credentials on the guest before model work.',
-  ],
+  reminders: ['Run open-agent show primary --inspect after the first boot'],
 };
 
 const PASSING_READINESS: ReadinessAssessment = {
@@ -79,6 +94,27 @@ const INSPECTION: GuestInspection = {
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
 };
+
+const INSTALLED_TOOLS: GuestInspection['environment']['tools'] = [
+  {
+    name: 'gh',
+    required: false,
+    account: 'linuxbrew',
+    executables: ['gh'],
+    source: { kind: 'brew', formula: 'gh' },
+  },
+  {
+    name: 'ripgrep',
+    required: false,
+    account: 'linuxbrew',
+    executables: ['rg'],
+    source: { kind: 'brew', formula: 'ripgrep' },
+  },
+];
+
+const SKIPPED_TOOLS: GuestInspection['environment']['setup']['skipped'] = [
+  { name: 'tmux', reason: 'no source is usable on this system' },
+];
 
 const ERROR_CODES: readonly CommandErrorCode[] = [
   'USAGE',
@@ -266,8 +302,63 @@ export const CORPUS: readonly CorpusCase[] = [
     error: { code: 'PROVIDER', message: 'List unavailable' },
   }),
 
-  corpusCase('create-failure-secret-error', {
-    command: 'create',
+  // show
+  corpusCase('show-plain', {
+    command: 'show',
+    ok: true,
+    data: { machine: DETAILED_MACHINE },
+  }),
+  corpusCase('show-inspection-disabled', {
+    command: 'show',
+    ok: true,
+    data: { machine: MACHINE, inspection: INSPECTION },
+  }),
+  corpusCase('show-inspection-detailed', {
+    command: 'show',
+    ok: true,
+    data: {
+      machine: DETAILED_MACHINE,
+      inspection: {
+        ...INSPECTION,
+        services: [{ name: 't3-code', status: 'running', needs: [] }],
+        environment: environmentOf(DISABLED_NETWORK_PROFILE, {
+          tools: INSTALLED_TOOLS,
+          setup: { state: 'ready', skipped: SKIPPED_TOOLS },
+        }),
+        readiness: PASSING_READINESS,
+      },
+    },
+  }),
+  corpusCase('show-guest-control-characters', {
+    command: 'show',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      inspection: {
+        ...INSPECTION,
+        network: {
+          ...INSPECTION.network,
+          reason: 'guest said\u0007 \u001b[1mbold\u001b[0m',
+        },
+      },
+    },
+  }),
+  corpusCase('show-nested-secrets', {
+    command: 'show',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      inspection: {
+        ...INSPECTION,
+        network: {
+          ...INSPECTION.network,
+          reason: `the network rejected ${NESTED_SECRET} twice: ${NESTED_SECRET}`,
+        },
+      },
+    },
+  }),
+  corpusCase('show-failure-secret-error', {
+    command: 'show',
     ok: false,
     error: {
       code: 'PROVIDER',
@@ -295,7 +386,7 @@ export const CORPUS: readonly CorpusCase[] = [
   }),
   ...ERROR_CODES.map((code) =>
     corpusCase(`error-code-${code.toLowerCase()}`, {
-      command: 'create',
+      command: 'show',
       ok: false,
       error: {
         code,
@@ -330,6 +421,25 @@ export const CORPUS: readonly CorpusCase[] = [
           }),
         },
       ],
+    },
+  }),
+  corpusCase('serialization-undefined-in-detail', {
+    command: 'show',
+    ok: true,
+    data: {
+      machine: {
+        ...MACHINE,
+        createdAt: sdkObservation<string>(new Date('2026-10-09T12:00:00.000Z')),
+        agentUrl: undefined,
+      },
+      inspection: {
+        ...INSPECTION,
+        probeFailures: [{ probe: 'network', reason: 'no answer' }],
+        services: [
+          { name: 'a', needs: [] },
+          sdkObservation<GuestInspection['services'][number]>(undefined),
+        ],
+      },
     },
   }),
 ];

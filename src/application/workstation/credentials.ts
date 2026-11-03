@@ -1,3 +1,4 @@
+import { resolveProviderCredential } from '#application/input/provider-credential';
 import { enteredCredentialProblem } from '#domain/prerequisites';
 import { rememberSecret } from '#kernel/redaction';
 
@@ -5,6 +6,30 @@ import type { WorkstationCommandParams } from '#application/contracts';
 import type { ProviderCredential } from '#application/input/provider-credential';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { ProviderId } from '#domain/ids';
+
+/**
+ * resolves the selected provider's credential, asking only in interactive mode
+ * @param dependencies the registered drivers, what this computer provides
+ * @param params the call's inputs: request, provider, interaction
+ * @returns the credential and its source, if available
+ */
+export async function resolveCommandCredential(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'host'>,
+  params: WorkstationCommandParams<ProviderId>,
+): Promise<ProviderCredential> {
+  const { request, provider, interaction } = params;
+  const resolved = await resolveProviderCredential(dependencies, {
+    options: request.options,
+    provider,
+    selection: {
+      reference: request.options.providerTokenSource,
+    },
+  });
+
+  return resolved.token
+    ? resolved
+    : enterCommandCredential(dependencies, { request, provider, interaction });
+}
 
 /**
  * asks for a provider credential in interactive mode, asking again while the

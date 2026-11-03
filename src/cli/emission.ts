@@ -63,7 +63,10 @@ function preparationFailure(result: CommandResult): CommandResult {
  */
 function successRecovery(
   result: CommandSuccess,
-): Pick<CommandError, 'machine' | 'machineId' | 'setupIncomplete' | 'outcome'> {
+): Pick<
+  CommandError,
+  'machine' | 'machineId' | 'setupIncomplete' | 'outcome' | 'details'
+> {
   const machine = result.command === 'list' ? undefined : result.data.machine;
   if (!machine) {
     return {};
@@ -74,5 +77,8 @@ function successRecovery(
     machineId: machine.id,
     setupIncomplete: machine.setup === 'incomplete' ? true : undefined,
     outcome: 'unknown',
+    details: [
+      `Inspect: open-agent show ${JSON.stringify(machine.name)} --inspect`,
+    ],
   };
 }

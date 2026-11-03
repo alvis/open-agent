@@ -68,6 +68,13 @@ export interface ProviderDriver<
    */
   list(): Promise<WorkstationRecord[]>;
   /**
+   * fetches one managed workstation, rejecting with not-found when none exists
+   * so the provider's own diagnostic reaches the user
+   * @param name exact workstation name
+   * @returns the managed workstation
+   */
+  get(name: string): Promise<WorkstationRecord>;
+  /**
    * tells whether any provider resource, managed or not, already uses a name
    * @param name proposed workstation name
    * @returns true when creating the name would collide

@@ -55,7 +55,7 @@ async function route(argv: string[]): Promise<{
 }
 
 describe('provider flag on workstation commands', () => {
-  it.each(['list'])(
+  it.each(['list', 'show'])(
     'should list --provider with every provider choice in %s help',
     async (command) => {
       const { output, exitCode } = await route([command, '--help']);
@@ -66,7 +66,7 @@ describe('provider flag on workstation commands', () => {
     },
   );
 
-  it.each(['list'])(
+  it.each(['list', 'show'])(
     'should refuse an unknown provider for %s before the command runs',
     async (command) => {
       const { output, exitCode } = await route([
@@ -86,16 +86,24 @@ describe('command route dispatch', () => {
     {
       argv: ['create', '--name', 'new-box'],
       command: 'create',
+      machine: undefined,
       options: { name: 'new-box' },
     },
     {
       argv: ['list', '--provider', 'sprite'],
       command: 'list',
+      machine: undefined,
       options: { provider: 'sprite' },
+    },
+    {
+      argv: ['show', 'dev-box', '--inspect'],
+      command: 'show',
+      machine: 'dev-box',
+      options: { inspect: true },
     },
   ])(
     'should dispatch $command with parsed request and invocation state',
-    async ({ argv, command, options }) => {
+    async ({ argv, command, machine, options }) => {
       const routed = await route(argv);
 
       expect(routed.exitCode).toBe(0);
@@ -103,6 +111,7 @@ describe('command route dispatch', () => {
         dependencies,
         request: {
           command,
+          ...(machine === undefined ? {} : { machine }),
           options: expect.objectContaining(options),
         },
         state: { emitted: false, command: null, errors: [] },
@@ -114,7 +123,7 @@ describe('command route dispatch', () => {
     const { output, exitCode } = await route(['--help']);
 
     expect(exitCode).toBe(0);
-    for (const command of ['create', 'list']) {
+    for (const command of ['create', 'list', 'show']) {
       expect(output).toContain(`open-agent ${command} `);
     }
   });

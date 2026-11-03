@@ -119,6 +119,15 @@ export class SpriteProvider implements ProviderDriver<'sprite'> {
   }
 
   /**
+   * fetches and verifies a managed Sprite before inspection or mutation
+   * @param name requested Sprite name
+   * @returns verified managed workstation
+   */
+  public async get(name: string): Promise<WorkstationRecord> {
+    return this.#record(await this.#fetchVerified(name));
+  }
+
+  /**
    * tells whether any Sprite, managed or not, already uses a name
    * @param name proposed Sprite name
    * @returns true when creating the name would collide

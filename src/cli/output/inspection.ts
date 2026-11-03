@@ -8,6 +8,18 @@ import type {
   NativeConfigurationInspection,
 } from '#domain/observations/native';
 import type { NetworkStatus } from '#domain/observations/network';
+import type { GuestServiceState } from '#domain/services';
+
+import type { EnvironmentOutput } from './environment';
+import type { ProbeFailureOutput } from './readiness';
+
+/** current state of one service on the guest */
+export interface GuestServiceOutput {
+  name: string;
+  status?: string;
+  needs: readonly string[];
+  startedAt?: string;
+}
 
 /** current service state without executable arguments */
 export interface ServiceSummaryOutput {
@@ -48,6 +60,31 @@ export interface NativeOutput {
   claude?: NativeHarnessOutput;
   agentEnvironment?: AgentEnvironmentOutput;
   harnesses: Record<string, HarnessStateOutput>;
+}
+
+/** everything a guest inspection observed */
+export interface InspectionOutput {
+  services: GuestServiceOutput[];
+  network: NetworkOutput;
+  native?: NativeOutput;
+  environment: EnvironmentOutput;
+  probeFailures: ProbeFailureOutput[];
+}
+
+/**
+ * projects the state of one guest service
+ * @param service internal state
+ * @returns output state
+ */
+export function projectGuestService(
+  service: GuestServiceState,
+): GuestServiceOutput {
+  return projectFields<GuestServiceState, GuestServiceOutput>(service, {
+    name: same,
+    status: same,
+    needs: same,
+    startedAt: same,
+  });
 }
 
 /**

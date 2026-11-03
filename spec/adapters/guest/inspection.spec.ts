@@ -8,6 +8,7 @@ import { registry } from '#composition/registry';
 import { environmentOf } from '../../fixtures/environment';
 import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
 
+import type { ProbeEvent } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
 
 const PROFILE = DISABLED_NETWORK_PROFILE;
@@ -36,12 +37,21 @@ function inspectionGuest(): GuestChannel {
 }
 
 describe('fn:createInspection', () => {
-  it('should report the services', async () => {
+  it('should report the services with completed probe events', async () => {
     const guest = inspectionGuest();
+    const events: ProbeEvent[] = [];
     const inspection = createGuestMechanics({ registry, defaults }).inspection;
 
-    const result = await inspection.inspect(guest);
+    const result = await inspection.inspect(guest, {
+      onProbe: (event) => {
+        events.push(event);
+      },
+    });
 
     expect(result).toMatchObject({ services: [] });
+    expect(events.filter(({ probe }) => probe === 'services')).toEqual([
+      { probe: 'services', phase: 'started' },
+      { probe: 'services', phase: 'completed', durationMs: expect.any(Number) },
+    ]);
   });
 });

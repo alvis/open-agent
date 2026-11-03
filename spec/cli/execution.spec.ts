@@ -380,10 +380,10 @@ describe('fn:execute', () => {
   it('should reject an invalid workstation name before reading a credential file', async () => {
     const selected: CommandRequest = {
       ...request,
-      command: 'create',
+      command: 'show',
+      machine: 'Not A Name',
       options: {
         ...request.options,
-        name: 'Not A Name',
         credentialFile: 'credentials.env',
       },
     };
@@ -506,6 +506,53 @@ describe('fn:execute', () => {
       cancellations: 1,
       exitCode: 130,
       state: { command: 'list', emitted: true, errors: [] },
+    });
+  });
+
+  it('should retain the selected workstation in cancellation recovery', async () => {
+    const controller = new AbortController();
+    cancellation.mockImplementationOnce((): CommandCancellation => ({
+      signal: controller.signal,
+      cancel: () => controller.abort(),
+      interrupt: () => controller.abort(),
+      dispose: disposeCancellation,
+    }));
+    run.mockImplementationOnce(async () => {
+      controller.abort();
+
+      return {
+        command: 'show',
+        ok: true,
+        data: {
+          machine: {
+            id: 'machine-1',
+            name: 'dev-box',
+            organization: 'example',
+            state: 'running',
+            setup: 'ready',
+            readiness: 'not inspected',
+          },
+        },
+      } satisfies CommandResult;
+    });
+    const selected: CommandRequest = {
+      command: 'show',
+      machine: 'dev-box',
+      options: request.options,
+    };
+
+    const captured = await captureExecution({ request: selected });
+
+    expect({
+      stdout: captured.stdout,
+      stderr: captured.stderr,
+      exitCode: captured.exitCode,
+    }).toEqual({
+      stdout: '',
+      stderr: expect.stringContaining(
+        'Workstation: dev-box\n  Inspect provider state before retrying any mutation.\n  Inspect: open-agent show "dev-box" --inspect\n',
+      ),
+      exitCode: 130,
     });
   });
 

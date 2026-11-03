@@ -1,13 +1,109 @@
+import { probeProgress } from '#application/inspection/progress';
+
+import { CommandFault } from '#kernel/faults';
+
+import { promptUnavailableDetail } from '#kernel/operation';
+
 import { commandError } from './failures';
 
 import { summarizeMachine } from './machine';
+import { assessReadiness } from './readiness';
 
 import type { BoundProvider } from '#application/catalog/providers';
+import type { WorkstationCommandParams } from '#application/contracts';
 import type { ListData, UnavailableProvider } from '#application/data';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { ProviderDriver } from '#application/ports/drivers';
+import type { ReleaseSource } from '#application/ports/guest';
+import type { Interaction } from '#application/ports/interaction';
 import type { CommandResult } from '#application/result';
 import type { ProviderId } from '#domain/ids';
+import type { WorkstationRecord } from '#domain/workstation';
 import type { CommandErrorCode } from '#kernel/faults';
+
+/** the named inputs of select managed machine */
+export interface SelectManagedMachineParams {
+  /** authenticated provider driver */
+  provider: ProviderDriver;
+  /** exact machine name when supplied */
+  requestedName: string | undefined;
+  /** optional inline machine selector */
+  interaction?: Interaction;
+  /** where the recorded release is read from */
+  release: ReleaseSource;
+}
+
+/**
+ * resolves a machine from current provider state, prompting only when
+ * permitted, and refuses one a newer open-agent release set up
+ * @param dependencies the guest mechanics
+ * @param params the call's inputs: provider, requestedName, interaction, release
+ * @returns the freshly fetched, ownership-checked and supported workstation
+ */
+export async function selectManagedMachine(
+  dependencies: Pick<ApplicationDependencies, 'guest'>,
+  params: SelectManagedMachineParams,
+): Promise<WorkstationRecord> {
+  const { provider, requestedName } = params;
+  const { interaction, release } = params;
+  const workstation = await findManagedMachine(
+    provider,
+    requestedName,
+    interaction,
+  );
+  await dependencies.guest.release.assertSupported(
+    provider,
+    workstation,
+    release,
+  );
+
+  return workstation;
+}
+
+/**
+ * resolves a machine from current provider state, prompting only when permitted
+ * @param provider authenticated provider driver
+ * @param requestedName exact machine name when supplied
+ * @param interaction optional inline machine selector
+ * @returns the freshly fetched and ownership-checked workstation
+ */
+async function findManagedMachine(
+  provider: ProviderDriver,
+  requestedName: string | undefined,
+  interaction?: Interaction,
+): Promise<WorkstationRecord> {
+  if (requestedName) {
+    return provider.get(requestedName);
+  }
+  if (!interaction) {
+    throw new CommandFault({
+      code: 'INPUT',
+      message: [
+        'Workstation name is required in non-interactive mode',
+        promptUnavailableDetail(),
+      ]
+        .filter(Boolean)
+        .join('. '),
+    });
+  }
+  const machines = await provider.list();
+  if (machines.length === 0) {
+    throw new CommandFault({
+      code: 'PROVIDER',
+      message: 'No managed workstations found',
+    });
+  }
+  const selected = await interaction.select(
+    { message: 'Select a workstation' },
+    machines.map((machine) => ({
+      value: machine.name,
+      label: machine.name,
+      description: `${machine.state} · ${machine.id || 'unknown ID'}`,
+    })),
+  );
+
+  return provider.get(selected);
+}
 
 /** a provider bound for listing, or the reason it cannot be queried */
 export type ProviderAvailability =
@@ -88,4 +184,49 @@ async function listProvider(
 
     return { provider: entry.id, code, reason: message };
   }
+}
+
+/**
+ * shows current control-plane details; guest inspection is an explicit action
+ * @param dependencies the registered drivers, the guest mechanics
+ * @param params the call's inputs: request, provider, interaction
+ * @returns control-plane details and any explicitly requested action result
+ */
+export async function showWorkstation(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'guest'>,
+  params: WorkstationCommandParams,
+): Promise<CommandResult> {
+  const { request, provider, interaction } = params;
+  const options = request.options;
+  // a control-plane summary never wakes the guest; an inspection does
+  const workstation = await selectManagedMachine(dependencies, {
+    provider,
+    requestedName: request.machine,
+    interaction,
+    release: options.inspect ? 'guest' : 'metadata',
+  });
+  const inspected = options.inspect
+    ? await dependencies.guest.inspection.inspect(
+        await provider.openGuest(workstation),
+        {
+          onProbe: probeProgress(interaction?.progress.bind(interaction)),
+        },
+      )
+    : undefined;
+
+  return {
+    command: 'show',
+    ok: true,
+    data: {
+      machine: summarizeMachine(dependencies, workstation),
+      ...(inspected
+        ? {
+            inspection: {
+              ...inspected,
+              readiness: assessReadiness(dependencies, inspected),
+            },
+          }
+        : {}),
+    },
+  };
 }

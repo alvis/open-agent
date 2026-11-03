@@ -8,6 +8,7 @@ import type {
   GuestEnvironmentAccess,
   GuestMechanics,
   InspectionProbe,
+  ProbeEvent,
 } from '#application/ports/guest';
 
 /**
@@ -29,19 +30,27 @@ export function createInspection(context: {
     /**
      * fetches current service, route, and installation state on explicit inspection
      * @param guest target guest
+     * @param options probe observer
      * @returns current service, network, native and environment status
      */
-    inspect: async (guest) => {
-      const environment = await inspectStage('inspection', async () =>
-        access.read(guest),
+    inspect: async (guest, options = {}) => {
+      const { onProbe } = options;
+      const environment = await inspectStage(
+        'inspection',
+        async () => access.read(guest),
+        onProbe,
       );
       const { profile } = environment;
       const network = registry.networks[profile.network];
       const [serviceProbe, networkProbe, nativeProbe] =
         await Promise.allSettled([
-          inspectStage('services', async () => guest.services.list()),
-          inspectStage('network', async () => network.status(guest)),
-          inspectStage('native', async () => native.inspect(guest, profile)),
+          inspectStage('services', async () => guest.services.list(), onProbe),
+          inspectStage('network', async () => network.status(guest), onProbe),
+          inspectStage(
+            'native',
+            async () => native.inspect(guest, profile),
+            onProbe,
+          ),
         ] as const);
 
       return settleInspectionResults({ environment }, [
@@ -54,22 +63,31 @@ export function createInspection(context: {
 }
 
 /**
- * traces one probe, so a probe a cancellation broke fails as the cancellation
+ * reports a real probe's lifecycle without exposing commands or credentials
  * @param probe probe identity
  * @param check original probe operation
+ * @param onProbe optional lifecycle observer
  * @returns the original probe result
  */
 async function inspectStage<T>(
   probe: InspectionProbe,
   check: () => Promise<T>,
+  onProbe?: (event: ProbeEvent) => void,
 ): Promise<T> {
+  const startedAt = performance.now();
+  const elapsed = (): number => performance.now() - startedAt;
+  onProbe?.({ probe, phase: 'started' });
   try {
-    return await traceStage({
+    const result = await traceStage({
       stage: `inspect.${probe}`,
       action: check,
     });
+    onProbe?.({ probe, phase: 'completed', durationMs: elapsed() });
+
+    return result;
   } catch (error) {
     checkOperation();
+    onProbe?.({ probe, phase: 'failed', durationMs: elapsed() });
     throw error;
   }
 }

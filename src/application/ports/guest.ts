@@ -27,6 +27,29 @@ export interface GuestFacts {
 /** one thing an inspection reads, named without its commands */
 export type InspectionProbe = 'inspection' | 'services' | 'network' | 'native';
 
+/** the lifecycle of one probe an inspection runs */
+export type ProbeEvent =
+  | { probe: InspectionProbe; phase: 'started' }
+  | {
+      probe: InspectionProbe;
+      phase: 'completed' | 'failed';
+      /** how long the probe ran, in milliseconds */
+      durationMs: number;
+    };
+
+/** what an inspection observes and reads besides the guest itself */
+export interface InspectionParams {
+  /** observer for actual probe starts and elapsed completions */
+  onProbe?: (event: ProbeEvent) => void;
+}
+
+/**
+ * where a command learns which release set a workstation up: `metadata` never
+ * wakes the guest, `guest` reads environment.json and fails when it cannot,
+ * and `guest-or-metadata` falls back to the metadata when the guest is unreadable
+ */
+export type ReleaseSource = 'metadata' | 'guest' | 'guest-or-metadata';
+
 /** what the provider's own services are installed from */
 export interface ProviderServiceParams {
   /** the provider's own service control */
@@ -155,9 +178,13 @@ export interface GuestMechanics {
     /**
      * reads current service, route and installation state
      * @param guest target guest
+     * @param params the probe observer
      * @returns current service, network, native and environment status
      */
-    inspect(guest: GuestChannel): Promise<GuestInspection>;
+    inspect(
+      guest: GuestChannel,
+      params?: InspectionParams,
+    ): Promise<GuestInspection>;
   };
   native: GuestNativeConfiguration;
   label: {
@@ -169,6 +196,18 @@ export interface GuestMechanics {
     write(guest: GuestChannel, label: string): Promise<void>;
   };
   release: {
+    /**
+     * refuses a workstation a newer open-agent release set up
+     * @param provider the provider the workstation runs on
+     * @param workstation record of the machine checked
+     * @param source where the recorded release is read from
+     * @throws {CommandFault} when the recorded release is newer than this one
+     */
+    assertSupported(
+      provider: Pick<ProviderDriver, 'openGuest'>,
+      workstation: WorkstationRecord,
+      source: ReleaseSource,
+    ): Promise<void>;
     /**
      * names the release a workstation's metadata records when it is newer
      * than this one, without waking the guest

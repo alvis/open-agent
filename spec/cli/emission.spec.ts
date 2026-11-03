@@ -4,8 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { emitResult } from '#cli/emission';
 
-import { CORPUS } from '../fixtures/output/corpus';
-
 import type { MachineSummary } from '#application/machine';
 import type { CommandResult } from '#application/result';
 
@@ -33,20 +31,6 @@ function machineWithUnreadableState(
       throw new Error('unreadable machine state');
     },
   };
-}
-
-/**
- * a successful create result reporting the given machine
- * @param machine summary that replaces the corpus machine
- * @returns the corpus's default create success with that machine
- */
-function createdWith(machine: MachineSummary): CommandResult {
-  const created = CORPUS.find(({ name }) => name === 'create-success-default');
-  if (!created?.result.ok || created.result.command !== 'create') {
-    throw new Error('The corpus has no default create success');
-  }
-
-  return { ...created.result, data: { ...created.result.data, machine } };
 }
 
 /**
@@ -96,7 +80,7 @@ function captureEmission(action: () => void): {
 describe('fn:emitResult', () => {
   it('should render one input failure and set the exact exit code', () => {
     const result: CommandResult = {
-      command: 'create',
+      command: 'show',
       ok: false,
       error: { code: 'INPUT', message: 'bad input' },
     };
@@ -126,7 +110,7 @@ describe('fn:emitResult', () => {
 
   it('should write cancellation to stderr with exit code 130', () => {
     const result: CommandResult = {
-      command: 'create',
+      command: 'show',
       ok: false,
       error: { code: 'CANCELLED', message: 'Cancelled by user' },
     };
@@ -142,7 +126,7 @@ describe('fn:emitResult', () => {
 
   it('should retain workstation identity in human render recovery', () => {
     const result: CommandResult = {
-      command: 'create',
+      command: 'show',
       ok: false,
       error: {
         code: 'INPUT',
@@ -170,14 +154,22 @@ describe('fn:emitResult', () => {
 
   it.each([
     {
-      label: 'create incomplete',
-      result: createdWith(machineWithUnreadableState('incomplete')),
-      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete.\n`,
+      label: 'show incomplete',
+      result: {
+        command: 'show',
+        ok: true,
+        data: { machine: machineWithUnreadableState('incomplete') },
+      } satisfies CommandResult,
+      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\nSetup is incomplete.\n  Inspect: open-agent show "dev box" --inspect\n`,
     },
     {
-      label: 'create ready',
-      result: createdWith(machineWithUnreadableState('ready')),
-      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\n`,
+      label: 'show ready',
+      result: {
+        command: 'show',
+        ok: true,
+        data: { machine: machineWithUnreadableState('ready') },
+      } satisfies CommandResult,
+      stderr: `The command result could not be rendered safely.\nWorkstation: dev box\nWorkstation ID: machine-1\n  Inspect: open-agent show "dev box" --inspect\n`,
     },
     {
       label: 'list',
