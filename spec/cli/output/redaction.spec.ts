@@ -36,13 +36,17 @@ describe('fn:prepareResult', () => {
       rememberSecret('provider');
       rememberSecret('reason');
       rememberSecret('name');
-      const fields = prepareResult({ result: RESULT, streams });
+      const fields = prepareResult({ result: RESULT, options: {}, streams });
 
       rememberSecret('unavailable');
-      const unavailable = prepareResult({ result: RESULT, streams });
+      const unavailable = prepareResult({
+        result: RESULT,
+        options: {},
+        streams,
+      });
 
       rememberSecret('machines');
-      const machines = prepareResult({ result: RESULT, streams });
+      const machines = prepareResult({ result: RESULT, options: {}, streams });
 
       expect([fields, unavailable, machines]).toEqual([
         {

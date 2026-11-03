@@ -176,6 +176,7 @@ describe('cmd:create failure', () => {
       data: { preflight },
     });
     expect(serializeResult(projectResult(result))).toMatchObject({
+      schemaVersion: 1,
       data: { preflight },
       error: { machine: sprite.name, machineId: sprite.id },
     });
@@ -254,16 +255,22 @@ describe('cmd:create failure', () => {
     expect(result.error.details?.[0]?.length).toBeLessThanOrEqual(
       512 + 'Creation cause: '.length,
     );
-    const human = prepareResult({ result });
+    const human = prepareResult({ result, options: {} });
+    const json = prepareResult({ result, options: { json: true } });
     expect(human.channel).toBe('stderr');
     expect(human.text).toContain(
       'Provider lookup confirmed this workstation is absent',
     );
-    expect(human.text).toContain(
-      'Creation cause: provider rejected [REDACTED]',
-    );
-    expect(human.text).not.toContain(secret);
-    expect(human.text).not.toContain('x'.repeat(600));
+    expect(json.channel).toBe('stdout');
+    expect(JSON.parse(json.text)).toMatchObject({
+      error: { outcome: 'absent' },
+    });
+    expect(json.text.trim().split('\n')).toHaveLength(1);
+    for (const output of [human.text, json.text]) {
+      expect(output).toContain('Creation cause: provider rejected [REDACTED]');
+      expect(output).not.toContain(secret);
+      expect(output).not.toContain('x'.repeat(600));
+    }
   });
 });
 

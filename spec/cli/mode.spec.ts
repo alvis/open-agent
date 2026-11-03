@@ -40,14 +40,15 @@ describe('fn:resolveInteractionMode prompt decision', () => {
   it('should allow prompts only when every terminal capability is available', () => {
     expect(resolveInteractionMode({}, terminal).nonInteractive).toBe(false);
     expect(
-      resolveInteractionMode({ nonInteractive: false }, terminal)
+      resolveInteractionMode({ nonInteractive: false, json: false }, terminal)
         .nonInteractive,
     ).toBe(false);
   });
 
-  it('should force non-interactive mode for explicit automation and environment controls', () => {
+  it('should force non-interactive mode for explicit output and environment controls', () => {
     const modes = [
       resolveInteractionMode({ nonInteractive: true }, terminal).nonInteractive,
+      resolveInteractionMode({ json: true }, terminal).nonInteractive,
       resolveInteractionMode(
         {},
         { ...terminal, env: { NON_INTERACTIVE: 'yes' } },
@@ -66,7 +67,7 @@ describe('fn:resolveInteractionMode prompt decision', () => {
         .nonInteractive,
     ];
 
-    expect(modes).toEqual(Array<boolean>(8).fill(true));
+    expect(modes).toEqual(Array<boolean>(9).fill(true));
     expect(
       resolveInteractionMode(
         {},
@@ -94,6 +95,7 @@ describe('fn:resolveInteractionMode', () => {
   });
 
   it.each([
+    { options: { json: true }, env: {} },
     { options: { nonInteractive: true }, env: {} },
     { options: {}, env: { CI: 'true' } },
     { options: {}, env: { NON_INTERACTIVE: '1' } },

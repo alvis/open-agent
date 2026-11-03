@@ -13,6 +13,7 @@ import { isJsonObject, serializeResult } from './serialization';
 
 import type { Writable } from 'node:stream';
 
+import type { CommandOptions } from '#application/contracts';
 import type { CommandResult } from '#application/result';
 
 import type { JsonObject, JsonValue, SerializedResult } from './serialization';
@@ -32,9 +33,10 @@ interface MachineRows {
   rows: Array<Record<string, string>>;
 }
 
-/** completed result used to prepare one payload */
+/** completed result and output controls used to prepare one payload */
 export interface PrepareResultParams {
   result: CommandResult;
+  options: CommandOptions;
   streams?: ResultStreams;
 }
 
@@ -61,16 +63,21 @@ const LIST_TSV_COLUMNS = [
 
 /**
  * prepares the entire redacted result before any output is written
- * @param params completed result and optional real streams
+ * @param params completed result, output controls and optional real streams
  * @param params.result completed application result
+ * @param params.options resolved output controls
  * @param params.streams real output streams used only for terminal width
  * @returns one complete payload and its destination
  */
 export function prepareResult({
   result,
+  options,
   streams = DEFAULT_STREAMS,
 }: PrepareResultParams): PreparedResult {
   const safe = serializeResult(projectResult(result));
+  if (options.json) {
+    return { channel: 'stdout', text: `${JSON.stringify(safe)}\n` };
+  }
   if (safe.ok && safe.command === 'list' && !streams.stdout.isTTY) {
     const rows = machineRows(safe.data);
     if (rows) {

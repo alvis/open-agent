@@ -23,7 +23,7 @@ const STAGE_LINES_ONLY = expect.stringMatching(
 );
 
 describe('fn:cli', () => {
-  it('should emit a successful list without contacting a provider service', async () => {
+  it('should emit a successful JSON list without contacting a provider service', async () => {
     vi.stubEnv('SPRITES_TOKEN', 'test-org/1/0abc/0def');
     const originalExitCode = process.exitCode;
     const signalListeners = {
@@ -57,14 +57,20 @@ describe('fn:cli', () => {
     });
 
     try {
-      await cli(['list', '--provider', 'sprite', '--non-interactive']);
+      await cli([
+        'list',
+        '--provider',
+        'sprite',
+        '--non-interactive',
+        '--json',
+      ]);
       exitCode = process.exitCode;
     } finally {
       process.exitCode = originalExitCode;
     }
 
     expect({
-      outputText,
+      result: JSON.parse(outputText),
       errorText,
       exitCode,
       signalListeners: {
@@ -72,22 +78,53 @@ describe('fn:cli', () => {
         sigterm: process.listenerCount('SIGTERM'),
       },
     }).toMatchObject({
-      outputText: '',
+      result: {
+        schemaVersion: 1,
+        command: 'list',
+        ok: true,
+        data: { machines: [] },
+      },
       errorText: STAGE_LINES_ONLY,
       exitCode: 0,
       signalListeners,
     });
+    expect(outputText.endsWith('\n')).toBe(true);
     expect(providerList.mock.calls).toEqual([[]]);
     expect(outbound.mock.calls).toEqual([]);
   });
 
-  it('should emit one usage failure for an unsupported command', async () => {
-    const { stdout, stderr, exitCode } = await captureCli(['unsupported']);
+  it.each([
+    {
+      argv: ['show', '--json', '--help'],
+      command: 'show',
+      message: '--json cannot be combined with help or version.',
+    },
+    {
+      argv: ['show', '--json', '--version'],
+      command: 'show',
+      message: '--json cannot be combined with help or version.',
+    },
+    {
+      argv: ['unsupported', '--json'],
+      command: null,
+      message: 'unsupported',
+    },
+  ])(
+    'should emit one structured usage failure for $argv',
+    async ({ argv, command, message }) => {
+      const { stdout, stderr, exitCode } = await captureCli(argv);
+      const result: unknown = JSON.parse(stdout);
 
-    expect(stdout).toBe('');
-    expect(stderr).toContain('unsupported');
-    expect(exitCode).toBe(2);
-  });
+      expect(result).toMatchObject({
+        schemaVersion: 1,
+        command,
+        ok: false,
+        error: { code: 'USAGE', message: expect.stringContaining(message) },
+      });
+      expect(stderr).toBe('');
+      expect(exitCode).toBe(2);
+    },
+  );
 
   it('should show provider environment guidance in root help', async () => {
     const { stdout, stderr, exitCode } = await captureCli(['--help']);
@@ -102,20 +139,32 @@ describe('fn:cli', () => {
   it('should report a missing command if parsing returns without output', async () => {
     parse.mockResolvedValueOnce(undefined);
 
-    const { stdout, stderr, exitCode } = await captureCli(['list']);
+    const { stdout, stderr, exitCode } = await captureCli(['list', '--json']);
 
-    expect(stdout).toBe('');
-    expect(stderr).toBe('A command is required.\n');
+    expect(JSON.parse(stdout)).toMatchObject({
+      command: 'list',
+      ok: false,
+      error: { code: 'USAGE', message: 'A command is required.' },
+    });
+    expect(stderr).toBe('');
     expect(exitCode).toBe(2);
   });
 
   it('should hide unexpected parser failures behind a generic result', async () => {
     parse.mockRejectedValueOnce(new Error('private parser detail'));
 
-    const { stdout, stderr, exitCode } = await captureCli(['list']);
+    const { stdout, stderr, exitCode } = await captureCli(['list', '--json']);
 
-    expect(stdout).toBe('');
-    expect(stderr).toBe('The command could not complete safely.\n');
+    expect(JSON.parse(stdout)).toMatchObject({
+      command: 'list',
+      ok: false,
+      error: {
+        code: 'UNEXPECTED',
+        message: 'The command could not complete safely.',
+      },
+    });
+    expect(stdout).not.toContain('private parser detail');
+    expect(stderr).toBe('');
     expect(exitCode).toBe(1);
   });
 
@@ -125,7 +174,7 @@ describe('fn:cli', () => {
       throw new Error('late parser failure');
     });
 
-    const { stdout, stderr, exitCode } = await captureCli(['list']);
+    const { stdout, stderr, exitCode } = await captureCli(['list', '--json']);
 
     expect(stdout).toBe('');
     expect(stderr).toBe('');

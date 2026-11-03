@@ -4,6 +4,7 @@ import { resultExitCode } from '#cli/exit';
 
 import { prepareResult, writePreparedResult } from './output';
 
+import type { CommandOptions } from '#application/contracts';
 import type { CommandError } from '#application/failures';
 import type { CommandResult, CommandSuccess } from '#application/result';
 
@@ -13,17 +14,21 @@ const RENDER_FAILURE_MESSAGE =
   'The command result could not be rendered safely.';
 
 /**
- * owns the ordinary result object and its exit status
+ * owns the ordinary result object and its mode-independent exit status
  * @param result completed command or parser failure
+ * @param options selected output mode
  */
-export function emitResult(result: CommandResult): void {
+export function emitResult(
+  result: CommandResult,
+  options: CommandOptions,
+): void {
   let completed = result;
   let prepared: PreparedResult;
   try {
-    prepared = prepareResult({ result });
+    prepared = prepareResult({ result, options });
   } catch {
     completed = preparationFailure(result);
-    prepared = prepareResult({ result: completed });
+    prepared = prepareResult({ result: completed, options });
   }
   process.exitCode = resultExitCode(completed);
   writePreparedResult(prepared);

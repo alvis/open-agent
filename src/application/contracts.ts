@@ -24,6 +24,8 @@ export interface CommandOptions {
   network?: NetworkId;
   /** disables every prompt */
   nonInteractive?: boolean;
+  /** prints one JSON result instead of human output */
+  json?: boolean;
   /** confirms prompts that would otherwise ask for consent */
   yes?: boolean;
   /** adds a live guest inspection to show */

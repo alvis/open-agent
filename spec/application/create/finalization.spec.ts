@@ -41,6 +41,8 @@ import { dependencies, dependenciesWith } from '../../mocks/dependencies';
 
 import { providerOf } from '../../mocks/sprites';
 
+import type { CommandOptions } from '#application/contracts';
+
 import type { CreateContext } from '#application/create/context';
 
 import type { GuestChannel } from '#application/ports/guest-channel';
@@ -231,12 +233,13 @@ function createContext(sprite: Sprite): CreateContext {
 /**
  * captures both real output destinations for a completed domain result
  * @param result create result from a real finalization or recovery helper
+ * @param options human or JSON disclosure controls
  * @returns exact stdout and stderr writes
  */
-function captureResult(result: CommandResult): {
-  stdout: string;
-  stderr: string;
-} {
+function captureResult(
+  result: CommandResult,
+  options: CommandOptions,
+): { stdout: string; stderr: string } {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   let out = '';
@@ -251,6 +254,7 @@ function captureResult(result: CommandResult): {
     writePreparedResult(
       prepareResult({
         result,
+        options,
         streams: { stdout, stderr },
       }),
       { stdout, stderr },
@@ -606,16 +610,27 @@ describe('fn:markCreateIncomplete pre-READY recovery', () => {
         recovery: { privacy: 'unconfirmed', incompleteLabel: 'unconfirmed' },
       },
     });
-    const human = captureResult(result);
+    const human = captureResult(result, {});
+    const json = captureResult(result, { json: true });
     expect(human.stdout).toBe('');
     expect(human.stderr).toContain('Workstation ID: sprite-ready-42');
     expect(human.stderr).toContain(
       'Private URL authentication could not be confirmed',
     );
     expect(human.stderr).toContain('incomplete label could not be confirmed');
-    expect(human.stderr).toContain('Incomplete label: unconfirmed');
-    expect(human.stderr).toContain('[REDACTED]');
-    expect(human.stderr).not.toContain(secret);
+    expect(json.stderr).toBe('');
+    expect(json.stdout.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      schemaVersion: 1,
+      command: 'create',
+      ok: false,
+      error: { code: 'PROVIDER', machineId: sprite.id },
+      data: {
+        recovery: { privacy: 'unconfirmed', incompleteLabel: 'unconfirmed' },
+      },
+    });
+    expect(`${human.stderr}${json.stdout}`).toContain('[REDACTED]');
+    expect(`${human.stderr}${json.stdout}`).not.toContain(secret);
   });
 });
 

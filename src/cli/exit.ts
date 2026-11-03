@@ -16,7 +16,7 @@ const FAILURE_EXIT_CODES = {
 } as const;
 
 /**
- * applies the D10 process status to every result
+ * applies the same D10 process status to human and JSON results
  * @param result completed command or parser result
  * @returns portable process exit status
  */

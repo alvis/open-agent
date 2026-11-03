@@ -26,6 +26,7 @@ export const providerCredentialFlags = {
 
 /** output and automation controls shared by every operation */
 export const outputFlags = {
+  json: { kind: 'boolean', default: false, brief: 'print one JSON result' },
   nonInteractive: { kind: 'boolean', default: false, brief: 'disable prompts' },
 } as const;
 

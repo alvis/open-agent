@@ -8,7 +8,7 @@ import type { SetupDataOutput, SetupFailureDataOutput } from './setup';
 import type { ShowDataOutput } from './show';
 import type { TerminateDataOutput } from './terminate';
 
-/** success payload each command reports */
+/** success payload each command reports under schema version 1 */
 export interface CommandDataOutput {
   create: CreateDataOutput;
   setup: SetupDataOutput;
@@ -18,7 +18,7 @@ export interface CommandDataOutput {
   doctor: DoctorDataOutput;
 }
 
-/** observations each command keeps after failure */
+/** observations each command keeps after failure under schema version 1 */
 export interface CommandFailureDataOutput {
   create: CreateFailureDataOutput;
   setup: SetupFailureDataOutput;

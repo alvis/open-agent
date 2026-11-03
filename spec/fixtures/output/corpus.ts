@@ -1,6 +1,7 @@
 import { environmentOf } from '../environment';
 import { DISABLED_NETWORK_PROFILE } from '../profile';
 
+import type { CommandOptions } from '#application/contracts';
 import type { CreatePreflight } from '#application/create/context';
 import type { CurrentReadiness } from '#application/data';
 import type { MachineSummary } from '#application/machine';
@@ -9,12 +10,14 @@ import type { CommandResult } from '#application/result';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { CommandErrorCode } from '#kernel/faults';
 
-/** one characterized result */
+/** one characterized result and the output controls it is rendered with */
 export interface CorpusCase {
   /** unique kebab-case identity used in runtime contract test names */
   name: string;
   /** the completed result handed to the output layer */
   result: CommandResult;
+  /** output controls other than `json`, which each variant decides */
+  options: CommandOptions;
 }
 
 /** a workstation of any provider as the list command reports it */
@@ -591,10 +594,15 @@ export const CORPUS: readonly CorpusCase[] = [
  * names one characterized result
  * @param name unique kebab-case identity
  * @param result completed result
+ * @param options output controls other than `json`
  * @returns the corpus entry
  */
-function corpusCase(name: string, result: CommandResult): CorpusCase {
-  return { name, result };
+function corpusCase(
+  name: string,
+  result: CommandResult,
+  options: CommandOptions = {},
+): CorpusCase {
+  return { name, result, options };
 }
 
 /**
