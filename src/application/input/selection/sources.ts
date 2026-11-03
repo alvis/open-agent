@@ -16,6 +16,14 @@ export interface SelectionContext {
   interaction?: Interaction;
 }
 
+/** a value read or resolved from its sources, with every problem found */
+export interface Resolved<T> {
+  /** the value; undefined for an optional value nobody supplied */
+  value: T;
+  /** why supplied values could not be read */
+  problems: readonly string[];
+}
+
 /** how one step reads its sources before prompting or defaulting */
 interface StepSources {
   /** explicit flag value */
@@ -38,6 +46,16 @@ interface EnvironmentReader {
    * @returns the trimmed entries
    */
   list(environment: string): string[] | undefined;
+  /**
+   * reads a whole number
+   * @param flag explicit flag value
+   * @param environment environment variable
+   * @returns the number when supplied, and why a supplied value is unreadable
+   */
+  number(
+    flag: number | undefined,
+    environment: string,
+  ): Resolved<number | undefined>;
 }
 
 /**
@@ -45,7 +63,7 @@ interface EnvironmentReader {
  * @param sources process and credential file values
  * @param scope whether environment values apply to this run
  * @param scope.isEnabled false when only flags apply
- * @returns accessors for ids and lists
+ * @returns accessors for ids, lists and whole numbers
  */
 export function environmentReader(
   sources: InputSources,
@@ -65,7 +83,30 @@ export function environmentReader(
         ?.split(',')
         .map((entry) => entry.trim())
         .filter(Boolean),
+    number: (flag, environment) =>
+      flag === undefined
+        ? parseWholeNumber(environment, raw(environment))
+        : { value: flag, problems: [] },
   };
+}
+
+/**
+ * parses an environment whole number
+ * @param name environment variable
+ * @param value raw value
+ * @returns the number, or undefined with a problem when the value is not a whole number
+ */
+function parseWholeNumber(
+  name: string,
+  value: string | undefined,
+): Resolved<number | undefined> {
+  if (value === undefined) {
+    return { value: undefined, problems: [] };
+  }
+
+  return /^-?\d+$/u.test(value)
+    ? { value: Number(value), problems: [] }
+    : { value: undefined, problems: [`${name} must be a whole number`] };
 }
 
 /** prompts that skip a step with only one choice */
@@ -90,6 +131,13 @@ export interface Prompts {
     message: string,
     choices: ReadonlyArray<InteractionChoice<V>>,
   ): Promise<V[] | undefined>;
+  /**
+   * asks for a whole number of minutes
+   * @param message prompt label
+   * @param defaultValue value Enter keeps
+   * @returns the number
+   */
+  number(message: string, defaultValue: number): Promise<number>;
 }
 
 /**
@@ -110,5 +158,16 @@ export function activePrompts(context: SelectionContext): Prompts | undefined {
       choices.length > 1
         ? interaction.multiselect({ message }, choices)
         : undefined,
+    number: async (message, defaultValue) =>
+      Number(
+        await interaction.input({
+          message,
+          defaultValue: String(defaultValue),
+          validate: (value) =>
+            /^\d+$/u.test(value.trim())
+              ? undefined
+              : 'Enter a whole number of minutes',
+        }),
+      ),
   };
 }

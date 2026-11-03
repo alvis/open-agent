@@ -14,6 +14,8 @@ export type HarnessEvidence = HarnessCommandEvidence;
 
 /** non-secret native harness configuration and authentication evidence */
 export interface NativeHarnessInspection {
+  /** every exact idle-governor awake command the harness driver owns is installed in its hooks */
+  awakeHooksInstalled: boolean;
   /** how the harness authenticates */
   authentication: 'native' | 'not-configured';
 }

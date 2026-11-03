@@ -10,6 +10,7 @@ const INSPECTION_MESSAGES: Record<InspectionProbe, string> = {
   services: 'Checking managed services',
   network: 'Checking the selected network',
   native: 'Checking harness configuration and the agent environment',
+  governor: 'Reading the idle governor state',
 };
 
 /**

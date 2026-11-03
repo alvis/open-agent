@@ -14,6 +14,7 @@ const params = {
   state: 'incomplete',
   family: 'debian',
   profile: DISABLED_NETWORK_PROFILE,
+  provider: registry.providers.sprite,
   tools: [],
   resolutions: [],
   agent: { id: 't3', service },
@@ -63,6 +64,30 @@ describe('fn:buildEnvironment', () => {
       expect.objectContaining({
         message: expect.stringMatching(/inconsistent.*service/u),
       }),
+    );
+  });
+
+  it('should record no awake adapter for a provider without one', () => {
+    const { id, capabilities } = registry.providers.sprite;
+    const provider = {
+      id,
+      capabilities: { ...capabilities, keepAwakeMode: 'none' },
+    } satisfies Parameters<typeof buildEnvironment>[1]['provider'];
+    const declarations = {
+      ...registry,
+      providers: {
+        ...registry.providers,
+        sprite: { ...registry.providers.sprite, ...provider },
+      },
+    };
+
+    const environment = buildEnvironment(declarations, {
+      ...params,
+      provider,
+    });
+
+    expect(environment.provider).toEqual(
+      expect.objectContaining({ id, awakeAdapter: null }),
     );
   });
 });

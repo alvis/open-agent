@@ -31,7 +31,7 @@ describe('input source resolution', () => {
           options: { yes: true },
           sources,
           section: 'all',
-        }),
+        }).value,
       });
       const create = await resolveCreateSelection(dependencies, {
         options: { yes: true },
@@ -50,7 +50,7 @@ describe('input source resolution', () => {
     expect(observed.result.create).toMatchObject({ network: 'none' });
   });
 
-  it('should accept the default create selection without a prompt', async () => {
+  it('should accept the default create selection through Enter at every prompt', async () => {
     const observed = await driveInk(
       async (interaction) =>
         resolveCreateSelection(dependencies, {
@@ -58,14 +58,17 @@ describe('input source resolution', () => {
           sources: { processEnv: {}, fileEnv: {} },
           interaction,
         }),
-      [],
+      [{ waitFor: 'Suspend after idle', input: '\r' }],
     );
 
-    expect(observed.matchedSteps, observed.output).toBe(0);
+    expect(observed.matchedSteps, observed.output).toBe(1);
     expect(observed.result.candidate).toMatchObject({
       provider: 'sprite',
       harnesses: ['claude'],
       network: 'none',
+      options: {
+        idleTimeoutMinutes: 5,
+      },
     });
   });
 });

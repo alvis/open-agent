@@ -15,6 +15,7 @@ import type { HarnessInspection } from '#domain/observations/harness';
 
 const OBSERVATION = {
   configuration: {
+    awakeHooksInstalled: false,
     authentication: 'native',
   },
   evidence: undefined,

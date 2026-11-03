@@ -178,7 +178,7 @@ ${Object.values(registry.providers)
       `  ${credential.environment.padEnd(ENVIRONMENT_NAME_WIDTH)} ${displayName} credential; --provider-token-source selects another source.`,
   )
   .join('\n')}
-  OPEN_AGENT_*        Driver selection; see open-agent create --help.
+  OPEN_AGENT_*        Driver and option selection; see open-agent create --help.
   CI, NON_INTERACTIVE Disable prompts when set to 1, true, yes, or on.
   NO_COLOR            Disable color unless --color is selected.
 

@@ -148,6 +148,17 @@ const TRAILING_FIELDS: Readonly<Record<string, Check>> = {
       version: optional(text),
     }),
   ),
+  provider: shape({
+    id: text,
+    keepAwakeMode: oneOf('native-deadline', 'none'),
+    idleForms: listOf(oneOf('provider-managed', 'disk-snapshot')),
+    wakeMode: oneOf('url-traffic', 'cli-restore', 'always-on'),
+    supportsCliWakeSleep: flag,
+    maxAwakeDeadlineMinutes: (value) => value === null || atLeast(1)(value),
+    idleTimeoutMinutes: atLeast(0),
+    holdMaxMinutes: atLeast(1),
+    awakeAdapter: (value) => value === null || path(value),
+  }),
   agent: shape({
     id: text,
     service: name,

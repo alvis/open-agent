@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { commandError } from '#application/failures';
 import { resolveSecret } from '#application/input/sources';
@@ -19,6 +19,7 @@ import type { CommandOptions } from '#application/contracts';
 import type { CurrentReadiness } from '#application/data';
 import type { MachineSummary } from '#application/machine';
 import type { CommandResult } from '#application/result';
+import type { GovernorState } from '#domain/observations/governor';
 import type { GuestInspection } from '#domain/observations/inspection';
 
 const machine: MachineSummary & { provider: 'sprite' } = {
@@ -31,6 +32,18 @@ const machine: MachineSummary & { provider: 'sprite' } = {
   readiness: 'not inspected',
 };
 
+const RECORDED_GOVERNOR: GovernorState = {
+  version: 1,
+  updatedAt: '2026-10-09T00:10:00.000Z',
+  keepAwakeMode: 'native-deadline',
+  idleTimeoutMinutes: 5,
+  holdMaxMinutes: 60,
+  lastHeartbeat: '2026-10-09T00:10:00.000Z',
+  holds: [],
+  openHolds: 0,
+  deadline: '2026-10-09T00:15:00.000Z',
+  diagnostics: [],
+};
 const inspection: GuestInspection = {
   services: [],
   network: {
@@ -40,6 +53,7 @@ const inspection: GuestInspection = {
   },
   native: {
     claude: {
+      awakeHooksInstalled: false,
       authentication: 'not-configured',
     },
     harnesses: {
@@ -50,6 +64,7 @@ const inspection: GuestInspection = {
   },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
+  governor: { recorded: true, state: RECORDED_GOVERNOR },
 };
 
 /**
@@ -352,6 +367,7 @@ describe('fn:prepareResult', () => {
           native: inspection.native,
           services: [{ name: 't3-code', state: 'running' }],
           environment: inspection.environment,
+          governor: inspection.governor,
         },
       },
     };
@@ -380,6 +396,218 @@ describe('fn:prepareResult', () => {
     expect(output.stderr).toBe('');
   });
 
+  it('should show whether each harness has the awake hooks installed', () => {
+    const output = captureResult(
+      {
+        command: 'show',
+        ok: true,
+        data: {
+          machine,
+          inspection: {
+            ...inspection,
+            native: {
+              ...inspection.native!,
+              claude: {
+                ...inspection.native!.claude!,
+                awakeHooksInstalled: true,
+              },
+            },
+          },
+        },
+      },
+      {},
+    );
+
+    expect(output.stdout.replaceAll(/\s+/g, ' ')).toMatch(
+      /Awake hooks installed: Yes/,
+    );
+  });
+
+  describe('idle governor line by keep-awake mode', () => {
+    const NOW = Date.parse('2026-10-09T00:12:00.000Z');
+    const { deadline: _deadline, ...NO_DEADLINE_GOVERNOR } = RECORDED_GOVERNOR;
+    /**
+     * shows a machine whose governor state differs from the fixture's
+     * @param state recorded state to render
+     * @param now time used for relative deadline rendering
+     * @returns the flattened human output
+     */
+    const governorOutput = (state: GovernorState, now = NOW): string => {
+      vi.useFakeTimers({ toFake: ['Date'], now });
+      try {
+        const output = captureResult(
+          {
+            command: 'show',
+            ok: true,
+            data: {
+              machine,
+              inspection: {
+                ...inspection,
+                governor: {
+                  recorded: true,
+                  state,
+                },
+              },
+            },
+          },
+          {},
+        );
+
+        return output.stdout.replaceAll(/\s+/g, ' ');
+      } finally {
+        vi.useRealTimers();
+      }
+    };
+
+    it('should show a native-deadline provider as awake until the deadline and then on its own idle rules', () => {
+      const output = governorOutput(RECORDED_GOVERNOR);
+
+      expect(output).toMatch(
+        /Idle governor.*last heartbeat 2026-10-09T00:10:00\.000Z; 0 open holds; awake until 2026-10-09T00:15:00\.000Z, then the provider's idle rules apply/,
+      );
+    });
+
+    it('should mark a passed deadline as passed', () => {
+      expect(governorOutput(RECORDED_GOVERNOR, NOW + 10 * 60_000)).toMatch(
+        /awake deadline 2026-10-09T00:15:00\.000Z passed, the provider's idle rules apply/,
+      );
+    });
+
+    it('should show a native-deadline provider with nothing keeping it awake and a released task', () => {
+      expect(
+        governorOutput({
+          ...NO_DEADLINE_GOVERNOR,
+          adapter: {
+            at: '2026-10-09T00:10:00.000Z',
+            action: 'apply-deadline',
+            result: 'released',
+          },
+        }),
+      ).toMatch(
+        /0 open holds; nothing keeps it awake, the provider's idle rules apply; awake task released/,
+      );
+    });
+
+    it('should show a provider that never keeps the workstation awake as not governed', () => {
+      const output = governorOutput({
+        ...NO_DEADLINE_GOVERNOR,
+        keepAwakeMode: 'none',
+      });
+
+      expect(output).toMatch(/0 open holds; not governed/);
+    });
+  });
+
+  it('should show why no idle governor state is recorded and the last adapter failure', () => {
+    const unrecorded = captureResult(
+      {
+        command: 'show',
+        ok: true,
+        data: {
+          machine,
+          inspection: {
+            ...inspection,
+            governor: {
+              recorded: false,
+              reason: 'no awake event has been recorded yet',
+            },
+          },
+        },
+      },
+      {},
+    );
+    const failingResult: CommandResult = {
+      command: 'show',
+      ok: true,
+      data: {
+        machine,
+        inspection: {
+          ...inspection,
+          governor: {
+            recorded: true,
+            state: {
+              version: 1,
+              updatedAt: '2026-10-09T00:10:00.000Z',
+              idleTimeoutMinutes: 5,
+              holdMaxMinutes: 60,
+              holds: [
+                {
+                  source: 'claude',
+                  session: 'a'.repeat(64),
+                  expiresAt: '2026-10-09T00:15:00.000Z',
+                },
+              ],
+              openHolds: 1,
+              adapter: {
+                at: '2026-10-09T00:10:00.000Z',
+                action: 'apply-deadline',
+                failure: 'deadline refused',
+              },
+              diagnostics: [],
+            },
+          },
+        },
+      },
+    };
+    const failing = captureResult(failingResult, {});
+    const json = captureResult(failingResult, { json: true });
+
+    expect(
+      JSON.parse(json.stdout).data.inspection.governor.state.holds,
+    ).toEqual([
+      {
+        source: 'claude',
+        session: 'a'.repeat(64),
+        expiresAt: '2026-10-09T00:15:00.000Z',
+      },
+    ]);
+
+    expect(unrecorded.stdout.replaceAll(/\s+/g, ' ')).toMatch(
+      /Idle governor.*not recorded \(no awake event has been recorded yet\)/,
+    );
+    expect(failing.stdout.replaceAll(/\s+/g, ' ')).toMatch(
+      /Idle governor.*no heartbeat yet; 1 open hold; nothing keeps it awake; adapter failed: deadline refused/,
+    );
+  });
+
+  it('should show guest-supplied governor text without control characters', () => {
+    const output = captureResult(
+      {
+        command: 'show',
+        ok: true,
+        data: {
+          machine,
+          inspection: {
+            ...inspection,
+            governor: {
+              recorded: true,
+              state: {
+                version: 1,
+                updatedAt: '2026-10-09T00:10:00.000Z',
+                idleTimeoutMinutes: 5,
+                holdMaxMinutes: 60,
+                holds: [],
+                openHolds: 0,
+                adapter: {
+                  at: '2026-10-09T00:10:00.000Z',
+                  action: 'apply-deadline',
+                  failure: 'deadline\u001b[2J refused\u009b31m',
+                },
+                diagnostics: [],
+              },
+            },
+          },
+        },
+      },
+      {},
+    );
+
+    expect(output.stdout).not.toMatch(/\p{Cc}(?<!\n)/u);
+    expect(output.stdout.replaceAll(/\s+/g, ' ')).toContain(
+      'adapter failed: deadline[2J refused31m',
+    );
+  });
+
   it('should render failed readiness facts without executable service internals', () => {
     const currentReadiness: CurrentReadiness = {
       ready: false,
@@ -390,6 +618,7 @@ describe('fn:prepareResult', () => {
       network: inspection.network,
       native: inspection.native,
       environment: inspection.environment,
+      governor: inspection.governor,
     };
     const output = captureResult(
       {
@@ -546,6 +775,7 @@ describe('fn:prepareResult', () => {
             native: inspection.native,
             services: [],
             environment: inspection.environment,
+            governor: inspection.governor,
           },
         },
       },

@@ -10,8 +10,8 @@ import type { SetupContext } from './context';
 
 /**
  * records setup readiness, the persisted profile summary and the open-agent
- * version in provider metadata; a run that leaves the summary unchanged
- * leaves the metadata as it is unless it recorded another version
+ * version in provider metadata; a run that changes only options the summary
+ * omits leaves the metadata as it is unless it recorded another version
  * @param section setup area that completed
  * @param context provider, workstation, persisted profile and whether this run changed it
  * @returns the workstation as recorded after setup

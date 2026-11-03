@@ -18,7 +18,11 @@ import type {
   GuestExecResult,
   GuestProcess,
 } from '#application/ports/guest-channel';
-import type { GuestSession, SessionFamily } from '#application/ports/session';
+import type {
+  GuestSession,
+  SessionAwakeHold,
+  SessionFamily,
+} from '#application/ports/session';
 import type { OsImage } from '#domain/guest';
 import type { WorkstationRecord } from '#domain/workstation';
 
@@ -38,6 +42,8 @@ interface GuestSessionParams {
   family: SessionFamily;
   /** the provider's declared images */
   images: readonly OsImage[];
+  /** holds the workstation awake while the session lives; a seam for the idle governor */
+  awakeHold: SessionAwakeHold;
   /** pid of a lost session of this host whose shell and command this one ends */
   supersedes?: number;
 }
@@ -45,8 +51,10 @@ interface GuestSessionParams {
 /** what {@link openWorkstationSession} opens a session with */
 export interface WorkstationSessionParams extends Omit<
   GuestSessionParams,
-  'shell' | 'images'
+  'shell' | 'images' | 'awakeHold'
 > {
+  /** holds the workstation awake while the session lives */
+  awakeHold: SessionAwakeHold;
   /** the provider that opens the root shell and declared the images */
   provider: Pick<
     ProviderDriver,
@@ -58,8 +66,8 @@ export interface WorkstationSessionParams extends Omit<
 
 /**
  * waits until the guest has booted, opens a root shell and opens a session
- * on it
- * @param params the provider, workstation and family
+ * on it, which holds the workstation awake while its shell lives
+ * @param params the provider, workstation, family and awake hold
  * @returns a session that holds the guest's setup lock
  */
 export async function openWorkstationSession(
@@ -79,14 +87,14 @@ export async function openWorkstationSession(
 /**
  * opens a session on a root shell: probes the guest's OS and refuses another
  * family than the declared one, then prepares the shell, ends an orphaned
- * process group and takes the root-only lock
- * @param params the shell, family and declared images
+ * process group, takes the root-only lock and opens the awake hold
+ * @param params the shell, family, declared images and awake hold
  * @returns a session that holds the guest's setup lock
  */
 async function openGuestSession(
   params: GuestSessionParams,
 ): Promise<GuestSession> {
-  const { shell, family, images, supersedes } = params;
+  const { shell, family, images, awakeHold, supersedes } = params;
   const session = new ShellSession(shell, family);
   try {
     const probeMarker = newMarker();
@@ -113,6 +121,7 @@ async function openGuestSession(
       OPEN_LIMIT_MS + LOCK_WAIT_SECONDS * MILLISECONDS_PER_SECOND,
     );
     session.start(release, openedPid(opened));
+    await session.holdAwake(awakeHold);
 
     return session;
   } catch (error) {

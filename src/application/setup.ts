@@ -215,7 +215,7 @@ async function readStaticSetupInputs(
   });
   requireValidSuppliedSelection(dependencies, supplied, options);
 
-  return { sources, supplied };
+  return { sources, supplied: supplied.value };
 }
 
 /** the named inputs of setup success */

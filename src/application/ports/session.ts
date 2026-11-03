@@ -72,6 +72,25 @@ export type SessionFamily = Pick<
   'id' | 'matches' | 'shell' | 'sessionCommands' | 'runAs'
 >;
 
+/**
+ * the commands that hold the workstation awake for as long as a session's
+ * shell lives; the idle governor fills it in, keyed by the shell's pid
+ */
+export interface SessionAwakeHold {
+  /**
+   * renders the command that opens the hold
+   * @param pid the session shell's pid
+   * @returns the command
+   */
+  open(pid: number): SessionCommand;
+  /**
+   * renders the command that closes the hold
+   * @param pid the session shell's pid
+   * @returns the command
+   */
+  close(pid: number): SessionCommand;
+}
+
 /** the provider facts a setup connection opens sessions with */
 export type ConnectionProvider = Pick<
   ProviderDriver,

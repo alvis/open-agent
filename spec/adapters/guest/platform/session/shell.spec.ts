@@ -75,7 +75,34 @@ async function scriptAt(shell: ControlledShell, count: number): Promise<void> {
 }
 
 describe('cl:ShellSession', () => {
-  it('should run framed commands and redact resolved secrets', async () => {
+  it('should finish disposal when the shell exits during awake-hold release', async () => {
+    const shell = new ControlledShell({ exitOnEnd: false });
+    const session = new ShellSession(shell, debianFamily);
+    session.start(RELEASE, 51);
+    const opening = session.holdAwake({
+      open: () => ({ argv: ['hold', 'open'], timeoutMs: 50 }),
+      close: () => ({ argv: ['hold', 'close'], timeoutMs: 50 }),
+    });
+    await scriptAt(shell, 1);
+    shell.reply(0, { stdout: '', stderr: '', exitCode: 0 });
+    await opening;
+
+    let closed = false;
+    const closing = session[Symbol.asyncDispose]().then(() => {
+      closed = true;
+    });
+    await scriptAt(shell, 2);
+    shell.emit('exit', 0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect({ closed, killed: shell.killed }).toEqual({
+      closed: true,
+      killed: false,
+    });
+    await closing;
+  });
+
+  it('should run framed commands, redact resolved secrets, and release its awake hold', async () => {
     const shell = new ControlledShell();
     const session = new ShellSession(shell, debianFamily);
     const secret = 'shell-session-secret-unique-20261026';
@@ -87,9 +114,25 @@ describe('cl:ShellSession', () => {
     expect(session.release).toBe(RELEASE);
     expect(session.pid).toBe(51);
 
-    const running = session.run({ argv: ['/bin/true'], timeoutMs: 50 });
+    const hold = {
+      open: vi.fn((pid: number) => ({
+        argv: ['hold', 'open', String(pid)] as const,
+        timeoutMs: 50,
+      })),
+      close: vi.fn((pid: number) => ({
+        argv: ['hold', 'close', String(pid)] as const,
+        timeoutMs: 50,
+      })),
+    };
+    const opening = session.holdAwake(hold);
     await scriptAt(shell, 1);
-    shell.reply(0, {
+    expect(shell.scripts[0]?.script).toContain('hold');
+    shell.reply(0, { stdout: '', stderr: '', exitCode: 0 });
+    await opening;
+
+    const running = session.run({ argv: ['/bin/true'], timeoutMs: 50 });
+    await scriptAt(shell, 2);
+    shell.reply(1, {
       stdout: `before ${secret} after`,
       stderr: `error ${secret}`,
       exitCode: 7,
@@ -100,7 +143,13 @@ describe('cl:ShellSession', () => {
       stderr: 'error [REDACTED]',
     });
 
-    await session[Symbol.asyncDispose]();
+    const closing = session[Symbol.asyncDispose]();
+    await scriptAt(shell, 3);
+    expect(shell.scripts[2]?.script).toContain('close');
+    shell.reply(2, { stdout: '', stderr: '', exitCode: 0 });
+    await closing;
+    expect(hold.open).toHaveBeenCalledExactlyOnceWith(51);
+    expect(hold.close).toHaveBeenCalledExactlyOnceWith(51);
     expect(shell.killed).toBe(false);
   });
 
@@ -244,5 +293,23 @@ describe('cl:ShellSession', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     await closing;
     expect(shell.killed).toBe(true);
+  });
+
+  it('should close even when the guest shell stops reading the awake-hold release', async () => {
+    const shell = new ControlledShell();
+    const session = new ShellSession(shell, debianFamily);
+    session.start(RELEASE, 51);
+    const opening = session.holdAwake({
+      open: () => ({ argv: ['hold', 'open'], timeoutMs: 50 }),
+      close: () => ({ argv: ['hold', 'close'], timeoutMs: 50 }),
+    });
+    await scriptAt(shell, 1);
+    shell.reply(0, { stdout: '', stderr: '', exitCode: 0 });
+    await opening;
+    const closing = session[Symbol.asyncDispose]();
+    await scriptAt(shell, 2);
+    shell.stdin.emit('error', new Error('write stopped'));
+    await closing;
+    expect(shell.killed).toBe(false);
   });
 });

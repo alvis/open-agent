@@ -49,6 +49,7 @@ const OBSERVED = {
   },
   native: {
     claude: {
+      awakeHooksInstalled: true,
       authentication: 'not-configured',
     },
     agentEnvironment: SERVED,
@@ -60,6 +61,7 @@ const OBSERVED = {
   },
   environment: environmentOf(DISABLED_NETWORK_PROFILE),
   probeFailures: [],
+  governor: { recorded: false, reason: 'no awake event has been recorded yet' },
 } satisfies GuestInspection;
 
 const REQUEST = {

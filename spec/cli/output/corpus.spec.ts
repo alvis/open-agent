@@ -278,6 +278,7 @@ function expectShowJson(
       data: {
         inspection: {
           network: { online: inspection.network.online },
+          governor: { recorded: inspection.governor.recorded },
         },
       },
     });

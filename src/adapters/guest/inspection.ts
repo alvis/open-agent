@@ -1,3 +1,4 @@
+import { inspectGovernor } from '#adapters/guest/governor';
 import { checkOperation, traceStage } from '#kernel/operation';
 
 import { settleInspectionResults } from './inspection/results';
@@ -42,22 +43,33 @@ export function createInspection(context: {
       );
       const { profile } = environment;
       const network = registry.networks[profile.network];
-      const [serviceProbe, networkProbe, nativeProbe] =
-        await Promise.allSettled([
-          inspectStage('services', async () => guest.services.list(), onProbe),
-          inspectStage('network', async () => network.status(guest), onProbe),
-          inspectStage(
-            'native',
-            async () => native.inspect(guest, profile),
-            onProbe,
-          ),
-        ] as const);
+      // the governor report settles every failure into a reason itself
+      const [[serviceProbe, networkProbe, nativeProbe], governor] =
+        await Promise.all([
+          Promise.allSettled([
+            inspectStage(
+              'services',
+              async () => guest.services.list(),
+              onProbe,
+            ),
+            inspectStage('network', async () => network.status(guest), onProbe),
+            inspectStage(
+              'native',
+              async () => native.inspect(guest, profile),
+              onProbe,
+            ),
+          ] as const),
+          inspectStage('governor', async () => inspectGovernor(guest), onProbe),
+        ]);
 
-      return settleInspectionResults({ environment }, [
-        serviceProbe,
-        networkProbe,
-        nativeProbe,
-      ]);
+      return {
+        ...settleInspectionResults({ environment }, [
+          serviceProbe,
+          networkProbe,
+          nativeProbe,
+        ]),
+        governor,
+      };
     },
   };
 }

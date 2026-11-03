@@ -54,10 +54,18 @@ describe('fn:reviewCreatePlan', () => {
       signal: new AbortController().signal,
       onStatus: status,
     });
+    const profile = {
+      ...DISABLED_NETWORK_PROFILE,
+      options: {
+        ...DISABLED_NETWORK_PROFILE.options,
+        idleTimeoutMinutes: 0,
+      },
+    };
+
     await withOperation(operation, async () =>
       reviewCreatePlan(dependencies, {
         values: { name: 'box', token: 'private-token' },
-        input: { ...input, profile: DISABLED_NETWORK_PROFILE },
+        input: { ...input, profile },
         preflight: { checks: [], reminders: [] },
       }),
     );

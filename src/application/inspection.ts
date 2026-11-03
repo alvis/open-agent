@@ -310,6 +310,7 @@ export async function doctorWorkstation(
         state: service.status,
       })),
       environment: inspection.environment,
+      governor: inspection.governor,
     },
   };
 

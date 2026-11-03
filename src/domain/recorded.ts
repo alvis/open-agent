@@ -14,8 +14,8 @@ export interface RecordedProfile {
 
 /**
  * reduces a profile to the compact selection a provider records natively
- * @param profile validated workstation profile
- * @returns the recorded driver ids
+ * @param profile validated workstation profile, options included or not
+ * @returns driver ids without options
  */
 export function summarizeProfile(profile: ProfileSummary): ProfileSummary {
   return {

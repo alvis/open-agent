@@ -128,9 +128,13 @@ export function validateSetupIntegrationOptions(
       message: 'Network switches require --section network or --section all',
     });
   }
-  if (options.harness !== undefined) {
+  if (
+    options.harness !== undefined ||
+    options.idleMinutes !== undefined ||
+    options.holdMaxMinutes !== undefined
+  ) {
     throw new CommandValidationError({
-      message: 'Harness switches require --section all',
+      message: 'Harness and idle switches require --section all',
     });
   }
 }

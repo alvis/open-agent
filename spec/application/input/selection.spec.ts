@@ -34,7 +34,7 @@ async function resolveSetup(
     section: SetupSection;
   },
 ): ReturnType<typeof resolveSetupSelection> {
-  const supplied = readSetupSelection(dependencies, context);
+  const { value: supplied } = readSetupSelection(dependencies, context);
 
   return resolveSetupSelection(dependencies, { ...context, supplied });
 }
@@ -94,7 +94,7 @@ function recordingInteraction(): {
 }
 
 describe('fn:resolveCreateSelection', () => {
-  it('should skip single-choice steps', async () => {
+  it('should ask harnesses and the supported options in order while skipping single-choice steps and hold-max', async () => {
     const { interaction, asked } = recordingInteraction();
 
     const { candidate } = await resolveCreateSelection(dependencies, {
@@ -103,7 +103,7 @@ describe('fn:resolveCreateSelection', () => {
       interaction,
     });
 
-    expect(asked).toEqual([]);
+    expect(asked).toEqual(['Suspend after idle (minutes, 0 = never)']);
     expect(candidate).toMatchObject({
       provider: 'sprite',
       agent: 't3',
@@ -120,19 +120,20 @@ describe('fn:resolveCreateSelection', () => {
         provider: 'sprite',
         harness: ['claude'],
         network: 'none',
+        idleMinutes: 0,
       },
       sources: empty,
       interaction,
     });
 
     expect(asked).toEqual([]);
-    expect(candidate.network).toBe('none');
+    expect(candidate.options.idleTimeoutMinutes).toBe(0);
   });
 
   it('should take the flag over the env file over the process environment', async () => {
     const sources: InputSources = {
-      processEnv: { OPEN_AGENT_NETWORK: 'process-network' },
-      fileEnv: { OPEN_AGENT_NETWORK: 'file-network' },
+      processEnv: { OPEN_AGENT_IDLE_MINUTES: '15' },
+      fileEnv: { OPEN_AGENT_IDLE_MINUTES: '45', OPEN_AGENT_NETWORK: 'none' },
     };
 
     const fromEnvironment = await resolveCreateSelection(dependencies, {
@@ -140,12 +141,49 @@ describe('fn:resolveCreateSelection', () => {
       sources,
     });
     const fromFlag = await resolveCreateSelection(dependencies, {
-      options: { nonInteractive: true, network: 'none' },
+      options: { nonInteractive: true, idleMinutes: 0 },
       sources,
     });
 
-    expect(fromEnvironment.candidate.network).toBe('file-network');
-    expect(fromFlag.candidate.network).toBe('none');
+    expect(fromEnvironment.candidate.options.idleTimeoutMinutes).toBe(45);
+    expect(fromEnvironment.candidate.network).toBe('none');
+    expect(fromFlag.candidate.options.idleTimeoutMinutes).toBe(0);
+  });
+
+  it('should report an unreadable whole number instead of guessing', async () => {
+    const { problems } = await resolveCreateSelection(dependencies, {
+      options: { nonInteractive: true },
+      sources: {
+        processEnv: { OPEN_AGENT_IDLE_MINUTES: 'soon' },
+        fileEnv: {},
+      },
+    });
+
+    expect(problems).toEqual([
+      'OPEN_AGENT_IDLE_MINUTES must be a whole number',
+    ]);
+  });
+
+  it('should report every unreadable number together without prompting', async () => {
+    const { interaction, asked } = recordingInteraction();
+
+    const { problems } = await resolveCreateSelection(dependencies, {
+      options: {},
+      sources: {
+        processEnv: {
+          OPEN_AGENT_IDLE_MINUTES: 'later',
+          OPEN_AGENT_HOLD_MAX_MINUTES: 'soon',
+        },
+        fileEnv: {},
+      },
+      interaction,
+    });
+
+    expect(asked).toEqual([]);
+    expect(problems).toEqual([
+      'OPEN_AGENT_IDLE_MINUTES must be a whole number',
+      'OPEN_AGENT_HOLD_MAX_MINUTES must be a whole number',
+    ]);
   });
 });
 
@@ -170,9 +208,63 @@ describe('fn:resolveSetupSelection', () => {
       network: 'none',
     });
   });
+
+  it('should keep the recorded idle minutes when only the network section is targeted', async () => {
+    const profile = defaultProfile(defaults);
+    const recorded = {
+      ...profile,
+      options: { ...profile.options, idleTimeoutMinutes: 9 },
+    };
+
+    const { candidate } = await resolveSetup({
+      options: { nonInteractive: true, idleMinutes: 0 },
+      sources: empty,
+      recorded,
+      section: 'network',
+    });
+
+    expect(candidate.options).toEqual(recorded.options);
+  });
+
+  it('should not read an environment value the targeted section does not own', () => {
+    const { value, problems } = readSetupSelection(dependencies, {
+      options: {},
+      sources: {
+        processEnv: { OPEN_AGENT_IDLE_MINUTES: 'often' },
+        fileEnv: {},
+      },
+      section: 'network',
+    });
+
+    expect(problems).toEqual([]);
+    expect(value.options).toEqual({
+      idleTimeoutMinutes: undefined,
+      holdMaxMinutes: undefined,
+    });
+  });
 });
 
 describe('fn:suppliedSelectionViolations', () => {
+  it('should defer a provider capability check until a provider is named', () => {
+    const supplied = { options: { holdMaxMinutes: 61 } };
+    const deferred = suppliedSelectionViolations(dependencies, supplied, {
+      isPairingRequested: false,
+    });
+    const determined = suppliedSelectionViolations(
+      dependencies,
+      { ...supplied, provider: 'sprite' },
+      { isPairingRequested: false },
+    );
+
+    expect(deferred).toEqual([]);
+    expect(determined).toMatchObject([
+      {
+        code: 'undeclared-capability',
+        fields: ['provider', 'holdMaxMinutes'],
+      },
+    ]);
+  });
+
   it('should accept a complete compatible selection before workstation lookup', () => {
     const violations = suppliedSelectionViolations(
       dependencies,
@@ -181,6 +273,7 @@ describe('fn:suppliedSelectionViolations', () => {
         agent: 't3',
         harnesses: ['claude'],
         network: 'none',
+        options: {},
       },
       { isPairingRequested: false },
     );
@@ -188,10 +281,41 @@ describe('fn:suppliedSelectionViolations', () => {
     expect(violations).toEqual([]);
   });
 
+  it('should report supplied option bounds', () => {
+    const violations = suppliedSelectionViolations(
+      dependencies,
+      {
+        network: 'none',
+        options: { holdMaxMinutes: 0 },
+      },
+      { isPairingRequested: false },
+    );
+
+    expect(violations.map(({ message }) => message)).toEqual([
+      '--hold-max-minutes (OPEN_AGENT_HOLD_MAX_MINUTES) must be a whole number of minutes of at least 1',
+    ]);
+  });
+
+  it('should report every option violation together', () => {
+    const violations = suppliedSelectionViolations(
+      dependencies,
+      {
+        network: 'none',
+        options: { idleTimeoutMinutes: -2, holdMaxMinutes: 0 },
+      },
+      { isPairingRequested: false },
+    );
+
+    expect(violations.map(({ message }) => message)).toEqual([
+      expect.stringContaining('--idle-minutes'),
+      expect.stringContaining('--hold-max-minutes'),
+    ]);
+  });
+
   it('should report an unknown supplied driver id', () => {
     const violations = suppliedSelectionViolations(
       dependencies,
-      { agent: 'nope' },
+      { agent: 'nope', options: {} },
       { isPairingRequested: false },
     );
 

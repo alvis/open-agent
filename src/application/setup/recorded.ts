@@ -16,7 +16,7 @@ type SuppliedWorkstationKind = Pick<SuppliedSelection, 'provider' | 'agent'>;
  * reconstructs the selection of a workstation whose installation never wrote environment.json
  * @param dependencies the registered drivers, the profile defaults
  * @param workstation workstation with its provider-recorded summary
- * @returns the recorded driver selection, or the default profile
+ * @returns the recorded driver selection with default options, or the default profile
  */
 export function unrecordedProfile(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
@@ -27,7 +27,9 @@ export function unrecordedProfile(
     workstation.metadata.profile,
   );
 
-  return summary ?? defaultProfile(dependencies.defaults);
+  return summary
+    ? { ...summary, options: { ...dependencies.defaults.options } }
+    : defaultProfile(dependencies.defaults);
 }
 
 /**

@@ -21,6 +21,7 @@ const request = {
     localCredentials: false,
     harness: ['claude'],
     network: 'none',
+    idleMinutes: 5,
   },
 } satisfies CommandRequest;
 

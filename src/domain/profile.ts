@@ -1,5 +1,7 @@
 import { isRecord } from '#kernel/guards';
 
+import { OPTION_BOUNDS, optionViolations } from './profile/options';
+import { providerViolations } from './profile/provider';
 import {
   agentViolations,
   harnessSetViolations,
@@ -11,12 +13,16 @@ import type { ProductDeclarations } from '#domain/declarations';
 import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 import type { RecordedProfile } from '#domain/recorded';
 
+export { OPTION_BOUNDS, optionViolations } from './profile/options';
+export { providerViolations } from './profile/provider';
 export {
   agentViolations,
   harnessSetViolations,
   isDriverId,
   unknownDriverViolations,
 } from './profile/selection';
+export type { OptionViolationsParams } from './profile/options';
+export type { ProviderViolationsParams } from './profile/provider';
 export type {
   AgentViolationsParams,
   DriverIdContext,
@@ -32,6 +38,16 @@ export interface WorkstationProfile {
   harnesses: HarnessId[];
   /** selected network driver id */
   network: NetworkId;
+  /** capability-driven options */
+  options: ProfileOptions;
+}
+
+/** options whose meaning depends on declared driver capabilities */
+export interface ProfileOptions {
+  /** minutes without heartbeat or hold before sleep; 0 never initiates sleep */
+  idleTimeoutMinutes: number;
+  /** minutes a turn hold lasts after its last refresh */
+  holdMaxMinutes: number;
 }
 
 /** default driver choices, keyed by the input that selects among them */
@@ -46,10 +62,12 @@ export interface DefaultSelection {
   network: NetworkId;
 }
 
-/** drivers chosen when nothing else chooses them */
+/** drivers and options chosen when nothing else chooses them */
 export interface ProfileDefaults {
   /** default driver choices */
   selection: DefaultSelection;
+  /** default options */
+  options: Readonly<ProfileOptions>;
 }
 
 /** the driver selection a provider records natively for list and plain show */
@@ -68,12 +86,16 @@ export interface ProfileCandidate {
   harnesses: readonly string[];
   /** requested network driver id */
   network: string;
+  /** requested options */
+  options: ProfileOptions;
 }
 
 /** requests that are validated with a profile but not stored in it */
 export interface ProfileValidationOptions {
   /** a pairing code is requested from the ACP agent */
   isPairingRequested?: boolean;
+  /** the caller supplied an idle timeout rather than taking the default */
+  isIdleTimeoutRequested?: boolean;
 }
 
 /** decoded value and catalog used for untrusted profile validation */
@@ -91,7 +113,8 @@ export interface ValidateProfileParams {
 }
 
 /** a profile field a violation can be attributed to */
-export type ProfileField = 'provider' | 'agent' | 'harnesses' | 'network';
+export type ProfileField =
+  'provider' | 'agent' | 'harnesses' | 'network' | keyof ProfileOptions;
 
 /** class of one profile violation */
 type ProfileViolationCode =
@@ -102,6 +125,7 @@ type ProfileViolationCode =
   | 'unsupported-harness'
   | 'missing-acp-adapter'
   | 'undeclared-capability'
+  | 'invalid-option'
   | 'incompatible';
 
 /** one reason a profile is rejected */
@@ -135,7 +159,7 @@ type ProfileValidation = ValidProfile | InvalidProfile;
 
 /**
  * builds the default profile
- * @param defaults the drivers chosen when nothing else chooses them
+ * @param defaults the drivers and options chosen when nothing else chooses them
  * @returns today's default workstation profile
  */
 export function defaultProfile(defaults: ProfileDefaults): WorkstationProfile {
@@ -144,6 +168,7 @@ export function defaultProfile(defaults: ProfileDefaults): WorkstationProfile {
     agent: defaults.selection.agent,
     harnesses: [...defaults.selection.harnesses],
     network: defaults.selection.network,
+    options: { ...defaults.options },
   };
 }
 
@@ -228,6 +253,14 @@ export function validateProfile({
           options,
         })
       : []),
+    ...(isDriverId(provider, { declarations, kind: 'providers' })
+      ? providerViolations({
+          declarations,
+          selected: { provider, options: candidate.options },
+          options,
+        })
+      : []),
+    ...optionViolations({ options: candidate.options }),
   ];
   // incompatibilities are declared against a fully known selection, so they
   // are checked whenever every id resolves, alongside any other violation
@@ -236,7 +269,13 @@ export function validateProfile({
     isDriverId(agent, { declarations, kind: 'agents' }) &&
     isDriverId(network, { declarations, kind: 'networks' }) &&
     harnesses.length === candidate.harnesses.length
-      ? { provider, agent, harnesses, network }
+      ? {
+          provider,
+          agent,
+          harnesses,
+          network,
+          options: { ...candidate.options },
+        }
       : undefined;
   const allViolations = [
     ...violations,
@@ -268,6 +307,7 @@ function incompatibilityViolations(
         'agent' as const,
         'harnesses' as const,
         'network' as const,
+        ...OPTION_BOUNDS.map(({ key }) => key),
       ],
     }));
 }
@@ -278,15 +318,17 @@ function incompatibilityViolations(
  * @returns true when every field has its declared type
  */
 function isProfileCandidate(value: unknown): value is ProfileCandidate {
-  if (!isRecord(value)) {
+  if (!isRecord(value) || !isRecord(value.options)) {
     return false;
   }
+  const { options } = value;
 
   return (
     typeof value.provider === 'string' &&
     typeof value.agent === 'string' &&
     Array.isArray(value.harnesses) &&
     value.harnesses.every((id: unknown) => typeof id === 'string') &&
-    typeof value.network === 'string'
+    typeof value.network === 'string' &&
+    OPTION_BOUNDS.every(({ key }) => typeof options[key] === 'number')
   );
 }

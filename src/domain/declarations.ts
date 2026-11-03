@@ -1,4 +1,4 @@
-import type { OsImage } from '#domain/guest';
+import type { GuestAsset, OsImage } from '#domain/guest';
 import type { GuestCommand } from '#domain/guest-command';
 import type {
   AgentId,
@@ -14,6 +14,15 @@ import type { ToolSpec } from '#domain/tools';
 
 /** how core reaches the guest */
 type GuestChannelMode = 'provider-exec';
+
+/** who decides when the workstation sleeps */
+export type KeepAwakeMode = 'native-deadline' | 'none';
+
+/** a state an idle workstation can enter */
+export type IdleForm = 'provider-managed' | 'disk-snapshot';
+
+/** how a sleeping workstation is woken */
+export type WakeMode = 'url-traffic' | 'cli-restore' | 'always-on';
 
 /** where workstation data survives sleep */
 type PersistenceMode = 'provider-disk' | 'snapshot' | 'host-disk';
@@ -47,6 +56,20 @@ export interface DriverDescriptor<
 export interface ProviderCapabilities {
   /** how core reaches the guest */
   guestChannel: GuestChannelMode;
+  /** who decides when the workstation sleeps */
+  keepAwakeMode: KeepAwakeMode;
+  /** idle forms in preference order */
+  idleForms: readonly IdleForm[];
+  /** how a sleeping workstation is woken */
+  wakeMode: WakeMode;
+  /** a cli-restore provider opts in to governor-initiated sleep */
+  supportsCliWakeSleep: boolean;
+  /**
+   * furthest ahead, in minutes, the provider can keep a workstation awake with
+   * one deadline; null when it has no limit. An idle timeout or turn-hold
+   * maximum above it is refused when the profile is validated
+   */
+  maxAwakeDeadlineMinutes: number | null;
   /** where workstation data survives sleep */
   persistence: PersistenceMode;
   /** how the ACP agent port is published */
@@ -71,7 +94,7 @@ export interface ProfileIncompatibility {
 export interface ProviderDeclaration<
   Name extends string = string,
 > extends DriverDescriptor<'providers', Name> {
-  /** capability axes core branches on */
+  /** capability axes core and the idle governor branch on */
   capabilities: ProviderCapabilities;
   /** combinations validation rejects before any provider call */
   incompatibilities: readonly ProfileIncompatibility[];
@@ -79,6 +102,8 @@ export interface ProviderDeclaration<
   prerequisites: ProviderPrerequisites;
   /** OS images the provider can create workstations from, the default first */
   images: readonly [OsImage, ...OsImage[]];
+  /** guest program the idle governor runs to apply an awake deadline; absent when nothing keeps the provider awake */
+  awakeAsset?: GuestAsset;
 }
 
 /** a process that speaks ACP on a harness's behalf */

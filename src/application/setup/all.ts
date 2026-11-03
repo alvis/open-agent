@@ -1,3 +1,4 @@
+import { awakeHookCommand } from '#application/catalog/awake';
 import {
   configureHarnesses,
   harnessDrivers,
@@ -73,6 +74,7 @@ async function configureSections(
   const network = setupNetwork();
   await configureHarnesses(guest, {
     drivers: harnessDrivers(dependencies.registry, context.profile.harnesses),
+    awakeHook: awakeHookCommand(dependencies.guest.facts),
   });
 
   return network;

@@ -17,6 +17,7 @@ import {
 import { OPEN_AGENT_VERSION } from '#kernel/version';
 
 import { configureNewWorkstation } from './configuration';
+import { withCreateHold } from './hold';
 import { createResult, pairingRetry } from './outcome';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
@@ -62,20 +63,28 @@ export async function finishCreate(
 ): Promise<CommandResult> {
   const { workstation, context, interaction } = params;
   checkOperation();
+  const channel = await context.provider.openGuest(workstation);
   const connection = dependencies.guest.session.connect({
     provider: context.provider,
     workstation,
   });
-  try {
-    return await configureAndFinalize(dependencies, {
-      workstation,
-      context,
-      connection,
-      interaction,
-    });
-  } finally {
-    await connection.close();
-  }
+
+  return withCreateHold(
+    dependencies.guest.facts.awakeCommand,
+    channel,
+    async () => {
+      try {
+        return await configureAndFinalize(dependencies, {
+          workstation,
+          context,
+          connection,
+          interaction,
+        });
+      } finally {
+        await connection.close();
+      }
+    },
+  );
 }
 
 /** the named inputs of configure and finalize */
@@ -104,6 +113,7 @@ async function configureAndFinalize(
   const { workstation, context } = params;
   const { interaction } = params;
   const guest = await configureNewWorkstation(dependencies, {
+    provider: context.provider,
     connection: params.connection,
     interaction,
     configuration: {

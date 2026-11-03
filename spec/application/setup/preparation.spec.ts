@@ -33,7 +33,7 @@ describe('fn:prepareGuestSection', () => {
     const mutation = { started: false };
     const prepared = await prepareGuestSection(dependencies, {
       ...target,
-      supplied: {},
+      supplied: { options: {} },
       sources: { processEnv: {}, fileEnv: {} },
       section: 'agent',
       options: { nonInteractive: true },
@@ -72,7 +72,7 @@ describe('fn:prepareGuestSection', () => {
     const prepared = await prepareGuestSection(dependencies, {
       ...target,
       workstation,
-      supplied: {},
+      supplied: { options: {} },
       sources: { processEnv: {}, fileEnv: {} },
       section: 'all',
       options: {
@@ -124,7 +124,7 @@ describe('fn:prepareGuestSection', () => {
     await expect(
       prepareGuestSection(wired, {
         ...target,
-        supplied: {},
+        supplied: { options: {} },
         sources: { processEnv: {}, fileEnv: {} },
         section: 'network',
         options: { nonInteractive: true, yes: true },

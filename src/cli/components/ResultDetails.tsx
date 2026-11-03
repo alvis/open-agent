@@ -21,6 +21,7 @@ const FIELD_LABELS: Record<string, string> = {
   pairing: 'Agent pairing',
   expiresAt: 'Expires at',
   id: 'ID',
+  awakeHooksInstalled: 'Awake hooks installed',
   gh: 'GitHub CLI',
   jj: 'Jujutsu',
   node: 'Node.js',

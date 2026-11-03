@@ -42,6 +42,7 @@ describe('fn:exposeWhenServing readiness', () => {
       network: { online: false, skipped: true },
       environment: environmentOf(profile),
       probeFailures: [],
+      governor: { recorded: false, reason: 'not recorded' },
     } satisfies GuestInspection;
     vi.mocked(inspectUntilServing).mockResolvedValueOnce(inspection);
 

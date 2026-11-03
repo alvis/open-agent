@@ -4,6 +4,7 @@ import {
   serializeEnvironment,
 } from '#adapters/guest/environment/contracts';
 import { guestServices } from '#adapters/guest/environment/services';
+import { idleStep, IDLE_STEP } from '#adapters/guest/governor';
 import { familyOf } from '#adapters/guest/os/families';
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
 import { BASE_TOOLS } from '#adapters/guest/tools/base';
@@ -87,17 +88,17 @@ export function assertImageTools(
 /**
  * assembles a workstation's setup plan: the guest libraries and assets, the
  * agent account, the bootstrap packages, Homebrew and the ping sysctl, then
- * every resolved tool, environment.json and
+ * every resolved tool, the idle governor's directories, environment.json and
  * the version each tool's manager reports installed, recorded into it
  * @param registry every registered driver
- * @param params the profile, probed release and version
+ * @param params the provider, profile, probed release and version
  * @returns the steps, the resolved tools and the environment they record
  */
 export async function assemblePlan(
   registry: DriverRegistry,
   params: AssemblyParams,
 ): Promise<SetupAssembly> {
-  const { profile, release } = params;
+  const { provider, profile, release } = params;
   const family = familyOf(release);
   const tools = workstationTools(registry, profile);
   const resolutions = resolveTools(
@@ -111,6 +112,7 @@ export async function assemblePlan(
   });
   const foundation = await foundationSteps({
     registry,
+    provider,
     profile,
     release,
     family,
@@ -134,13 +136,14 @@ export async function assemblePlan(
     foundation,
     steps: [
       ...installed,
+      idleStep({ needs: required }),
       fileStep(family, {
         id: ENVIRONMENT_STEP,
         component: 'environment',
         path: ENVIRONMENT_PATH,
         contents: serializeEnvironment(environment),
         mode: ENVIRONMENT_MODE,
-        needs: required,
+        needs: [IDLE_STEP, ...required],
       }),
       versionsStep(family, {
         path: ENVIRONMENT_PATH,
@@ -153,7 +156,7 @@ export async function assemblePlan(
 /**
  * builds the environment the plan writes, its setup still incomplete
  * @param registry every registered driver
- * @param params the profile, version and retained identity
+ * @param params the provider, profile, version and retained identity
  * @param resolved the tools setup resolved and the source picked for each
  * @param resolved.tools every tool setup resolved
  * @param resolved.resolutions the source picked for each tool
@@ -168,7 +171,7 @@ function assembleEnvironment(
   },
 ): GuestEnvironment {
   const { tools, resolutions } = resolved;
-  const { profile, release } = params;
+  const { provider, profile, release } = params;
   const agent = agentService(registry, profile);
 
   return buildEnvironment(registry, {
@@ -177,6 +180,7 @@ function assembleEnvironment(
     state: 'incomplete',
     family: release.family,
     profile,
+    provider,
     tools,
     resolutions,
     agent: { id: profile.agent, service: agent },

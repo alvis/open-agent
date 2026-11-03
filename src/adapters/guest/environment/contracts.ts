@@ -1,5 +1,5 @@
 // environment.json: the one record setup leaves on the guest. The guest's sh
-// programs (links, launchers)
+// programs (links, launchers, governor)
 // read it with jq, and the host reads it back to inspect, update and destroy
 
 import { CommandFault } from '#kernel/faults';

@@ -25,7 +25,7 @@ const DIAGNOSTIC_LIMIT = 512;
 export function settleInspectionResults(
   recorded: Pick<GuestInspection, 'environment'>,
   results: InspectionResults,
-): GuestInspection {
+): Omit<GuestInspection, 'governor'> {
   checkOperation();
   const [serviceProbe, networkProbe, nativeProbe] = results;
   const probeFailures: InspectionProbeFailure[] = [];

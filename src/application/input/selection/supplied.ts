@@ -7,12 +7,16 @@ import { environmentReader } from './sources';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type {
   ProfileField,
+  ProfileOptions,
   ProfileValidationOptions,
   ProfileViolation,
 } from '#domain/profile';
 import type { SelectionField } from '#domain/selection-inputs';
 
-import type { SelectionContext } from './sources';
+import type { Resolved, SelectionContext } from './sources';
+
+/** options a caller can select */
+type SelectableOption = Extract<SelectionField, keyof ProfileOptions>;
 
 /** the values a caller's flags and environment supply, before prompts and defaults */
 export interface SuppliedSelection {
@@ -24,11 +28,19 @@ export interface SuppliedSelection {
   harnesses?: readonly string[];
   /** requested network driver id */
   network?: string;
+  /** requested options */
+  options: Partial<Pick<ProfileOptions, SelectableOption>>;
 }
+
+/** the options a caller can select */
+const SELECTABLE_OPTIONS: readonly SelectableOption[] = [
+  'idleTimeoutMinutes',
+  'holdMaxMinutes',
+];
 
 /**
  * validates what can be known before the workstation's recorded profile is:
- * catalog ids and each capability whose drivers are all
+ * catalog ids, option bounds, and each capability whose drivers are all
  * determined, because they were supplied or the catalog registers only one
  * @param dependencies the registered drivers, the profile defaults
  * @param supplied values a setup run supplies
@@ -47,6 +59,9 @@ export function suppliedSelectionViolations(
     'agent',
     ...(supplied.harnesses === undefined ? [] : (['harnesses'] as const)),
     ...(supplied.network === undefined ? [] : (['network'] as const)),
+    ...SELECTABLE_OPTIONS.filter(
+      (field) => supplied.options[field] !== undefined,
+    ),
   ]);
   const validation = validateProfile({
     declarations: dependencies.registry,
@@ -56,8 +71,15 @@ export function suppliedSelectionViolations(
       harnesses:
         supplied.harnesses ?? dependencies.defaults.selection.harnesses,
       network: supplied.network ?? dependencies.defaults.selection.network,
+      options: {
+        ...dependencies.defaults.options,
+        ...definedOptions(supplied),
+      },
     },
-    options: requests,
+    options: {
+      ...requests,
+      isIdleTimeoutRequested: supplied.options.idleTimeoutMinutes !== undefined,
+    },
   });
 
   return validation.isValid
@@ -73,13 +95,13 @@ export function suppliedSelectionViolations(
  * @param dependencies the registered drivers, which declare the selection inputs
  * @param context flags and sources
  * @param fields fields the run owns
- * @returns the supplied values
+ * @returns the supplied values and every unreadable environment value
  */
 export function readSelection(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: Omit<SelectionContext, 'interaction'>,
   fields: readonly SelectionField[],
-): SuppliedSelection {
+): Resolved<SuppliedSelection> {
   const { options, sources } = context;
   const read = environmentReader(sources);
   const inputs = selectionInputs();
@@ -87,21 +109,86 @@ export function readSelection(
     fields.includes(field) ? inputs[field].environment : undefined;
   const harnessEnvironment = owned('harnesses');
   const networkEnvironment = owned('network');
+  const numbers = readNumberOptions(options, read, owned);
 
   return {
-    provider: read.choice({
-      flag: options.provider,
-      environment: owned('provider'),
-    }),
-    agent: read.choice({ flag: options.agent, environment: owned('agent') }),
-    harnesses: harnessEnvironment
-      ? (options.harness ?? read.list(harnessEnvironment))
-      : undefined,
-    network: networkEnvironment
-      ? read.choice({
-          flag: options.network,
-          environment: networkEnvironment,
-        })
-      : undefined,
+    value: {
+      provider: read.choice({
+        flag: options.provider,
+        environment: owned('provider'),
+      }),
+      agent: read.choice({ flag: options.agent, environment: owned('agent') }),
+      harnesses: harnessEnvironment
+        ? (options.harness ?? read.list(harnessEnvironment))
+        : undefined,
+      network: networkEnvironment
+        ? read.choice({
+            flag: options.network,
+            environment: networkEnvironment,
+          })
+        : undefined,
+      options: numbers.value,
+    },
+    problems: numbers.problems,
   };
+}
+
+/** the options whose values are whole numbers of minutes */
+const NUMBER_OPTIONS = [
+  'idleTimeoutMinutes',
+  'holdMaxMinutes',
+] as const satisfies readonly SelectableOption[];
+
+type NumberOption = (typeof NUMBER_OPTIONS)[number];
+
+/**
+ * reads the whole-number options a run owns from their flags and environment
+ * @param options flags of the run
+ * @param read reader over the environment sources
+ * @param owned names the environment variable of a field the run owns
+ * @returns the supplied numbers and every unreadable value
+ */
+function readNumberOptions(
+  options: SelectionContext['options'],
+  read: ReturnType<typeof environmentReader>,
+  owned: (field: SelectionField) => string | undefined,
+): Resolved<Partial<Record<NumberOption, number>>> {
+  const flags: Record<NumberOption, number | undefined> = {
+    idleTimeoutMinutes: options.idleMinutes,
+    holdMaxMinutes: options.holdMaxMinutes,
+  };
+  const resolved = NUMBER_OPTIONS.map((field) => {
+    const environment = owned(field);
+
+    return {
+      field,
+      ...(environment
+        ? read.number(flags[field], environment)
+        : { value: undefined, problems: [] }),
+    };
+  });
+
+  return {
+    value: Object.fromEntries(
+      resolved.map(({ field, value }) => [field, value]),
+    ),
+    problems: resolved.flatMap(({ problems }) => problems),
+  };
+}
+
+/**
+ * keeps only the options a caller supplied
+ * @param supplied values a caller supplied
+ * @returns the supplied options without unset keys
+ */
+function definedOptions(
+  supplied: SuppliedSelection,
+): Partial<Pick<ProfileOptions, SelectableOption>> {
+  return Object.fromEntries(
+    SELECTABLE_OPTIONS.flatMap((field) => {
+      const value = supplied.options[field];
+
+      return value === undefined ? [] : [[field, value]];
+    }),
+  );
 }

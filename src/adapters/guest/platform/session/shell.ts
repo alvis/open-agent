@@ -12,6 +12,7 @@ import type {
 } from '#application/ports/guest-channel';
 import type {
   GuestSession,
+  SessionAwakeHold,
   SessionCommand,
   SessionFamily,
 } from '#application/ports/session';
@@ -48,6 +49,7 @@ export class ShellSession implements GuestSession {
   #hasReported = false;
   #exitCode: number | undefined;
   #queue: Promise<unknown> = Promise.resolve();
+  #awakeHold: SessionAwakeHold | undefined;
 
   /**
    * listens to the shell's streams and lifetime
@@ -116,6 +118,16 @@ export class ShellSession implements GuestSession {
   }
 
   /**
+   * opens the awake hold keyed by the shell's pid, closed when the session is;
+   * like any hold, one the guest refuses only lets the governor count idleness
+   * @param hold the commands that open and close the hold
+   */
+  public async holdAwake(hold: SessionAwakeHold): Promise<void> {
+    await this.run(hold.open(this.#pid));
+    this.#awakeHold = hold;
+  }
+
+  /**
    * runs one command in its own process group as its account
    * @param command argv, account, input, limit and environment
    * @returns its exit status and redacted output
@@ -156,12 +168,16 @@ export class ShellSession implements GuestSession {
     return turn;
   }
 
-  /** lets the shell exit, releasing the lock */
+  /** closes the awake hold, then lets the shell exit, releasing the lock */
   public async [Symbol.asyncDispose](): Promise<void> {
     if (this.#broken !== undefined) {
       this.kill();
 
       return;
+    }
+    const hold = this.#awakeHold;
+    if (hold) {
+      await this.run(hold.close(this.#pid)).catch(() => undefined);
     }
     const exited = new Promise<boolean>((resolve) => {
       if (this.#exitCode !== undefined) {

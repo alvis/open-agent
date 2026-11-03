@@ -1,4 +1,5 @@
 import { readAsset } from '#adapters/guest/platform/assets';
+import { AWAKE_ASSET } from '#adapters/guest/platform/awake';
 import {
   AGENT_HOME,
   AGENT_ID,
@@ -20,7 +21,7 @@ import { homebrewStep } from './steps/homebrew';
 
 import type { DriverRegistry } from '#application/ports/drivers';
 import type { OsFamily } from '#application/ports/os';
-import type { SetupStep } from '#application/ports/plan';
+import type { PlanProvider, SetupStep } from '#application/ports/plan';
 import type { GuestAsset, OsRelease } from '#domain/guest';
 import type { WorkstationProfile } from '#domain/profile';
 import type { Resolution, ToolSpec } from '#domain/tools';
@@ -47,6 +48,8 @@ const SYSCTL_LIMIT_MS = 30_000;
 interface FoundationContext {
   /** every registered driver, whose agent and network bring launchers */
   registry: DriverRegistry;
+  /** the provider, whose awake adapter is installed */
+  provider: PlanProvider;
   /** the selection, whose agent and network bring launchers */
   profile: WorkstationProfile;
   /** the guest's release, as the session probed it */
@@ -63,7 +66,7 @@ interface FoundationContext {
  * builds the steps every package step builds on: the guest programs, the
  * agent account, the bootstrap packages, Homebrew where a tool is poured from
  * it, the login profile and the ping sysctl
- * @param context the selection, release, family and resolved tools
+ * @param context the provider, selection, release, family and resolved tools
  * @returns the asset, account, bootstrap, Homebrew, profile and sysctl steps
  */
 export async function foundationSteps(
@@ -114,14 +117,18 @@ export async function foundationSteps(
 
 /**
  * lists the guest programs setup installs before any step sources one: the
- * family's library, the tool libraries and the agent's launcher
- * @param context the selection and the family
+ * family's library, the tool libraries, the governor and the provider's awake
+ * adapter, and the agent's launcher
+ * @param context the provider, the selection and the family
  * @returns each asset once
  */
 function guestAssets(
-  context: Pick<FoundationContext, 'registry' | 'profile' | 'family'>,
+  context: Pick<
+    FoundationContext,
+    'registry' | 'provider' | 'profile' | 'family'
+  >,
 ): GuestAsset[] {
-  const { registry, profile, family } = context;
+  const { registry, provider, profile, family } = context;
   const assets = [
     family.library,
     HOMEBREW_LIBRARY,
@@ -129,6 +136,8 @@ function guestAssets(
     RUSTUP_LIBRARY,
     LINKS_LIBRARY,
     VERSIONS_LIBRARY,
+    AWAKE_ASSET,
+    ...(provider.awakeAsset ? [provider.awakeAsset] : []),
     registry.agents[profile.agent].launcher,
   ];
 

@@ -57,12 +57,13 @@ describe('fn:validateCommandRequest', () => {
 });
 
 describe('fn:validateSetupIntegrationOptions', () => {
-  it('should allow network and harness switches only in sections that apply them', () => {
+  it('should allow network and option switches only in sections that apply them', () => {
     expect(() =>
       validateSetupIntegrationOptions(
         {
           network: 'none',
           harness: ['claude'],
+          idleMinutes: 0,
         },
         'all',
       ),
@@ -75,7 +76,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
       validateSetupIntegrationOptions({ network: 'none' }, 'agent'),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
-      validateSetupIntegrationOptions({ harness: ['claude'] }, 'network'),
+      validateSetupIntegrationOptions({ idleMinutes: 30 }, 'network'),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
   });
 });

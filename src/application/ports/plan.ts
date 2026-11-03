@@ -8,6 +8,7 @@ import type {
   ToolSpec,
 } from '#domain/tools';
 
+import type { ProviderDriver } from './drivers';
 import type { OsFamily } from './os';
 import type { GuestSession, SessionCommand } from './session';
 
@@ -121,8 +122,16 @@ export interface PlanRunParams {
   settled?: readonly string[];
 }
 
+/** the provider facts a plan is assembled from */
+export type PlanProvider = Pick<
+  ProviderDriver,
+  'id' | 'capabilities' | 'awakeAsset'
+>;
+
 /** what a plan is assembled from */
 export interface AssemblyParams {
+  /** the provider the workstation runs on */
+  provider: PlanProvider;
   /** the profile setup applies */
   profile: WorkstationProfile;
   /** the guest's release, as the session probed it */
@@ -147,6 +156,6 @@ export interface SetupAssembly {
   environment: GuestEnvironment;
   /** steps every package step builds on: guest libraries, accounts, bootstrap packages, Homebrew and sysctl */
   foundation: readonly SetupStep[];
-  /** the steps after the foundation: tools and environment.json */
+  /** the steps after the foundation: tools, idle governor and environment.json */
   steps: readonly SetupStep[];
 }

@@ -1,10 +1,15 @@
 import { ENVIRONMENT_SCHEMA } from './contracts';
 import { environmentProblem } from './validation';
 
-import type { AcpAdapterSpec, ProductDeclarations } from '#domain/declarations';
+import type {
+  AcpAdapterSpec,
+  ProductDeclarations,
+  ProviderDeclaration,
+} from '#domain/declarations';
 import type { OsFamilyId } from '#domain/guest';
 import type {
   EnvironmentHarness,
+  EnvironmentProvider,
   EnvironmentSetupState,
   EnvironmentTool,
   GuestEnvironment,
@@ -31,6 +36,8 @@ interface EnvironmentParams {
   family: OsFamilyId;
   /** the workstation's profile */
   profile: WorkstationProfile;
+  /** the selected provider */
+  provider: Pick<ProviderDeclaration, 'id' | 'capabilities' | 'awakeAsset'>;
   /** every tool setup resolved */
   tools: readonly ToolSpec[];
   /** the source picked for each tool, or why none is usable */
@@ -57,7 +64,8 @@ interface EnvironmentParams {
 
 /**
  * builds the environment record from the selection and what setup resolved;
- * a tool without a usable source is recorded as skipped
+ * a tool without a usable source is recorded as skipped, and the idle settings
+ * are capped at the furthest the provider can keep the workstation awake
  * @param declarations the data every registered driver declares, which the record is validated against
  * @param params version, outcome, selection, tools and services
  * @returns the record, validated
@@ -81,6 +89,7 @@ export function buildEnvironment(
     os: { family: params.family },
     profile,
     tools,
+    provider: providerFacts(params.provider, profile),
     agent: {
       id: agent.id,
       service: agent.service.name,
@@ -132,6 +141,35 @@ function recordTools(
   }
 
   return { tools, skipped };
+}
+
+/**
+ * gathers the provider facts the governor reads, with the profile's idle
+ * settings capped at the furthest one deadline keeps the workstation awake
+ * @param provider the provider's id, capabilities and awake adapter
+ * @param profile the profile whose idle settings are capped
+ * @returns the facts the governor and the awake adapter read
+ */
+function providerFacts(
+  provider: EnvironmentParams['provider'],
+  profile: WorkstationProfile,
+): EnvironmentProvider {
+  const { capabilities } = provider;
+  const cap = capabilities.maxAwakeDeadlineMinutes;
+  const capped = (minutes: number): number =>
+    cap === null ? minutes : Math.min(minutes, cap);
+
+  return {
+    id: provider.id,
+    keepAwakeMode: capabilities.keepAwakeMode,
+    idleForms: [...capabilities.idleForms],
+    wakeMode: capabilities.wakeMode,
+    supportsCliWakeSleep: capabilities.supportsCliWakeSleep,
+    maxAwakeDeadlineMinutes: cap,
+    idleTimeoutMinutes: capped(profile.options.idleTimeoutMinutes),
+    holdMaxMinutes: capped(profile.options.holdMaxMinutes),
+    awakeAdapter: provider.awakeAsset?.installAs ?? null,
+  };
 }
 
 /**

@@ -33,7 +33,7 @@ export interface CreateData {
   >;
   machine: MachineSummary;
   preflight: CreatePreflight;
-  /** driver selection the workstation recorded */
+  /** driver selection and options the workstation recorded */
   profile: WorkstationProfile;
   readiness: ReadinessAssessment;
   network: GuestInspection['network'];
@@ -79,6 +79,7 @@ export interface CurrentReadiness extends ReadinessAssessment {
   native: GuestInspection['native'];
   services: ServiceSummary[];
   environment: GuestInspection['environment'];
+  governor: GuestInspection['governor'];
 }
 
 /** bounded doctor inspection result */

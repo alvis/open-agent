@@ -3,6 +3,7 @@ import { projectProfile } from './profile';
 
 import type {
   EnvironmentHarness,
+  EnvironmentProvider,
   EnvironmentTool,
   GuestEnvironment,
   SkippedTool,
@@ -35,6 +36,19 @@ export interface EnvironmentToolOutput {
 export interface SkippedToolOutput {
   name: string;
   reason: string;
+}
+
+/** provider behavior the guest recorded */
+export interface EnvironmentProviderOutput {
+  id: string;
+  keepAwakeMode: string;
+  idleForms: readonly string[];
+  wakeMode: string;
+  supportsCliWakeSleep: boolean;
+  maxAwakeDeadlineMinutes: number | null;
+  idleTimeoutMinutes: number;
+  holdMaxMinutes: number;
+  awakeAdapter: string | null;
 }
 
 /** a harness the guest recorded for its agent */
@@ -72,6 +86,7 @@ export interface EnvironmentOutput {
   os: { family: string };
   profile: ProfileOutput;
   tools: EnvironmentToolOutput[];
+  provider: EnvironmentProviderOutput;
   agent: EnvironmentAgentOutput;
   services: ServiceDefinitionOutput[];
 }
@@ -106,6 +121,7 @@ export function projectEnvironment(
       projectFields<typeof os, EnvironmentOutput['os']>(os, { family: same }),
     profile: projectProfile,
     tools: each(projectTool),
+    provider: projectProvider,
     agent: projectAgent,
     services: each(projectServiceDefinition),
   });
@@ -183,6 +199,30 @@ function projectSkippedTool(tool: SkippedTool): SkippedToolOutput {
     name: same,
     reason: same,
   });
+}
+
+/**
+ * projects recorded provider behavior
+ * @param provider internal provider record
+ * @returns output provider record
+ */
+function projectProvider(
+  provider: EnvironmentProvider,
+): EnvironmentProviderOutput {
+  return projectFields<EnvironmentProvider, EnvironmentProviderOutput>(
+    provider,
+    {
+      id: same,
+      keepAwakeMode: same,
+      idleForms: same,
+      wakeMode: same,
+      supportsCliWakeSleep: same,
+      maxAwakeDeadlineMinutes: same,
+      idleTimeoutMinutes: same,
+      holdMaxMinutes: same,
+      awakeAdapter: same,
+    },
+  );
 }
 
 /**

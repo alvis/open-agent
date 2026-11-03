@@ -97,6 +97,7 @@ describe('fn:setupAll', () => {
             },
             native: {
               claude: {
+                awakeHooksInstalled: true,
                 authentication: 'not-configured' as const,
               },
               agentEnvironment: { ok: true as const, serverVersion: '' },
@@ -106,6 +107,10 @@ describe('fn:setupAll', () => {
               await context.connection.guest(),
             ),
             probeFailures: [],
+            governor: {
+              recorded: false as const,
+              reason: 'no awake event has been recorded yet',
+            },
           }),
         },
       };

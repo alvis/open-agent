@@ -1,7 +1,11 @@
-import { mapValues, projectFields, same } from './fields';
+import { each, mapValues, projectFields, same } from './fields';
 
 import type { ServiceSummary } from '#application/data';
 import type { T3Environment } from '#domain/observations/agent';
+import type {
+  GovernorReport,
+  GovernorState,
+} from '#domain/observations/governor';
 import type { NativeHarnessInspection } from '#domain/observations/harness';
 import type {
   HarnessAgentState,
@@ -36,6 +40,7 @@ export interface NetworkOutput {
 
 /** native configuration of one harness */
 export interface NativeHarnessOutput {
+  awakeHooksInstalled: boolean;
   authentication: string;
 }
 
@@ -62,6 +67,11 @@ export interface NativeOutput {
   harnesses: Record<string, HarnessStateOutput>;
 }
 
+/** the keep-awake governor state, when the guest recorded one */
+export type GovernorOutput =
+  | { recorded: true; state: Record<string, unknown> }
+  | { recorded: false; reason: string };
+
 /** everything a guest inspection observed */
 export interface InspectionOutput {
   services: GuestServiceOutput[];
@@ -69,7 +79,11 @@ export interface InspectionOutput {
   native?: NativeOutput;
   environment: EnvironmentOutput;
   probeFailures: ProbeFailureOutput[];
+  governor: GovernorOutput;
 }
+
+type RecordedHold = GovernorState['holds'][number];
+type AdapterResult = NonNullable<GovernorState['adapter']>;
 
 /**
  * projects the state of one guest service
@@ -123,6 +137,7 @@ function projectNativeHarness(
   native: NativeHarnessInspection,
 ): NativeHarnessOutput {
   return projectFields<NativeHarnessInspection, NativeHarnessOutput>(native, {
+    awakeHooksInstalled: same,
     authentication: same,
   });
 }
@@ -172,4 +187,54 @@ export function projectNative(
     agentEnvironment: projectAgentEnvironment,
     harnesses: mapValues(projectHarnessState),
   });
+}
+
+/**
+ * projects the governor state the guest recorded
+ * @param state internal state
+ * @returns output state
+ */
+function projectGovernorState(state: GovernorState): Record<string, unknown> {
+  return projectFields<GovernorState, Record<string, unknown>>(state, {
+    version: same,
+    updatedAt: same,
+    keepAwakeMode: same,
+    idleTimeoutMinutes: same,
+    holdMaxMinutes: same,
+    lastHeartbeat: same,
+    holds: each((hold: RecordedHold) =>
+      projectFields<RecordedHold, Record<string, unknown>>(hold, {
+        source: same,
+        session: same,
+        expiresAt: same,
+      }),
+    ),
+    openHolds: same,
+    deadline: same,
+    adapter: (adapter: AdapterResult) =>
+      projectFields<AdapterResult, Record<string, unknown>>(adapter, {
+        at: same,
+        action: same,
+        result: same,
+        failure: same,
+      }),
+    diagnostics: same,
+  });
+}
+
+/**
+ * projects the governor report
+ * @param report internal report
+ * @returns output report
+ */
+export function projectGovernor(report: GovernorReport): GovernorOutput {
+  return report.recorded
+    ? projectFields<typeof report, GovernorOutput>(report, {
+        recorded: same,
+        state: projectGovernorState,
+      })
+    : projectFields<typeof report, GovernorOutput>(report, {
+        recorded: same,
+        reason: same,
+      });
 }
