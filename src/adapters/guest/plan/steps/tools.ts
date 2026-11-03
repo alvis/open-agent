@@ -228,15 +228,21 @@ function brewActions(spec: ToolSpec, source: BrewToolSource): SourceActions {
 }
 
 /**
- * decides the calls of an npm package's step: install it at its latest
- * dist-tag; it is in place once the tool's version probe passes
+ * decides the calls of an npm package's step: install it at its dist-tag. A
+ * package pinned to a dist-tag, such as an agent's release channel, is in
+ * place only once its installed version is the one the tag names now, since
+ * any installed version passes the tool's version probe; one without a tag
+ * is in place once the probe passes
  * @param source the package
  * @returns the libraries, calls and limit of the step
  */
 function npmActions(source: NpmToolSource): SourceActions {
   return {
     libraries: [NPM_LIBRARY],
-    apply: [['oa_npm_install', source.package, 'latest']],
+    ...(source.distTag
+      ? { check: [['oa_npm_current', source.package, source.distTag]] }
+      : {}),
+    apply: [['oa_npm_install', source.package, source.distTag ?? 'latest']],
     timeoutMs: NPM_LIMIT_MS,
   };
 }

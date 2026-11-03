@@ -8,7 +8,7 @@ import { traceStage } from '#kernel/operation';
 
 import { installSetupPlan } from './installation';
 import { setupNetwork } from './network';
-import { setupAgent } from './sections';
+import { setupAgent, stopService } from './sections';
 import { exposeWhenServing } from './serving';
 
 import type { AllSetupData } from '#application/data';
@@ -34,7 +34,7 @@ export async function setupAll(
   guest: GuestChannel,
   context: SetupContext,
 ): Promise<AllSetupData> {
-  const { interaction } = context;
+  const { interaction, profile } = context;
   interaction?.progress({
     stage: 'tools',
     message: 'Installing the guest environment and managed developer tools',
@@ -49,11 +49,24 @@ export async function setupAll(
         action: async () => configureSections(dependencies, guest, context),
       }),
     );
+    if (context.isReleaseChanged) {
+      // stopped only once every section is configured, so a section that
+      // fails leaves the agent serving; the plan's service step starts it on
+      // the selected release
+      await stopService(
+        guest,
+        dependencies.registry.agents[profile.agent].service.name,
+      );
+    }
   });
   await exposeWhenServing(dependencies, guest, context);
   await markInstallationReady(dependencies.guest, guest);
+  // the release was switched by the plan, not by pairing
   const agent = context.options.withPairCode
-    ? await setupAgent(dependencies, guest, context)
+    ? await setupAgent(dependencies, guest, {
+        ...context,
+        isReleaseChanged: false,
+      })
     : undefined;
 
   return { tools: 'updated', ...(await configured.promise), ...agent };

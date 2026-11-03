@@ -36,6 +36,14 @@ export const t3: AgentDriver<'t3', HarnessId, T3Environment> = {
   supportedHarnesses: T3_HARNESSES,
   harnessLaunchMode: 'native-cli',
   supportsPairing: true,
+  // the stable release follows npm's latest tag; the nightly follows the nightly tag
+  releaseChannels: {
+    channels: [
+      { id: 'stable', distTag: 'latest' },
+      { id: 'nightly', distTag: 'nightly' },
+    ],
+    defaultChannel: 'stable',
+  },
   tools: T3_TOOLS,
   service: t3Service,
   launcher: T3_LAUNCHER,

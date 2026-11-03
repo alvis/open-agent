@@ -26,5 +26,7 @@ export interface SetupContext {
   profile: WorkstationProfile;
   /** whether this run persists the selection into the stored profile */
   persistsProfile: boolean;
+  /** whether this run moves the agent's installed release: to another channel, or back to its channel's current release when the guest drifted from it */
+  isReleaseChanged: boolean;
   mutation: SetupProgress;
 }

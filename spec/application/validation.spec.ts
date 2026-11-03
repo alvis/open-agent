@@ -80,6 +80,15 @@ describe('fn:validateSetupIntegrationOptions', () => {
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
   });
 
+  it.each([{ release: 'latest' }] satisfies CommandOptions[])(
+    'should refuse integration input outside the section that applies it: %j',
+    (options) => {
+      expect(() => validateSetupIntegrationOptions(options, 'tools')).toThrow(
+        expect.objectContaining({ code: 'USAGE' }),
+      );
+    },
+  );
+
   it('should allow the update interval switch only in the tools section or the full setup', () => {
     const options = { updateDueDays: 3 };
 

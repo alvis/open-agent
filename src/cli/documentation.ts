@@ -9,14 +9,17 @@ export const createDocumentation = {
   brief: 'create one new coding workstation',
   customUsage: ['[--name NAME] [options]'],
   fullDescription: `Creates a private workstation, verifies readiness, then exposes its agent URL.
-Interactive runs ask for the provider, ACP agent, harnesses, network, then the
-options those drivers support; a step with one choice is skipped. Flags and
+Interactive runs ask for the provider, ACP agent, its release channel,
+harnesses, network, then the options those drivers support; a step with one
+choice is skipped. --release picks the agent's release channel, the agent's
+default when omitted. Flags and
 OPEN_AGENT_* environment variables answer the same questions. --with-pair-code
 alone requests a new five-minute pairing code.
 
 EXAMPLES
   open-agent create --name devbox
   open-agent create --name devbox --network none --idle-minutes 30
+  open-agent create --name devbox --release nightly
   open-agent create --name devbox --with-pair-code --json --non-interactive`,
 } as const;
 
@@ -27,11 +30,15 @@ export const setupDocumentation = {
   fullDescription: `Changes only the selected setup section. Without a workstation name,
 interactive mode offers a selection. --section all can change the harnesses,
 network and options; the provider and ACP agent are fixed at creation.
+--release CHANNEL with --section agent or all moves the agent to that release
+channel: it installs the channel's current version, restarts the agent and
+exposes it once ready.
 --with-pair-code selects the agent section when --section is omitted; it also
 works with --section all.
 
 EXAMPLES
   open-agent setup devbox --section agent
+  open-agent setup devbox --section agent --release nightly
   open-agent setup devbox --section all --network none --yes
   open-agent setup devbox --with-pair-code`,
 } as const;

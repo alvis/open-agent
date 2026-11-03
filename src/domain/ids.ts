@@ -51,3 +51,19 @@ export function pairingAgentIds(declarations: ProductDeclarations): AgentId[] {
     .filter(({ supportsPairing }) => supportsPairing)
     .map(({ id }) => id);
 }
+
+/**
+ * lists the release channels any registered ACP agent declares
+ * @param declarations the data every registered driver declares
+ * @returns each declared channel id once, in catalog order
+ */
+export function releaseChannelIds(declarations: ProductDeclarations): string[] {
+  return [
+    ...new Set(
+      Object.values(declarations.agents).flatMap(
+        ({ releaseChannels }) =>
+          releaseChannels?.channels.map(({ id }) => id) ?? [],
+      ),
+    ),
+  ];
+}

@@ -5,6 +5,7 @@ import { isDriverId } from '#domain/profile';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { InteractionChoice } from '#application/ports/interaction';
+import type { ReleaseChannels } from '#domain/declarations';
 import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 
 /**
@@ -66,6 +67,22 @@ export function networkChoices(
     label: dependencies.registry.networks[id].displayName,
     value: id,
   }));
+}
+
+/**
+ * offers the release channels an agent declares with the preferred one first
+ * @param channels the agent's declared channels
+ * @param preferred channel to offer first
+ * @returns one labelled choice per channel, the preferred one first
+ */
+export function releaseChoices(
+  channels: ReleaseChannels,
+  preferred: string,
+): Array<InteractionChoice<string>> {
+  return [
+    ...channels.channels.filter(({ id }) => id === preferred),
+    ...channels.channels.filter(({ id }) => id !== preferred),
+  ].map(({ id }) => ({ label: id, value: id }));
 }
 
 /**

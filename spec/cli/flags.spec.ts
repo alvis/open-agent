@@ -100,6 +100,22 @@ describe('cmd:setup', () => {
     expect(rejected.exitCode).not.toBe(0);
   });
 
+  it('should accept stable releases and reject unknown release channels before invoking a command', async () => {
+    const accepted = await parseFlags(['--release', 'stable']);
+    const rejected = await parseFlags(['--release', 'relay']);
+
+    expect(accepted).toMatchObject({
+      options: [expect.objectContaining({ release: 'stable' })],
+      diagnostics: [],
+      exitCode: 0,
+    });
+    expect(rejected).toMatchObject({
+      options: [],
+      diagnostics: expect.arrayContaining([expect.stringContaining('relay')]),
+    });
+    expect(rejected.exitCode).not.toBe(0);
+  });
+
   it('should reject unknown section values before a command handler runs', async () => {
     const parsed = await parseFlags(['--section', 'unsupported']);
 

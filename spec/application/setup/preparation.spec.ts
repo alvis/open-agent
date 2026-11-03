@@ -22,6 +22,42 @@ vi.mock(
 );
 
 describe('fn:prepareGuestSection', () => {
+  it.each([
+    { release: undefined, expected: 'stable' },
+    { release: 'nightly', expected: 'nightly' },
+  ])(
+    'should resolve a declared release before reporting a channel change (release=$expected)',
+    async ({ release, expected }) => {
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-prepared-release-'),
+      );
+      const sprite = createFilesystemSprite({ root: directory.path });
+      await sprite
+        .filesystem()
+        .writeFile(
+          ENVIRONMENT_PATH,
+          JSON.stringify(environmentOf(DISABLED_NETWORK_PROFILE)),
+        );
+      const target = workstationOf(sprite);
+      const prepared = await prepareGuestSection(dependencies, {
+        ...target,
+        supplied: { options: { agentRelease: release } },
+        sources: { processEnv: {}, fileEnv: {} },
+        section: 'agent',
+        options: { release, nonInteractive: true },
+        mutation: { started: false },
+      });
+
+      expect({
+        changed: prepared.context.isReleaseChanged,
+        channel: prepared.context.profile.options.agentRelease,
+        persisted: (await dependencies.guest.environment.find(prepared.guest))
+          ?.profile.options.agentRelease,
+      }).toEqual({ changed: true, channel: expected, persisted: expected });
+      await target.connection.close();
+    },
+  );
+
   it('should preserve a ready profile and its current session when the section changes no selection', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-preparation-preserved-'),
@@ -85,11 +121,19 @@ describe('fn:prepareGuestSection', () => {
     expect({
       profile: prepared.context.profile,
       persistsProfile: prepared.context.persistsProfile,
+      releaseChanged: prepared.context.isReleaseChanged,
       started: mutation.started,
       recorded: await dependencies.guest.environment.find(prepared.guest),
     }).toEqual({
-      profile: DISABLED_NETWORK_PROFILE,
+      profile: {
+        ...DISABLED_NETWORK_PROFILE,
+        options: {
+          ...DISABLED_NETWORK_PROFILE.options,
+          agentRelease: 'stable',
+        },
+      },
       persistsProfile: true,
+      releaseChanged: true,
       started: false,
       recorded: undefined,
     });

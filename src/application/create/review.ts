@@ -48,6 +48,7 @@ export function reviewCreatePlan(
       kind: 'info',
       message: [
         `Create ${values.name} on ${provider.displayName}`,
+        ...releaseSummary(dependencies, profile),
         `Harnesses: ${profile.harnesses.map((id) => harnessLabel(id)).join(', ')}`,
         'No private network',
         `Suspend after idle: ${idleSummary(profile.options.idleTimeoutMinutes)}`,
@@ -85,6 +86,25 @@ export async function confirmCreation(
   }
 
   return undefined;
+}
+
+/**
+ * names the release channel the agent follows
+ * @param dependencies the registered drivers
+ * @param profile validated selection
+ * @returns one review line, none when the agent declares no channels
+ */
+function releaseSummary(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  profile: WorkstationProfile,
+): string[] {
+  const { agentRelease } = profile.options;
+
+  return agentRelease === undefined
+    ? []
+    : [
+        `${dependencies.registry.agents[profile.agent].displayName} release: ${agentRelease}`,
+      ];
 }
 
 /**

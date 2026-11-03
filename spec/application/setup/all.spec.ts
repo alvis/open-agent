@@ -33,9 +33,12 @@ vi.mock(
   async () => import('../../mocks/session'),
 );
 describe('fn:setupAll', () => {
-  it.each([{ withPairCode: false }, { withPairCode: true }])(
+  it.each([
+    { isReleaseChanged: false, withPairCode: false },
+    { isReleaseChanged: true, withPairCode: true },
+  ])(
     'should complete the full setup and record readiness after configuring the guest (%o)',
-    async ({ withPairCode }) => {
+    async ({ isReleaseChanged, withPairCode }) => {
       await using directory = await mkdtempDisposable(
         join(tmpdir(), 'open-agent-setup-all-'),
       );
@@ -73,9 +76,52 @@ describe('fn:setupAll', () => {
         },
         profile,
         persistsProfile: false,
+        isReleaseChanged,
         mutation: { started: false },
       };
+      const channel = await context.connection.guest();
       const agentName = registry.agents[profile.agent].service.name;
+      if (isReleaseChanged) {
+        await channel.services.ensure(agentService(registry, profile));
+      }
+      const lifecycle: Array<{
+        event: 'final section' | 'service stopped';
+        configured: boolean;
+        status: string | undefined;
+      }> = [];
+      let configured = false;
+      const nativeStop = vi.mocked(sprite.stopService).getMockImplementation();
+      if (!nativeStop) {
+        throw new Error('The native service stop boundary is not installed');
+      }
+      vi.mocked(sprite.stopService).mockImplementation(
+        async (name, timeout) => {
+          const result = await nativeStop(name, timeout);
+          if (name === agentName) {
+            lifecycle.push({
+              event: 'service stopped',
+              configured,
+              status: services.get(name)?.state?.status,
+            });
+          }
+
+          return result;
+        },
+      );
+      const configureHarness = registry.harnesses.claude.configure;
+      using _harness = vi
+        .spyOn(registry.harnesses.claude, 'configure')
+        .mockImplementation(async (target) => {
+          if (isReleaseChanged) {
+            lifecycle.push({
+              event: 'final section',
+              configured,
+              status: services.get(agentName)?.state?.status,
+            });
+          }
+          configured = true;
+          await configureHarness(target);
+        });
       const guest = {
         ...dependencies.guest,
         native: {
@@ -137,13 +183,21 @@ describe('fn:setupAll', () => {
         ),
       ).toMatchObject({ setup: { state: 'ready' } });
       expect(sprite.updateURLSettings).toHaveBeenCalledOnce();
+      expect(lifecycle).toEqual(
+        isReleaseChanged
+          ? [
+              { event: 'final section', configured: false, status: 'running' },
+              { event: 'service stopped', configured: true, status: 'stopped' },
+            ]
+          : [],
+      );
       expect(services.get(agentName)?.state?.status).toBe('running');
     },
   );
 
-  it('should leave the agent serving and the setup incomplete when the final setup section fails', async () => {
+  it('should leave the previous release serving when the final setup section fails before restart', async () => {
     await using directory = await mkdtempDisposable(
-      join(tmpdir(), 'open-agent-setup-failure-'),
+      join(tmpdir(), 'open-agent-setup-release-failure-'),
     );
     const sprite = createFilesystemSprite({
       root: directory.path,
@@ -163,6 +217,7 @@ describe('fn:setupAll', () => {
       input: { profile, sources: {}, missing: [] },
       profile,
       persistsProfile: false,
+      isReleaseChanged: true,
       mutation: { started: false },
     };
     const channel = await context.connection.guest();

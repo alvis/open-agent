@@ -9,6 +9,7 @@ import {
   readSetupEnvironment,
   unrecordedProfile,
 } from './recorded';
+import { isAgentReleaseChanged } from './release';
 
 import type { CommandOptions, SetupSection } from '#application/contracts';
 import type { SuppliedSelection } from '#application/input/selection/supplied';
@@ -71,6 +72,8 @@ interface ResolvedSetup {
   profile: WorkstationProfile;
   /** whether the run writes the profile back */
   persistsProfile: boolean;
+  /** whether this run moves the agent's installed release */
+  isReleaseChanged: boolean;
   /** the inputs the run needs, resolved */
   input: Awaited<ReturnType<typeof resolveInputs>>;
 }
@@ -176,6 +179,7 @@ function setupContextOf(
     input,
     profile,
     persistsProfile: resolved.persistsProfile,
+    isReleaseChanged: resolved.isReleaseChanged,
     mutation: params.mutation,
   };
 }
@@ -210,10 +214,10 @@ async function resolveSetupInputs(
 
 /**
  * reads what the machine records, then resolves and validates the selection
- * and every input it needs
+ * and every input it needs, and tells whether the agent's release moves
  * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
  * @param params target, selected section and input choices
- * @returns the recorded environment and profile, the validated profile and the resolved inputs
+ * @returns the recorded environment and profile, the validated profile, whether the release moves and the resolved inputs
  */
 async function resolveSetup(
   dependencies: ApplicationDependencies,
@@ -251,6 +255,13 @@ async function resolveSetup(
     recorded,
     profile,
     persistsProfile,
+    isReleaseChanged: await isAgentReleaseChanged(dependencies, {
+      section,
+      connection: params.connection,
+      guest: params.guest,
+      interaction,
+      resolved: { environment, recorded, profile },
+    }),
     input,
   };
 }

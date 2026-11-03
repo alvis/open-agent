@@ -9,6 +9,7 @@ import { familyOf } from '#adapters/guest/os/families';
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
 import { jobsStep } from '#adapters/guest/services/cron';
 import { BASE_TOOLS } from '#adapters/guest/tools/base';
+import { agentCli } from '#adapters/guest/tools/channel';
 import { resolveTools } from '#adapters/guest/tools/resolve';
 import { agentService } from '#domain/services';
 
@@ -32,8 +33,9 @@ const ENVIRONMENT_STEP = 'environment';
 
 /**
  * lists every tool a workstation installs: the base set, then the agent's,
- * the harnesses' with their ACP adapters, and the network's; a tool two
- * drivers declare is installed once, as the first declares it
+ * at its release channel's dist-tag, the harnesses' with their ACP adapters,
+ * and the network's; a tool two drivers declare is installed once, as the
+ * first declares it
  * @param registry every registered driver
  * @param profile the selection
  * @returns the tools, each named once
@@ -42,6 +44,9 @@ function workstationTools(
   registry: DriverRegistry,
   profile: WorkstationProfile,
 ): ToolSpec[] {
+  const agent = registry.agents[profile.agent];
+  const cli = agentCli(agent, profile.options.agentRelease);
+  const agentTools = cli ? [cli, ...agent.tools.slice(1)] : [];
   const harnessTools = profile.harnesses
     .map((id) => registry.harnesses[id])
     .flatMap((driver) => [
@@ -50,7 +55,7 @@ function workstationTools(
     ]);
   const declared = [
     ...BASE_TOOLS,
-    ...registry.agents[profile.agent].tools,
+    ...agentTools,
     ...harnessTools,
     ...registry.networks[profile.network].tools,
   ];

@@ -2,7 +2,7 @@ import { AGENT_BIN } from '#adapters/guest/platform/layout';
 
 import type { ToolSpec } from '#domain/tools';
 
-/** the T3 Code CLI, installed from npm by the agent */
+/** the T3 Code CLI, installed from npm by the agent at its release channel's dist-tag */
 export const t3Tool: ToolSpec = {
   name: 't3',
   required: true,

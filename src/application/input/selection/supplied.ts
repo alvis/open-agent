@@ -34,6 +34,7 @@ export interface SuppliedSelection {
 
 /** the options a caller can select */
 const SELECTABLE_OPTIONS: readonly SelectableOption[] = [
+  'agentRelease',
   'idleTimeoutMinutes',
   'holdMaxMinutes',
   'updateDueIntervalDays',
@@ -128,7 +129,13 @@ export function readSelection(
             environment: networkEnvironment,
           })
         : undefined,
-      options: numbers.value,
+      options: {
+        agentRelease: read.choice({
+          flag: options.release,
+          environment: owned('agentRelease'),
+        }),
+        ...numbers.value,
+      },
     },
     problems: numbers.problems,
   };

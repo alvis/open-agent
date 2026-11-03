@@ -6,6 +6,7 @@ import {
   agentViolations,
   harnessSetViolations,
   isDriverId,
+  releaseViolations,
   unknownDriverViolations,
 } from './profile/selection';
 
@@ -23,6 +24,7 @@ export {
   agentViolations,
   harnessSetViolations,
   isDriverId,
+  releaseViolations,
   unknownDriverViolations,
 } from './profile/selection';
 export type { OptionViolationsParams } from './profile/options';
@@ -30,6 +32,7 @@ export type { ProviderViolationsParams } from './profile/provider';
 export type {
   AgentViolationsParams,
   DriverIdContext,
+  ReleaseViolationsParams,
 } from './profile/selection';
 
 /** a workstation's complete driver selection */
@@ -54,6 +57,8 @@ export interface ProfileOptions {
   holdMaxMinutes: number;
   /** days after the last successful update before another is due */
   updateDueIntervalDays: number;
+  /** release channel the agent follows; absent when the agent declares none */
+  agentRelease?: string;
 }
 
 /** default driver choices, keyed by the input that selects among them */
@@ -253,11 +258,18 @@ export function validateProfile({
     ...unknownDriverViolations(declarations, candidate),
     ...harnessSetViolations(candidate.harnesses),
     ...(isDriverId(agent, { declarations, kind: 'agents' })
-      ? agentViolations({
-          declarations,
-          selected: { agent, harnesses },
-          options,
-        })
+      ? [
+          ...agentViolations({
+            declarations,
+            selected: { agent, harnesses },
+            options,
+          }),
+          ...releaseViolations({
+            declarations,
+            agent,
+            release: candidate.options.agentRelease,
+          }),
+        ]
       : []),
     ...(isDriverId(provider, { declarations, kind: 'providers' })
       ? providerViolations({
@@ -335,6 +347,8 @@ function isProfileCandidate(value: unknown): value is ProfileCandidate {
     Array.isArray(value.harnesses) &&
     value.harnesses.every((id: unknown) => typeof id === 'string') &&
     typeof value.network === 'string' &&
-    OPTION_BOUNDS.every(({ key }) => typeof options[key] === 'number')
+    OPTION_BOUNDS.every(({ key }) => typeof options[key] === 'number') &&
+    (options.agentRelease === undefined ||
+      typeof options.agentRelease === 'string')
   );
 }

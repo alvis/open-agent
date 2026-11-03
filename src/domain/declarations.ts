@@ -132,6 +132,22 @@ export interface AgentPairing {
   expiresAt?: string;
 }
 
+/** one release channel an agent can be installed and kept updated from */
+export interface ReleaseChannel {
+  /** the name a user selects, such as `stable` */
+  id: string;
+  /** the npm dist-tag the agent's package is installed and updated from */
+  distTag: string;
+}
+
+/** an ordered set of release channels and the one chosen when none is selected */
+export interface ReleaseChannels {
+  /** the channels in menu order */
+  channels: readonly ReleaseChannel[];
+  /** the identifier of the channel selected by default; one of the channels */
+  defaultChannel: string;
+}
+
 /** ACP agent identity and capabilities, declared as data */
 export interface AgentDeclaration<
   Name extends string = string,
@@ -143,6 +159,8 @@ export interface AgentDeclaration<
   harnessLaunchMode: HarnessLaunchMode;
   /** can issue a pairing code */
   supportsPairing: boolean;
+  /** release channels the agent installs from; absent when it has one */
+  releaseChannels?: ReleaseChannels;
   /** command, account, public port and dependencies on nothing */
   service: ServiceDefinition;
 }
