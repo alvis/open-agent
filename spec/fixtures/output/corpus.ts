@@ -2,6 +2,7 @@ import { environmentOf } from '../environment';
 import { DISABLED_NETWORK_PROFILE } from '../profile';
 
 import type { CreatePreflight } from '#application/create/context';
+import type { CurrentReadiness } from '#application/data';
 import type { MachineSummary } from '#application/machine';
 import type { ReadinessAssessment } from '#application/readiness';
 import type { CommandResult } from '#application/result';
@@ -369,6 +370,55 @@ export const CORPUS: readonly CorpusCase[] = [
     },
   }),
 
+  // doctor
+  corpusCase('doctor-ready-native-deadline', {
+    command: 'doctor',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      currentReadiness: currentReadiness({
+        services: [{ name: 't3-code', state: 'running' }],
+      }),
+    },
+  }),
+  corpusCase('doctor-tools', {
+    command: 'doctor',
+    ok: true,
+    data: {
+      machine: DETAILED_MACHINE,
+      currentReadiness: currentReadiness({
+        environment: environmentOf(DISABLED_NETWORK_PROFILE, {
+          tools: INSTALLED_TOOLS,
+          setup: { state: 'ready', skipped: SKIPPED_TOOLS },
+        }),
+        skipped: sdkObservation<string[]>(['first', undefined, 'third']),
+      }),
+    },
+  }),
+  corpusCase('doctor-failure-readiness', {
+    command: 'doctor',
+    ok: false,
+    error: {
+      code: 'PREFLIGHT',
+      message: 'Readiness check failed',
+      machine: 'primary',
+    },
+    data: {
+      machine: { ...MACHINE, state: 'cold' },
+      currentReadiness: currentReadiness({
+        ready: false,
+        failures: ['T3 environment endpoint'],
+        skipped: [],
+        network: INSPECTION.network,
+      }),
+    },
+  }),
+  corpusCase('doctor-failure-bare', {
+    command: 'doctor',
+    ok: false,
+    error: { code: 'INPUT', message: 'Workstation "missing" was not found' },
+  }),
+
   // parser failures and every error code
   corpusCase('parser-failure-usage', {
     command: null,
@@ -461,4 +511,22 @@ function corpusCase(name: string, result: CommandResult): CorpusCase {
  */
 function sdkObservation<T>(value: unknown): T {
   return value as T;
+}
+
+/**
+ * builds doctor readiness evidence that differs from a healthy default
+ * @param overrides fields replacing the healthy default
+ * @returns the readiness evidence
+ */
+function currentReadiness(
+  overrides: Partial<CurrentReadiness> = {},
+): CurrentReadiness {
+  return {
+    ...PASSING_READINESS,
+    network: INSPECTION.network,
+    native: INSPECTION.native,
+    services: [],
+    environment: INSPECTION.environment,
+    ...overrides,
+  };
 }

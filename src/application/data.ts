@@ -53,11 +53,26 @@ export interface ShowData {
   inspection?: GuestInspection & { readiness?: ReadinessAssessment };
 }
 
+/** readiness evidence retained even when the workstation is not ready */
+export interface CurrentReadiness extends ReadinessAssessment {
+  network: GuestInspection['network'];
+  native: GuestInspection['native'];
+  services: ServiceSummary[];
+  environment: GuestInspection['environment'];
+}
+
+/** bounded doctor inspection result */
+export interface DoctorData {
+  machine: MachineSummary;
+  currentReadiness: CurrentReadiness;
+}
+
 /** success payload for each executed command */
 export interface CommandData {
   create: CreateData;
   list: ListData;
   show: ShowData;
+  doctor: DoctorData;
 }
 
 /** failed creation can still preserve verified preflight facts */
@@ -76,4 +91,5 @@ export interface CommandFailureData {
   create: CreateFailureData;
   list: never;
   show: never;
+  doctor: DoctorData;
 }

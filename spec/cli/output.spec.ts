@@ -13,6 +13,7 @@ import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
 
 import { dependencies } from '../mocks/dependencies';
 
+import type { CurrentReadiness } from '#application/data';
 import type { MachineSummary } from '#application/machine';
 import type { CommandResult } from '#application/result';
 import type { GuestInspection } from '#domain/observations/inspection';
@@ -263,6 +264,31 @@ describe('fn:prepareResult', () => {
     expect(failure).toEqual({ stdout: '', stderr: 'List unavailable\n' });
   });
 
+  it('should render successful current readiness on stdout', () => {
+    const result: CommandResult = {
+      command: 'doctor',
+      ok: true,
+      data: {
+        machine,
+        currentReadiness: {
+          ready: true,
+          failures: [],
+          skipped: ['private network'],
+          probeFailures: [],
+          network: inspection.network,
+          native: inspection.native,
+          services: [{ name: 't3-code', state: 'running' }],
+          environment: inspection.environment,
+        },
+      },
+    };
+    const human = captureResult(result);
+
+    expect(human.stdout).toContain('Ready: Yes');
+    expect(human.stdout).toContain('private network');
+    expect(human.stderr).toBe('');
+  });
+
   it('should show disabled checks from a typed inspection on stdout', () => {
     const output = captureResult({
       command: 'show',
@@ -272,6 +298,29 @@ describe('fn:prepareResult', () => {
 
     expect(output.stdout).toContain('No private network is selected');
     expect(output.stderr).toBe('');
+  });
+
+  it('should render failed readiness facts without executable service internals', () => {
+    const currentReadiness: CurrentReadiness = {
+      ready: false,
+      failures: ['T3 environment endpoint'],
+      skipped: [],
+      probeFailures: [],
+      services: [{ name: 't3-code', state: 'running' }],
+      network: inspection.network,
+      native: inspection.native,
+      environment: inspection.environment,
+    };
+    const output = captureResult({
+      command: 'doctor',
+      ok: false,
+      error: { code: 'PREFLIGHT', message: 'Readiness check failed' },
+      data: { machine: { ...machine, state: 'cold' }, currentReadiness },
+    });
+
+    expect(output.stdout).toBe('');
+    expect(output.stderr).toContain('Readiness check failed');
+    expect(output.stderr).toContain('T3 environment endpoint');
   });
 
   it('should write a human cancellation only to stderr', () => {

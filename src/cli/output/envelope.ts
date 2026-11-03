@@ -1,6 +1,7 @@
 import type { CommandName } from '#kernel/commands';
 
 import type { CreateDataOutput, CreateFailureDataOutput } from './create';
+import type { DoctorDataOutput } from './doctor';
 import type { ErrorOutput } from './failure';
 import type { ListDataOutput } from './list';
 import type { ShowDataOutput } from './show';
@@ -10,6 +11,7 @@ export interface CommandDataOutput {
   create: CreateDataOutput;
   list: ListDataOutput;
   show: ShowDataOutput;
+  doctor: DoctorDataOutput;
 }
 
 /** observations each command keeps after failure */
@@ -17,6 +19,7 @@ export interface CommandFailureDataOutput {
   create: CreateFailureDataOutput;
   list: never;
   show: never;
+  doctor: DoctorDataOutput;
 }
 
 /** a successful command */

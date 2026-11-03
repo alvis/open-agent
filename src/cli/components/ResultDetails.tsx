@@ -16,6 +16,7 @@ type ResultDetailsProps = {
 
 const FIELD_LABELS: Record<string, string> = {
   machine: 'Workstation',
+  currentReadiness: 'Readiness',
   agentUrl: 'Agent URL',
   id: 'ID',
   gh: 'GitHub CLI',

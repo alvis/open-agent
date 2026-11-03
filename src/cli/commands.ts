@@ -2,6 +2,7 @@ import { buildCommand } from '@stricli/core';
 
 import {
   createDocumentation,
+  doctorDocumentation,
   listDocumentation,
   showDocumentation,
 } from './documentation';
@@ -138,6 +139,30 @@ const showCommand = buildCommand({
   },
   docs: showDocumentation,
 });
+const doctorCommand = buildCommand({
+  /**
+   * executes the selected workstation command
+   * @param flags parsed command options
+   * @param machine optional exact workstation name
+   * @returns completion after final output
+   */
+  async func(
+    this: InvocationContext,
+    flags: ProviderCommonFlags,
+    machine?: string,
+  ): Promise<void> {
+    return execute({
+      dependencies: this.dependencies,
+      request: { command: 'doctor', machine, options: flags },
+      state: this.state,
+    });
+  },
+  parameters: {
+    flags: { ...providerFlags, ...commonFlags },
+    positional: machinePositional,
+  },
+  docs: doctorDocumentation,
+});
 
 /**
  * keeps root route usage concise while naming optional workstation selection
@@ -159,4 +184,5 @@ export const commandRoutes = {
   create: withRootUsage(createCommand, '[--name NAME]'),
   list: listCommand,
   show: withRootUsage(showCommand, '[<workstation>]'),
+  doctor: withRootUsage(doctorCommand, '[<workstation>]'),
 };

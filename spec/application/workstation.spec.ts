@@ -1,12 +1,31 @@
+import { mkdtempDisposable } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { SpritesClient } from '@fly/sprites';
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  MANAGED_LABEL,
+  mergeMetadataLabels,
+  SCHEMA_LABEL,
+} from '#adapters/drivers/providers/sprite/labels';
+import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
 import { runCommand } from '#application/workstation';
+import { summarizeProfile } from '#domain/recorded';
 import { OperationContext } from '#kernel/operation';
+import { OPEN_AGENT_VERSION } from '#kernel/version';
 
-import { dependencies } from '../mocks/dependencies';
+import { environmentOf } from '../fixtures/environment';
+import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
+import { dependencies, dependenciesWith } from '../mocks/dependencies';
+import { createFilesystemSprite, holdServices } from '../mocks/sprites';
 
+import type { Sprite } from '@fly/sprites';
+
+import type { GuestMechanics } from '#application/ports/guest';
 import type { Interaction } from '#application/ports/interaction';
+import type { GuestInspection } from '#domain/observations/inspection';
 
 // a guest command runs through the framed guest shell boundary
 vi.mock(
@@ -19,6 +38,53 @@ const options = { nonInteractive: true } as const;
 
 function withoutProviderCredentials(): void {
   vi.stubEnv('SPRITES_TOKEN', undefined);
+}
+
+function spriteCredential(): void {
+  vi.stubEnv('SPRITES_TOKEN', TOKEN);
+}
+
+async function managedSprite(root: string): Promise<Sprite> {
+  const sprite = Object.assign(
+    createFilesystemSprite({
+      root,
+      name: 'workstation',
+      execute: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
+    }),
+    {
+      id: 'sprite-workstation',
+      organizationName: 'fixture-organization',
+      labels: mergeMetadataLabels([MANAGED_LABEL, SCHEMA_LABEL], {
+        setup: 'ready',
+        profile: summarizeProfile(DISABLED_NETWORK_PROFILE),
+        version: OPEN_AGENT_VERSION,
+      }),
+      url: 'https://workstation.sprites.app/',
+      status: 'running',
+    },
+  );
+  vi.spyOn(SpritesClient.prototype, 'getSprite').mockResolvedValue(sprite);
+  vi.spyOn(sprite, 'update').mockImplementation(async (update) =>
+    Object.assign(sprite, update),
+  );
+  vi.spyOn(sprite, 'updateURLSettings').mockResolvedValue(undefined);
+  const agentName =
+    dependencies.registry.agents[DISABLED_NETWORK_PROFILE.agent].service.name;
+  holdServices(sprite).set(agentName, {
+    name: agentName,
+    cmd: '/bin/true',
+    args: [],
+    needs: [],
+    state: { name: agentName, status: 'running' },
+  });
+  await sprite
+    .filesystem()
+    .writeFile(
+      ENVIRONMENT_PATH,
+      JSON.stringify(environmentOf(DISABLED_NETWORK_PROFILE)),
+    );
+
+  return sprite;
 }
 
 const interaction: Interaction = {
@@ -175,6 +241,50 @@ describe('fn:runCommand', () => {
     });
     expect(secret).toHaveBeenCalledOnce();
     expect(list).toHaveBeenCalledOnce();
+  });
+
+  it('should report current readiness from the selected workstation', async () => {
+    spriteCredential();
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-command-doctor-'),
+    );
+    await managedSprite(directory.path);
+    const observation = {
+      services: [],
+      network: { online: false, skipped: true },
+      environment: environmentOf(DISABLED_NETWORK_PROFILE),
+      probeFailures: [],
+    } satisfies GuestInspection;
+    const inspect = vi.fn<GuestMechanics['inspection']['inspect']>(
+      async () => observation,
+    );
+    const wired = dependenciesWith({
+      guest: {
+        ...dependencies.guest,
+        inspection: { ...dependencies.guest.inspection, inspect },
+      },
+    });
+
+    const result = await runCommand(wired, {
+      command: 'doctor',
+      machine: 'workstation',
+      options: { ...options, provider: 'sprite' },
+    });
+
+    expect(result).toMatchObject({
+      command: 'doctor',
+      ok: false,
+      error: { code: 'PREFLIGHT', machineId: 'sprite-workstation' },
+      data: {
+        machine: { id: 'sprite-workstation', name: 'workstation' },
+        currentReadiness: {
+          ready: false,
+          services: [],
+          environment: observation.environment,
+        },
+      },
+    });
+    expect(inspect).toHaveBeenCalledOnce();
   });
 
   it('should retain known identity and recovery guidance when its caller cancels', async () => {

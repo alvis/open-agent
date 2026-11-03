@@ -17,10 +17,14 @@ export function humanResultDetails(data: JsonObject): JsonObject {
       .filter(([key]) => key !== 'agentUrl')
       .map(([key, value]) => [
         key,
-        key === 'inspection'
+        key === 'inspection' || key === 'currentReadiness'
           ? inspectionDetails(value)
           : key === 'machine'
-            ? machineDetails(value, data.inspection !== undefined)
+            ? machineDetails(
+                value,
+                data.inspection !== undefined ||
+                  data.currentReadiness !== undefined,
+              )
             : value,
       ]),
   );
@@ -50,7 +54,7 @@ function machineDetails(
 
 /**
  * summarizes current checks rather than exposing process arguments and probe inventories
- * @param value explicit inspection result
+ * @param value explicit inspection or readiness result
  * @returns grouped service, integration and harness details
  */
 function inspectionDetails(value: JsonValue | undefined): JsonObject {

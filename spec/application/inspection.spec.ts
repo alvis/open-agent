@@ -12,7 +12,7 @@ import {
   mergeMetadataLabels,
 } from '#adapters/drivers/providers/sprite/labels';
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
-import { showWorkstation } from '#application/inspection';
+import { doctorWorkstation, showWorkstation } from '#application/inspection';
 import { runCommand } from '#application/workstation';
 import { resultExitCode } from '#cli/exit';
 import { prepareResult, writePreparedResult } from '#cli/output';
@@ -191,6 +191,140 @@ describe('cmd:show', () => {
     expect(diagnostic).not.toContain('sdk-private-rejection');
   });
 
+  it('should return a ready doctor result only from current service and environment endpoint evidence', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-doctor-ready-'),
+    );
+    const { client } = await installedSprite(directory.path, true);
+
+    const result = await doctorWorkstation(dependencies, {
+      provider: providerOf(client),
+      requestedName: 'temporary',
+    });
+
+    expect(result).toMatchObject({
+      command: 'doctor',
+      ok: true,
+      data: {
+        currentReadiness: {
+          ready: true,
+          failures: [],
+          services: expect.arrayContaining([
+            { name: 't3-code', state: 'running' },
+          ]),
+          native: {
+            agentEnvironment: {
+              ok: true,
+              serverVersion: '0.0.46-nightly.20261014.3118',
+              orchestrationProtocolVersion: 2,
+            },
+          },
+        },
+      },
+    });
+    expect(serializeResult(projectResult(result))).toMatchObject({
+      command: 'doctor',
+      ok: true,
+      data: { currentReadiness: { ready: true } },
+    });
+  });
+
+  it('should return typed failed doctor readiness from a real guest inspection', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-doctor-'),
+    );
+    const { client } = await installedSprite(directory.path);
+
+    const result = await doctorWorkstation(dependencies, {
+      provider: providerOf(client),
+      requestedName: 'temporary',
+    });
+
+    expect(result).toMatchObject({
+      command: 'doctor',
+      ok: false,
+      error: {
+        code: 'PREFLIGHT',
+        machine: 'temporary',
+        machineId: 'sprite-temporary',
+      },
+      data: {
+        machine: { name: 'temporary', id: 'sprite-temporary' },
+        currentReadiness: {
+          ready: false,
+          failures: expect.arrayContaining(['T3 service']),
+          skipped: expect.arrayContaining(['private network']),
+        },
+      },
+    });
+    expect(serializeResult(projectResult(result))).toMatchObject({
+      command: 'doctor',
+      ok: false,
+      data: { currentReadiness: { ready: false } },
+    });
+  });
+
+  it('should report a failed service probe with sibling evidence in doctor and its output', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-doctor-probe-failure-'),
+    );
+    const { client, sprite } = await installedSprite(directory.path);
+    const secret = 'cor02-service-private-token';
+    rememberSecret(secret);
+    vi.mocked(sprite.listServices).mockRejectedValue(
+      new Error(`service list failed ${secret}`),
+    );
+
+    const result = await doctorWorkstation(dependencies, {
+      provider: providerOf(client),
+      requestedName: 'temporary',
+    });
+    expect(result).toMatchObject({
+      command: 'doctor',
+      ok: false,
+      error: { code: 'PREFLIGHT', machineId: 'sprite-temporary' },
+      data: {
+        currentReadiness: {
+          ready: false,
+          failures: expect.arrayContaining(['services inspection unavailable']),
+          probeFailures: [
+            {
+              probe: 'services',
+              reason: 'Service registry response could not be read.',
+            },
+          ],
+          network: { skipped: true },
+          native: expect.any(Object),
+        },
+      },
+    });
+
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    let out = '';
+    let errorOutput = '';
+    stdout.on('data', (chunk: Buffer) => {
+      out += chunk.toString();
+    });
+    stderr.on('data', (chunk: Buffer) => {
+      errorOutput += chunk.toString();
+    });
+    writePreparedResult(
+      prepareResult({
+        result,
+        streams: { stdout, stderr },
+      }),
+      { stdout, stderr },
+    );
+    stdout.destroy();
+    stderr.destroy();
+    expect(out).toBe('');
+    expect(errorOutput).not.toContain(secret);
+    expect(errorOutput.replaceAll(/\s+/g, ' ')).toContain(
+      'Probe: services · Reason: Service registry response could not be read.',
+    );
+  });
+
   it('should keep failed native inspection visible in show --inspect', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-show-probe-failure-'),
@@ -234,9 +368,9 @@ describe('cmd:show', () => {
     });
   });
 
-  it('should return cancellation exit 130 during a deferred show --inspect probe', async () => {
+  it('should return cancellation exit 130 during a deferred doctor probe', async () => {
     await using directory = await mkdtempDisposable(
-      join(tmpdir(), 'open-agent-show-cancel-'),
+      join(tmpdir(), 'open-agent-doctor-cancel-'),
     );
     const { sprite } = await installedSprite(directory.path);
     const pending =
@@ -250,9 +384,9 @@ describe('cmd:show', () => {
       const resultPromise = runCommand(
         dependencies,
         {
-          command: 'show',
+          command: 'doctor',
           machine: 'temporary',
-          options: { nonInteractive: true, inspect: true },
+          options: { nonInteractive: true },
         },
         { operation: context },
       );
@@ -262,7 +396,7 @@ describe('cmd:show', () => {
       controller.abort();
       const result = await resultPromise;
       expect(result).toMatchObject({
-        command: 'show',
+        command: 'doctor',
         ok: false,
         error: { code: 'CANCELLED', machineId: 'sprite-temporary' },
       });
