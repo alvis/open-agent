@@ -136,6 +136,7 @@ describe('fn:management credential precedence', () => {
       options: {
         credentialFile: 'selected.env',
         localCredentials: false,
+        github: false,
       },
       sources,
     });

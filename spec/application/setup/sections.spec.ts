@@ -1,17 +1,22 @@
-import { mkdtempDisposable } from 'node:fs/promises';
+import { mkdtempDisposable, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { setupAgent, stopService } from '#application/setup/sections';
+import {
+  setupAgent,
+  setupGithub,
+  stopService,
+} from '#application/setup/sections';
 
 import { PairingSecret } from '#kernel/pairing-secret';
+import { revealSecret } from '#kernel/secret';
 
 import { driveInk } from '../../fixtures/ink';
 import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
 
-import { dependencies } from '../../mocks/dependencies';
+import { dependencies, dependenciesWith } from '../../mocks/dependencies';
 import {
   createFilesystemSprite,
   holdServices,
@@ -160,6 +165,86 @@ async function quietSetup(
 
   return { context, guest: await context.connection.guest() };
 }
+
+describe('fn:setupGithub', () => {
+  it.each([
+    { github: false, expected: 'preserved' },
+    { github: undefined, expected: 'skipped' },
+  ] as const)(
+    'should leave guest authentication unchanged when GitHub is $expected',
+    async ({ github, expected }) => {
+      vi.stubEnv('GH_TOKEN', undefined);
+      vi.stubEnv('GITHUB_TOKEN', undefined);
+      const { context, guest } = await quietSetup({
+        github,
+        localCredentials: false,
+        nonInteractive: true,
+      });
+
+      expect({
+        result: await setupGithub(dependencies, guest, context),
+        started: context.mutation.started,
+      }).toEqual({ result: { github: expected }, started: false });
+    },
+  );
+
+  it('should configure the selected GitHub host and provider accounts with the resolved credential', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-github-selected-'),
+    );
+    const credential = join(directory.path, 'github-token');
+    const configured = join(directory.path, 'native-authentication');
+    await writeFile(credential, 'selected-github-secret');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async (url) => {
+        if (url !== 'https://github.example.test/api/v3/user') {
+          throw new Error('Unexpected GitHub endpoint');
+        }
+
+        return Response.json({ login: 'selected-user' });
+      }),
+    );
+    const { context, guest } = await quietSetup(
+      {
+        githubTokenSource: `file:${credential}`,
+        githubHost: 'github.example.test',
+        localCredentials: false,
+        nonInteractive: true,
+      },
+      directory.path,
+    );
+    const wired = dependenciesWith({
+      guest: {
+        ...dependencies.guest,
+        native: {
+          ...dependencies.guest.native,
+          configureGithub: async (_guest, secret, target) =>
+            writeFile(
+              configured,
+              JSON.stringify({ token: revealSecret(secret), ...target }),
+            ),
+        },
+      },
+    });
+
+    const result = await setupGithub(wired, guest, context);
+
+    expect({
+      result,
+      started: context.mutation.started,
+      native: JSON.parse(await readFile(configured, 'utf8')),
+    }).toEqual({
+      result: { github: 'configured' },
+      started: true,
+      native: {
+        token: 'selected-github-secret',
+        hostname: 'github.example.test',
+        shellAccounts: ['sprite'],
+      },
+    });
+  });
+});
 
 describe('fn:stopService', () => {
   it('should surface a provider stop failure while the service remains running', async () => {

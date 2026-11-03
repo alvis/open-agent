@@ -146,14 +146,48 @@ export const selectionFlags = {
   },
 } as const;
 
+/** non-secret provision and setup integration choices */
+export const integrationFlags = {
+  github: {
+    kind: 'boolean',
+    optional: true,
+    withNegated: true,
+    brief: 'enable or disable GitHub access',
+  },
+  githubHost: {
+    kind: 'parsed',
+    parse: String,
+    optional: true,
+    placeholder: 'HOST',
+    brief: 'HOST · GitHub host',
+  },
+} as const;
+
+/** credential source references for selected integrations */
+export const integrationCredentialFlags = {
+  githubTokenSource: {
+    kind: 'parsed',
+    parse: String,
+    optional: true,
+    placeholder: 'SOURCE',
+    brief: 'SOURCE · GitHub token source reference',
+  },
+} as const;
+
 /** setup-only action selectors */
 export const setupFlags = {
   section: {
     kind: 'parsed',
-    parse: buildChoiceParser(['all', 'agent', 'network', 'tools'] as const),
+    parse: buildChoiceParser([
+      'all',
+      'agent',
+      'network',
+      'github',
+      'tools',
+    ] as const),
     optional: true,
     placeholder: 'SECTION',
-    brief: 'SECTION · all, agent, network, or tools',
+    brief: 'SECTION · all, agent, network, github, or tools',
   },
   update: { kind: 'boolean', default: false, brief: 'update managed tools' },
 } as const;

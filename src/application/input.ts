@@ -2,7 +2,12 @@ import { validateProfile } from '#domain/profile';
 import { CommandFault } from '#kernel/faults';
 
 import { resolveBaseInputs } from './input/base';
-import { missingProvisioningInputs } from './input/missing';
+import { selectGithubToken } from './input/github';
+import { discoverGithubToken } from './input/github-discovery';
+import {
+  MISSING_GITHUB_TOKEN,
+  missingProvisioningInputs,
+} from './input/missing';
 import { resolveInteractiveInputs } from './input/prompts';
 import { resolveCreateSelection } from './input/selection';
 import { suppliedSelectionViolations } from './input/selection/supplied';
@@ -15,6 +20,7 @@ import type { Interaction } from '#application/ports/interaction';
 import type { CredentialStoreLocation } from '#domain/credentials';
 import type { WorkstationProfile } from '#domain/profile';
 
+import type { GithubTokenCandidate } from './input/github';
 import type { SelectionResolution } from './input/selection';
 import type { Resolved } from './input/selection/sources';
 import type { SuppliedSelection } from './input/selection/supplied';
@@ -25,6 +31,7 @@ const BASE_CREATE_INPUTS: readonly RequiredInput[] = ['name', 'providerToken'];
 
 interface ResolveInputsOptions {
   credentialStore?: CredentialStoreLocation;
+  discoverGithub?: boolean;
   profile?: WorkstationProfile;
   required?: readonly RequiredInput[];
   sources?: InputSources;
@@ -61,7 +68,7 @@ export async function resolveInputs(
   const required = resolution.required ?? BASE_CREATE_INPUTS;
   const sources =
     resolution.sources ?? (await readEnvironmentSources(dependencies, options));
-  const { input } = await resolveBaseInputs(dependencies, {
+  const { input, githubCandidate } = await resolveBaseInputs(dependencies, {
     options,
     sources,
     selection: {
@@ -75,8 +82,20 @@ export async function resolveInputs(
     required,
     credentialStore: resolution.credentialStore,
   });
+  const missingBeforeRemote = [...missingProvisioningInputs(input, required)];
+  if (options.nonInteractive && missingBeforeRemote.length > 0) {
+    return { ...input, missing: missingBeforeRemote };
+  }
 
-  return { ...input, missing: missingProvisioningInputs(input, required) };
+  return completeAccountInputs(dependencies, {
+    options,
+    interaction,
+    required,
+    input,
+    githubCandidate,
+    missingBeforeRemote,
+    discoverGithub: resolution.discoverGithub,
+  });
 }
 
 /**
@@ -105,6 +124,7 @@ export async function resolveCreateInputs(
     interaction,
     requirementSelection: {
       required: BASE_CREATE_INPUTS,
+      discoverGithub: true,
       profile,
       sources,
     },
@@ -191,4 +211,63 @@ function isResolveInputsOptions(
   value: readonly RequiredInput[] | ResolveInputsOptions,
 ): value is ResolveInputsOptions {
   return !Array.isArray(value);
+}
+
+interface AccountResolutionContext {
+  options: CommandOptions;
+  interaction?: Interaction;
+  required: readonly RequiredInput[];
+  input: ResolvedInputs;
+  githubCandidate?: string;
+  missingBeforeRemote: string[];
+  discoverGithub?: boolean;
+}
+
+/**
+ * resolves optional GitHub access after mandatory inputs are known
+ * @param dependencies what this computer provides
+ * @param context initial inputs and selected workflow requirements
+ * @returns completed account values and remaining missing inputs
+ */
+async function completeAccountInputs(
+  dependencies: Pick<ApplicationDependencies, 'host'>,
+  context: AccountResolutionContext,
+): Promise<ResolvedInputs> {
+  const {
+    options,
+    interaction,
+    required,
+    input,
+    githubCandidate,
+    missingBeforeRemote,
+    discoverGithub,
+  } = context;
+  const selectGithub =
+    options.github !== false &&
+    (discoverGithub === true || required.includes('githubToken'));
+  const discovered =
+    selectGithub && !githubCandidate
+      ? await discoverGithubToken(dependencies, options)
+      : undefined;
+  const candidate: GithubTokenCandidate | undefined = githubCandidate
+    ? { token: githubCandidate, provenance: 'provided' }
+    : discovered
+      ? { token: discovered, provenance: 'gh-discovery' }
+      : undefined;
+  const selectedGithub = selectGithub
+    ? await selectGithubToken(candidate, options, interaction)
+    : undefined;
+  input.githubToken = selectedGithub?.token;
+
+  return {
+    ...input,
+    missing: [
+      ...missingBeforeRemote,
+      ...(required.includes('githubToken') &&
+      options.github !== false &&
+      !input.githubToken
+        ? MISSING_GITHUB_TOKEN
+        : []),
+    ],
+  };
 }

@@ -108,6 +108,11 @@ export interface NetworkSetupData {
   network: { status: 'disabled'; readiness: 'skipped' };
 }
 
+/** native GitHub authentication outcome */
+export interface GithubSetupData {
+  github: 'configured' | 'preserved' | 'skipped';
+}
+
 /** how many tools an update left current, did not run for, and failed */
 export interface ComponentCounts {
   /** tools current after the update */
@@ -139,13 +144,18 @@ export interface ToolsSetupData {
 
 /** all-section recovery retains each independently selected outcome */
 export interface AllSetupData
-  extends Partial<AgentSetupData>, NetworkSetupData, ToolsSetupData {}
+  extends
+    Partial<AgentSetupData>,
+    Partial<GithubSetupData>,
+    NetworkSetupData,
+    ToolsSetupData {}
 
 /** concrete outcomes keyed by the executed guest setup section */
 interface SetupSectionData {
   all: AllSetupData;
   agent: AgentSetupData;
   network: NetworkSetupData;
+  github: GithubSetupData;
   tools: ToolsSetupData;
 }
 

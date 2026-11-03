@@ -22,6 +22,7 @@ const request = {
     mem: 2,
     release: 'stable',
     localCredentials: false,
+    github: false,
     harness: ['claude'],
     network: 'none',
     idleMinutes: 5,
@@ -40,7 +41,7 @@ describe('fn:prepareCreate consent', () => {
 
     const result = await prepareCreate(dependencies, {
       ...request,
-      options: { ...request.options, yes: true },
+      options: { ...request.options, yes: true, githubHost: 'github.com' },
     });
 
     expect(result).toMatchObject({
@@ -113,7 +114,18 @@ describe('fn:prepareCreate consent', () => {
       async () => [],
     );
     const observed = await driveInk(
-      async (interaction) => prepareCreate(dependencies, request, interaction),
+      async (interaction) =>
+        prepareCreate(
+          dependencies,
+          {
+            ...request,
+            options: {
+              ...request.options,
+              githubHost: 'enterprise.example.test',
+            },
+          },
+          interaction,
+        ),
       [{ waitFor: 'Create saf07-generated on Fly Sprite', input: '\u0003' }],
     );
 

@@ -13,7 +13,7 @@ import { setupFailure } from './setup/failure';
 import { recordSetupMetadata } from './setup/metadata';
 import { setupNetwork } from './setup/network';
 import { prepareGuestSection } from './setup/preparation';
-import { setupAgent } from './setup/sections';
+import { setupGithub, setupAgent } from './setup/sections';
 import { selectSetupSection } from './setup/selection';
 import { setupTools } from './setup/tools';
 
@@ -287,6 +287,10 @@ async function applySection(
     }),
     network: async (): Promise<AppliedSetupSection> =>
       Promise.resolve({ section: 'network', ...setupNetwork() }),
+    github: async (): Promise<AppliedSetupSection> => ({
+      section: 'github',
+      ...(await setupGithub(dependencies, guest, context)),
+    }),
     tools: async (): Promise<AppliedSetupSection> => ({
       section: 'tools',
       ...(await setupTools(dependencies, guest, context)),

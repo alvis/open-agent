@@ -7,6 +7,7 @@ import { networkDriver } from '#application/catalog/networks';
 import { installWorkstation } from '#application/installation';
 import { markInstallationReady } from '#application/installation/readiness';
 import { traceStage } from '#kernel/operation';
+import { Secret } from '#kernel/secret';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { ProviderDriver } from '#application/ports/drivers';
@@ -20,6 +21,8 @@ interface NewWorkstationConfiguration {
   hostname: string;
   /** validated selection the workstation is created with */
   profile: WorkstationProfile;
+  githubToken?: string;
+  githubHost?: string;
 }
 
 /** the named inputs of configure new workstation */
@@ -36,7 +39,7 @@ export interface ConfigureNewWorkstationParams {
 
 /**
  * installs the workstation through its setup plan, enrolling the network and
- * writing the native harness configuration before the services
+ * writing the native harness and account configuration before the services
  * start, then records the installation as ready
  * @param dependencies the registered drivers, the guest mechanics
  * @param params the call's inputs: provider, connection, interaction, configuration
@@ -87,7 +90,8 @@ interface EnrolAndConfigureParams {
 }
 
 /**
- * enrols the selected network, writes the native harness configuration
+ * enrols the selected network, writes the native harness and account
+ * configuration
  * @param dependencies the registered drivers, the guest mechanics
  * @param params the call's inputs: guest, configuration, interaction
  */
@@ -105,14 +109,40 @@ async function enrolAndConfigure(
   });
   interaction?.progress({
     stage: 'configuration',
-    message: 'Writing native harness configuration',
+    message: 'Writing native harness and account configuration',
   });
   await traceStage({
     stage: 'create.configuration',
-    action: async () =>
-      configureHarnesses(guest, {
-        drivers: harnessDrivers(dependencies.registry, profile.harnesses),
-        awakeHook: awakeHookCommand(dependencies.guest.facts),
-      }),
+    action: async () => configureNative(dependencies, guest, configuration),
+  });
+}
+
+/**
+ * applies selected native account configuration
+ * @param dependencies the registered drivers, the guest mechanics
+ * @param guest guest channel of the managed workstation
+ * @param configuration selected non-secret and transient secret inputs
+ */
+async function configureNative(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'guest'>,
+  guest: GuestChannel,
+  configuration: NewWorkstationConfiguration,
+): Promise<void> {
+  const { profile, githubToken, githubHost } = configuration;
+  const drivers = harnessDrivers(dependencies.registry, profile.harnesses);
+  if (githubToken) {
+    await dependencies.guest.native.configureGithub(
+      guest,
+      Secret.fromHost('github', githubToken),
+      {
+        hostname: githubHost,
+        shellAccounts:
+          dependencies.registry.providers[profile.provider].shellAccounts,
+      },
+    );
+  }
+  await configureHarnesses(guest, {
+    drivers,
+    awakeHook: awakeHookCommand(dependencies.guest.facts),
   });
 }

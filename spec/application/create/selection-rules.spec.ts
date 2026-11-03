@@ -36,6 +36,7 @@ const request = {
     nonInteractive: true,
     yes: true,
     localCredentials: false,
+    github: false,
     harness: ['claude'],
     network: 'none',
   },

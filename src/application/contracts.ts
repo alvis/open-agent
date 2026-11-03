@@ -4,7 +4,7 @@ import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 import type { CommandName } from '#kernel/commands';
 
 /** targetable setup areas */
-export type SetupSection = 'all' | 'agent' | 'network' | 'tools';
+export type SetupSection = 'all' | 'agent' | 'network' | 'github' | 'tools';
 
 /** values parsed from CLI flags; secret-bearing fields contain references, never raw credentials */
 export interface CommandOptions {
@@ -46,6 +46,8 @@ export interface CommandOptions {
   verbose?: boolean;
   /** hides routine status and progress */
   quiet?: boolean;
+  /** configures or skips the native GitHub CLI credential */
+  github?: boolean;
   /** reads and saves credentials on this computer when enabled */
   localCredentials?: boolean;
   /** requests a pairing code from an agent that supports pairing */
@@ -54,8 +56,12 @@ export interface CommandOptions {
   inspect?: boolean;
   /** installs the latest managed tools in place, without restarting a service */
   update?: boolean;
+  /** GitHub host the native credential authenticates against */
+  githubHost?: string;
   /** source reference of the provider management credential */
   providerTokenSource?: string;
+  /** source reference of the GitHub token */
+  githubTokenSource?: string;
 }
 
 /** parsed command and its optional machine selection */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { selectGithubToken } from '#application/input/github';
 import {
   readSetupSelection,
   resolveCreateSelection,
@@ -78,5 +79,40 @@ describe('input source resolution', () => {
         idleTimeoutMinutes: 5,
       },
     });
+  });
+
+  it('should mask GitHub replacement through back, failed retry and skip', async () => {
+    const replacement = 'unverifiable-replacement';
+    const observed = await driveInk(
+      async (interaction) =>
+        selectGithubToken(
+          undefined,
+          { githubHost: 'invalid/path' },
+          interaction,
+        ),
+      [
+        { waitFor: 'GitHub credential: add or skip?', input: '\r' },
+        { waitFor: 'GitHub token:', input: '\x1b' },
+        { waitFor: 'GitHub credential: add or skip?', input: '\r' },
+        { waitFor: 'GitHub token:', input: [replacement, '\r'] },
+        { waitFor: 'GitHub credential: add or skip?', input: 'Skip GitHub' },
+        { waitFor: 'Search: Skip GitHub', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(6);
+    expect(observed.result).toBeUndefined();
+    expect(observed.output).not.toContain(replacement);
+  });
+
+  it('should reject an invalid GitHub host before attempting credential verification', async () => {
+    await expect(
+      selectGithubToken('test-token', { githubHost: 'invalid/path' }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        code: 'INPUT',
+        message: expect.stringContaining('GitHub host must be a hostname'),
+      }),
+    );
   });
 });

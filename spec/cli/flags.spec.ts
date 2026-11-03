@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   commonFlags,
   consentFlags,
+  integrationCredentialFlags,
+  integrationFlags,
   pairingFlags,
   selectionFlags,
   setupFlags,
@@ -28,6 +30,8 @@ const parserFlags = {
   ...consentFlags,
   ...pairingFlags,
   ...selectionFlags,
+  ...integrationFlags,
+  ...integrationCredentialFlags,
   ...setupFlags,
 };
 
@@ -35,6 +39,7 @@ describe('cmd:setup', () => {
   it.each([
     ['color', 'color'],
     ['local-credentials', 'localCredentials'],
+    ['github', 'github'],
   ] as const)(
     'should preserve omitted, positive and negative values for --%s',
     async (flag, property) => {

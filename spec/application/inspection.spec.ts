@@ -559,6 +559,7 @@ describe('cmd:show', () => {
               withPairCode: true,
               inspect: true,
               localCredentials: false,
+              github: false,
             },
           },
           provider: providerOf(client),

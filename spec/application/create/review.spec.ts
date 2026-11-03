@@ -48,7 +48,7 @@ describe('fn:confirmCreation', () => {
 });
 
 describe('fn:reviewCreatePlan', () => {
-  it('should describe the selected network without credentials', async () => {
+  it('should describe the selected network and optional identities without credentials', async () => {
     const status = vi.fn<(update: StatusUpdate) => void>();
     const operation = new OperationContext({
       signal: new AbortController().signal,
@@ -65,7 +65,11 @@ describe('fn:reviewCreatePlan', () => {
     await withOperation(operation, async () =>
       reviewCreatePlan(dependencies, {
         values: { name: 'box', token: 'private-token' },
-        input: { ...input, profile },
+        input: {
+          ...input,
+          profile,
+          githubToken: 'github-token',
+        },
         preflight: { checks: [], reminders: [] },
       }),
     );
@@ -78,6 +82,8 @@ describe('fn:reviewCreatePlan', () => {
         },
       ],
     ]);
-    expect(JSON.stringify(status.mock.calls)).not.toMatch(/private-token/);
+    expect(JSON.stringify(status.mock.calls)).not.toMatch(
+      /private-token|github-token/,
+    );
   });
 });

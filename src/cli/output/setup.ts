@@ -51,6 +51,7 @@ export interface SetupDataOutput {
   service?: 'configured';
   pairing?: PairingOutput;
   network?: { status: 'disabled'; readiness: 'skipped' };
+  github?: string;
   components?: ComponentCountsOutput;
   tools?: ToolsSetupOutput;
 }
@@ -127,6 +128,7 @@ export function projectSetup(data: SetupData): SetupDataOutput {
     service: same,
     pairing: projectPairing,
     network: projectNetworkOutcome,
+    github: same,
     components: projectComponents,
     tools: projectToolsOutcome,
   });

@@ -129,7 +129,7 @@ describe('scoped setup', () => {
     }
   }, 15_000);
 
-  it('should return from tools to sections, then views recorded tool versions without mutation', async () => {
+  it('should return from tools to sections, then preserves GitHub without mutation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'open-agent-setup-'));
     vi.stubEnv('HOME', root);
     try {
@@ -155,6 +155,7 @@ describe('scoped setup', () => {
               options: {
                 section: 'tools',
                 localCredentials: false,
+                github: false,
               },
             },
             provider: providerOf(client),
@@ -162,16 +163,15 @@ describe('scoped setup', () => {
           }),
         [
           { waitFor: 'Managed tools', input: '\x1b' },
-          { waitFor: 'Choose setup section', input: 'Managed tools' },
-          { waitFor: 'Search: Managed tools', input: '\r' },
-          { waitFor: 'View recorded installed versions', input: '\r' },
+          { waitFor: 'Choose setup section', input: 'GitHub' },
+          { waitFor: 'Search: GitHub', input: '\r' },
         ],
       );
 
-      expect(observed.matchedSteps, observed.output).toBe(4);
+      expect(observed.matchedSteps, observed.output).toBe(3);
       expect(observed.result).toMatchObject({
         ok: true,
-        data: { section: 'tools', tools: { status: 'recorded versions' } },
+        data: { section: 'github', github: 'preserved' },
       });
       expect(writtenPaths(sprite)).toEqual([]);
     } finally {

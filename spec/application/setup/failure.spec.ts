@@ -192,7 +192,7 @@ describe('fn:setupFailure', () => {
       },
       error: new Error(`rejected ${secret}`),
       mutation: { started: false },
-      section: 'tools',
+      section: 'github',
     });
 
     expect(result).toMatchObject({
@@ -200,8 +200,8 @@ describe('fn:setupFailure', () => {
       error: {
         code: 'UNEXPECTED',
         details: [
-          'Failed setup section: tools',
-          'Retry: open-agent setup "primary" --section tools',
+          'Failed setup section: github',
+          'Retry: open-agent setup "primary" --section github',
         ],
       },
     });

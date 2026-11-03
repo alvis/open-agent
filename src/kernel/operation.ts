@@ -317,6 +317,20 @@ export async function runOperation<T>(
 }
 
 /**
+ * composes the current caller with the existing transport timeout
+ * @param timeoutMs maximum transport duration in milliseconds
+ * @returns transport signal respecting both existing bounds and cancellation
+ */
+export function operationSignal(timeoutMs: number): AbortSignal {
+  const operation = currentOperation();
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+
+  return operation
+    ? AbortSignal.any([operation.signal, timeoutSignal])
+    : timeoutSignal;
+}
+
+/**
  * bounds independent recovery without reusing an aborted operation signal
  * @param action recovery that returns its observations to the owner
  * @returns bounded recovery outcome with the parent scope restored

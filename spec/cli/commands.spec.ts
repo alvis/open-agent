@@ -90,10 +90,10 @@ describe('command route dispatch', () => {
       options: { name: 'new-box' },
     },
     {
-      argv: ['setup', 'dev-box', '--section', 'tools'],
+      argv: ['setup', 'dev-box', '--section', 'github'],
       command: 'setup',
       machine: 'dev-box',
-      options: { section: 'tools' },
+      options: { section: 'github' },
     },
     {
       argv: ['list', '--provider', 'sprite'],

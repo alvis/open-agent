@@ -1,12 +1,14 @@
 import { pairAgent } from '#application/catalog/services';
+import { resolveInputs } from '#application/input';
 import { markInstallationReady } from '#application/installation/readiness';
 import { CommandFault } from '#kernel/faults';
 import { PairingSecret } from '#kernel/pairing-secret';
+import { Secret } from '#kernel/secret';
 
 import { installSetupPlan } from './installation';
 import { exposeWhenServing } from './serving';
 
-import type { AgentSetupData } from '#application/data';
+import type { AgentSetupData, GithubSetupData } from '#application/data';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { GuestChannel } from '#application/ports/guest-channel';
 
@@ -101,4 +103,42 @@ export async function stopService(
       message: `The ${name} service reported a stop failure`,
     });
   }
+}
+
+/**
+ * sets optional GitHub authentication for the agent and the provider shell accounts
+ * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
+ * @param guest guest channel of the managed workstation
+ * @param context GitHub choices, prompts, and redaction values
+ * @returns gitHub configuration outcome
+ */
+export async function setupGithub(
+  dependencies: ApplicationDependencies,
+  guest: GuestChannel,
+  context: SetupContext,
+): Promise<GithubSetupData> {
+  const { options, interaction, mutation } = context;
+  if (options.github === false) {
+    return { github: 'preserved' };
+  }
+  const input = await resolveInputs(dependencies, {
+    options,
+    interaction,
+    requirementSelection: ['githubToken'],
+  });
+  if (!input.githubToken) {
+    return { github: 'skipped' };
+  }
+  mutation.started = true;
+  await dependencies.guest.native.configureGithub(
+    guest,
+    Secret.fromHost('github', input.githubToken),
+    {
+      hostname: options.githubHost,
+      shellAccounts:
+        dependencies.registry.providers[context.profile.provider].shellAccounts,
+    },
+  );
+
+  return { github: 'configured' };
 }

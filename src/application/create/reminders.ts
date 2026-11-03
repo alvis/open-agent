@@ -27,6 +27,11 @@ export function createPreflightSummary(
     reminders: [
       `Managed maintenance checks hourly; once ${dueDays(profile.options.updateDueIntervalDays)} passed since the last update, it installs the latest tools in place without restarting ${dependencies.registry.agents[profile.agent].displayName} or any other service.`,
       `${profile.harnesses.map((id) => harnessLabel(id)).join(' and ')} use native sign-in; configure their credentials on the guest before model work.`,
+      ...(!input.githubToken
+        ? [
+            'Private GitHub access is not configured; supply GH_TOKEN or sign in with gh on the guest when needed.',
+          ]
+        : []),
     ],
   };
 }

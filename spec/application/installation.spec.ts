@@ -301,7 +301,7 @@ describe('fn:installWorkstation', () => {
         argv: ['true'],
         input: {
           kind: 'secret',
-          value: Secret.embedding(value),
+          value: Secret.fromHost('github', value),
           as: 'stdin',
         },
       },

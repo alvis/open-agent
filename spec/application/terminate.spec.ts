@@ -62,6 +62,7 @@ async function createTerminationBoundary(root: string): Promise<{
       yes: true,
       nonInteractive: true,
       localCredentials: false,
+      github: false,
     },
   } satisfies CommandRequest;
 

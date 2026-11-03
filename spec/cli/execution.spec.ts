@@ -395,8 +395,8 @@ describe('fn:execute', () => {
       options: {
         ...request.options,
         credentialFile: 'credentials.env',
-        localCredentials: false,
-        providerTokenSource: 'keychain:test/account',
+        github: false,
+        githubTokenSource: 'env:TEST_GITHUB_TOKEN',
       },
     };
 
@@ -413,7 +413,7 @@ describe('fn:execute', () => {
         ok: false,
         error: {
           code: 'USAGE',
-          message: expect.stringContaining('--no-local-credentials'),
+          message: expect.stringContaining('--no-github'),
         },
       },
       stderr: '',

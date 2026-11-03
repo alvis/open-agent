@@ -3,6 +3,8 @@ import { runOperation } from '#kernel/operation';
 
 import { resolveProviderCredential } from './provider-credential';
 
+import { resolveSecret } from './sources';
+
 import type { CommandOptions } from '#application/contracts';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
@@ -15,9 +17,12 @@ import type { WorkstationProfile } from '#domain/profile';
 import type { InputSources } from './sources';
 import type { ResolvedInputs } from './types';
 
+type SourceReader = (name: string) => string | undefined;
+
 interface SecretValues {
   providerToken?: string;
   providerTokenSource?: string;
+  githubCandidate?: string;
 }
 
 /** selected local fallback requirements for this real input resolution */
@@ -46,23 +51,25 @@ export interface ResolveBaseInputsParams {
  * resolves initial create/setup inputs before optional inline prompts
  * @param dependencies the registered drivers, the profile defaults, what this computer provides
  * @param params the call's inputs: options, sources, selection
- * @returns initial inputs
+ * @returns initial inputs and candidate GitHub credential
  */
 export async function resolveBaseInputs(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults' | 'host'>,
   params: ResolveBaseInputsParams,
-): Promise<{ input: ResolvedInputs }> {
+): Promise<{ input: ResolvedInputs; githubCandidate?: string }> {
   const { options, sources, selection = {} } = params;
   const profile = selection.profile ?? defaultProfile(dependencies.defaults);
   const names = declaredNames(dependencies, profile);
   const sourceNames: Record<string, string> = {};
+  const value = sourceReader(options, sources, sourceNames);
   const secrets = await resolveSelectedSecrets(dependencies, {
     options,
+    value,
     profile,
     sources,
     credentialStore: selection.credentialStore,
   });
-  annotateSecretSources(secrets, {
+  annotateSecretSources(options, secrets, {
     names,
     sources: sourceNames,
   });
@@ -74,7 +81,7 @@ export async function resolveBaseInputs(
     missing: [],
   };
 
-  return { input };
+  return { input, githubCandidate: secrets.githubCandidate };
 }
 
 /**
@@ -95,10 +102,41 @@ function declaredNames(
   };
 }
 
+/**
+ * selects non-secret values in credential file, process order
+ * @param options parsed selected credential file path
+ * @param sources process and dotenv values
+ * @param names output map of selected source descriptions
+ * @returns a precedence-aware value reader
+ */
+function sourceReader(
+  options: CommandOptions,
+  sources: InputSources,
+  names: Record<string, string>,
+): SourceReader {
+  return (name) => {
+    const ordered = [
+      {
+        value: sources.fileEnv[name],
+        description: options.credentialFile ?? 'credential file',
+      },
+      { value: sources.processEnv[name], description: 'process environment' },
+    ];
+    const selected = ordered.find((entry) => Boolean(entry.value));
+    if (selected) {
+      names[name] = selected.description;
+    }
+
+    return selected?.value;
+  };
+}
+
 /** the named inputs of resolve selected secrets */
 interface ResolveSelectedSecretsParams {
   /** parsed secret references and local credential policy */
   options: CommandOptions;
+  /** non-secret precedence reader for environment values */
+  value: SourceReader;
   /** driver selection whose provider credential is read */
   profile: WorkstationProfile;
   /** process and credential file values */
@@ -110,40 +148,52 @@ interface ResolveSelectedSecretsParams {
 /**
  * resolves secret references without transferring management credentials to the guest
  * @param dependencies the registered drivers, what this computer provides
- * @param params the call's inputs: options, profile, sources, credentialStore
- * @returns the provider credential and its source
+ * @param params the call's inputs: options, value, profile, sources, credentialStore
+ * @returns selected secrets before optional GitHub confirmation
  */
 async function resolveSelectedSecrets(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'host'>,
   params: ResolveSelectedSecretsParams,
 ): Promise<SecretValues> {
-  const { options, profile, sources, credentialStore } = params;
-  const provider = await runOperation(async () =>
-    resolveProviderCredential(dependencies, {
-      options,
-      provider: profile.provider,
-      selection: {
-        reference: options.providerTokenSource,
-        sources,
-        credentialStore,
-      },
-    }),
+  const { options, value, profile, sources, credentialStore } = params;
+  const [provider, githubCandidate] = await runOperation(async () =>
+    Promise.all([
+      resolveProviderCredential(dependencies, {
+        options,
+        provider: profile.provider,
+        selection: {
+          reference: options.providerTokenSource,
+          sources,
+          credentialStore,
+        },
+      }),
+      options.github === false
+        ? Promise.resolve(undefined)
+        : resolveSecret(
+            dependencies,
+            options.githubTokenSource,
+            value('GH_TOKEN') ?? value('GITHUB_TOKEN'),
+          ),
+    ]),
   );
 
   return {
     providerToken: provider.token,
     providerTokenSource: provider.source,
+    githubCandidate,
   };
 }
 
 /**
  * labels selected local and explicit secret sources without recording values
+ * @param options parsed explicit secret references
  * @param secrets resolved secret presence
  * @param context declared credential names and the source descriptions updated in place
  * @param context.names credential names the selected drivers declare
  * @param context.sources source descriptions keyed by environment name
  */
 function annotateSecretSources(
+  options: CommandOptions,
   secrets: SecretValues,
   context: {
     names: DeclaredNames;
@@ -153,5 +203,8 @@ function annotateSecretSources(
   const { names, sources } = context;
   if (secrets.providerTokenSource) {
     sources[names.provider.environment] = secrets.providerTokenSource;
+  }
+  if (options.githubTokenSource) {
+    sources.GH_TOKEN = 'explicit secret reference';
   }
 }

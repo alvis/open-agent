@@ -30,6 +30,11 @@ export async function runLocal(params: LocalProcessParams): Promise<string> {
       stderr: 'pipe',
       stdout: 'pipe',
       reject: false,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        GH_PROMPT_DISABLED: '1',
+      },
     }),
   );
   if (result.exitCode !== 0) {
