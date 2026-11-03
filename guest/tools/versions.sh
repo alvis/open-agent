@@ -1,10 +1,11 @@
 # open-agent's tool version record, sourced as root after the OS family's
 # library and the Homebrew, npm and rustup libraries, whose version helpers it
-# asks: setup, once every tool step ran, records in environment.json the
-# version each tool's manager reports installed, so the record follows what
-# the guest has rather than what was asked for. A system tool, and a tool
-# whose version cannot be read, is recorded without one. Root reads and
-# rewrites environment.json with the system's jq alone
+# asks: setup, once every tool step ran, and the updater, once its upgrades
+# ran, record in environment.json the version each tool's manager reports
+# installed, so the record follows what the guest has rather than what was
+# asked for. A system tool, and a tool whose version cannot be read, is
+# recorded without one. Root reads and rewrites environment.json with the
+# system's jq alone
 
 OA_VERSIONS_JQ=/usr/bin/jq
 

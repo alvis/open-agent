@@ -34,6 +34,19 @@ export interface GuestServiceState {
   startedAt?: string;
 }
 
+/** a command the provider runs on a fixed schedule */
+export interface PeriodicJob {
+  /** job identifier */
+  name: string;
+  /** minutes between two runs */
+  everyMinutes: number;
+  /** program, arguments and account each run executes */
+  run: Pick<ServiceDefinition, 'command' | 'arguments' | 'account'>;
+}
+
+/** name of the periodic-job scheduler service every backend runs */
+export const CRON_SERVICE_NAME = 'open-agent-cron';
+
 /**
  * reads the service core registers for the selected agent
  * @param declarations the data every registered driver declares

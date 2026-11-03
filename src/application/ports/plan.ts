@@ -158,4 +158,6 @@ export interface SetupAssembly {
   foundation: readonly SetupStep[];
   /** the steps after the foundation: tools, idle governor and environment.json */
   steps: readonly SetupStep[];
+  /** the cron jobs setup installs, in a plan of their own once the steps succeeded */
+  services: readonly SetupStep[];
 }

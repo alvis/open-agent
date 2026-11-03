@@ -18,8 +18,10 @@ export interface PersistSetupProfileParams {
 }
 
 /**
- * persists a validated selection. The setup session holds the guest's setup
- * lock, so nothing else changes the record meanwhile
+ * persists a validated selection; the update gate reads the tools section's
+ * due interval from environment.json, so storing it is the whole change. The
+ * setup session holds the guest's setup lock, so nothing else changes the
+ * record meanwhile
  * @param dependencies the guest mechanics
  * @param params the call's inputs: guest, profile, context
  */
@@ -34,10 +36,21 @@ export async function persistSetupProfile(
 }
 
 /**
- * detects whether this setup invocation changes the persisted selection
+ * detects whether this setup invocation changes the persisted selection; the
+ * tools section owns only the update due interval, so it changes the selection
+ * only when the resolved interval differs from the recorded one
  * @param section selected setup area
+ * @param profile validated selection this run applies
+ * @param recorded selection recorded before this run
  * @returns whether profile persistence is required
  */
-export function profileUpdateSelected(section: SetupSection): boolean {
-  return sectionFields(section).length > 0;
+export function profileUpdateSelected(
+  section: SetupSection,
+  profile: WorkstationProfile,
+  recorded: WorkstationProfile,
+): boolean {
+  return section === 'tools'
+    ? profile.options.updateDueIntervalDays !==
+        recorded.options.updateDueIntervalDays
+    : sectionFields(section).length > 0;
 }

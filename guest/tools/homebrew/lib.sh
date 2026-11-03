@@ -213,6 +213,32 @@ oa_brew_install() {
   oa_brew install --formula "$1"
 }
 
+# refreshes Homebrew's formula data from its API, leaving its own code at
+# the pinned release: `brew update` would move that to the newest tag, so it
+# never runs, and an `outdated` run fetches the data in its stead, which it
+# does even with automatic updates off when asked to; it prints the installed
+# formulae the refreshed data has a newer version of, one name a line
+oa_brew_refresh() {
+  oa_brew_as HOMEBREW_FORCE_API_AUTO_UPDATE=1 "$OA_BREW" outdated --formula --quiet
+}
+
+# upgrades installed formulae from their bottles; one whose new version has no
+# bottle for the guest yet keeps its current version
+# arguments: formula names
+oa_brew_upgrade() {
+  oa_brew_names "$@" || return 1
+  oa_upgrade_unbottled=$(oa_brew_unbottled "$@") || return 1
+  for oa_upgrade_formula; do
+    shift
+    if printf '%s\n' "$oa_upgrade_unbottled" | grep -qxF "no-bottle:$oa_upgrade_formula"; then
+      echo "Keeping $oa_upgrade_formula: its new version has no bottle for $(uname -m)" >&2
+    elif oa_brew_installed "$oa_upgrade_formula"; then
+      set -- "$@" "$oa_upgrade_formula"
+    fi
+  done
+  test "$#" -eq 0 || oa_brew upgrade --formula "$@"
+}
+
 # prints the installed version of a formula
 # arguments: formula name
 oa_brew_version() {
@@ -247,4 +273,23 @@ oa_brew_listed_version() {
       ;;
   esac
   oa_brew_version "$2"
+}
+
+# prints the directories a cleanup of Homebrew shrinks: the formulae's kegs
+# and the account's download cache
+oa_brew_clean_roots() {
+  printf '%s\n%s\n' "$OA_BREW_PREFIX/Cellar" "$OA_BREW_HOME/.cache/Homebrew"
+}
+
+# cleans up after an update of the formulae: brew removes the kegs of versions
+# an upgrade replaced and the downloads of superseded bottles, keeps every
+# installed formula's current keg and any pinned one, and expires cached
+# downloads after its own default of 120 days. It returns 2, noting why on
+# stderr, when Homebrew is not installed
+oa_brew_clean() {
+  if ! test -x "$OA_BREW"; then
+    echo 'Skipping the Homebrew cleanup: Homebrew is not installed' >&2
+    return 2
+  fi
+  oa_brew cleanup
 }

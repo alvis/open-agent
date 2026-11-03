@@ -17,9 +17,14 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
     description: 'Workstation networking',
   },
   {
+    value: 'tools',
+    label: 'Managed tools',
+    description: 'View recorded versions or explicitly update tools in place',
+  },
+  {
     value: 'all',
     label: 'Full setup / recovery',
-    description: 'Install tools and configure every section',
+    description: 'Update tools and configure every section',
   },
 ];
 

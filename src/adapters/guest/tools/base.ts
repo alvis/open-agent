@@ -93,6 +93,14 @@ export const BASE_TOOLS: readonly ToolSpec[] = [
     sources: [apt('procps')],
   },
   {
+    // the provider runs cron as open-agent's own service
+    name: 'cron',
+    required: true,
+    executables: [],
+    version: packageProbe('cron'),
+    sources: [{ ...apt('cron'), vendorServices: ['cron.service'] }],
+  },
+  {
     // Homebrew's installer clones its own repository with the system git,
     // which root's commands run
     name: 'git-bootstrap',

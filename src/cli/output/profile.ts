@@ -18,6 +18,7 @@ export interface ProfileSummaryOutput {
 export interface ProfileOptionsOutput {
   idleTimeoutMinutes: number;
   holdMaxMinutes: number;
+  updateDueIntervalDays: number;
 }
 
 /** driver selection and options a workstation recorded */
@@ -67,5 +68,6 @@ export function projectProfileOptions(
   return projectFields<ProfileOptions, ProfileOptionsOutput>(options, {
     idleTimeoutMinutes: same,
     holdMaxMinutes: same,
+    updateDueIntervalDays: same,
   });
 }

@@ -16,7 +16,7 @@ type Check = (value: unknown) => boolean;
 /** the record's format version */
 export const ENVIRONMENT_SCHEMA: EnvironmentSchema = 1;
 
-/** a service or tool name a guest path can carry */
+/** a service, job or tool name a guest path or cron entry can carry */
 const NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 /** an environment variable name */
 const VARIABLE_PATTERN = /^[A-Z_a-z]\w*$/;
@@ -79,7 +79,7 @@ const text: Check = (value) => typeof value === 'string' && value !== '';
 const word: Check = (value) => typeof value === 'string';
 // a boolean
 const flag: Check = (value) => typeof value === 'boolean';
-// a name a guest path can carry
+// a name a guest path or cron entry can carry
 const name: Check = (value) =>
   typeof value === 'string' && NAME_PATTERN.test(value);
 // an absolute guest path
@@ -110,6 +110,7 @@ const source: Check = (value) => {
         system: {
           family: text,
           packages: listOf(text),
+          vendorServices: optional(listOf(text)),
         },
         npm: { package: text, account: oneOf('agent') },
         rustup: {
@@ -123,7 +124,7 @@ const source: Check = (value) => {
   return fields !== undefined && shape(fields)(value);
 };
 
-/** the program, arguments and account a service runs */
+/** the program, arguments and account a service or job runs */
 const run = { command: path, arguments: listOf(word), account };
 
 /** the top-level fields before the profile, and their checks */
@@ -148,6 +149,7 @@ const TRAILING_FIELDS: Readonly<Record<string, Check>> = {
       version: optional(text),
     }),
   ),
+  schedule: shape({ dueDays: atLeast(1) }),
   provider: shape({
     id: text,
     keepAwakeMode: oneOf('native-deadline', 'none'),
@@ -191,6 +193,7 @@ const TRAILING_FIELDS: Readonly<Record<string, Check>> = {
       machineLog: optional(flag),
     }),
   ),
+  jobs: listOf(shape({ name, everyMinutes: atLeast(1), run: shape(run) })),
 };
 
 /**

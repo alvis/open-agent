@@ -13,7 +13,11 @@ import type { ProductDeclarations } from '#domain/declarations';
 import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 import type { RecordedProfile } from '#domain/recorded';
 
-export { OPTION_BOUNDS, optionViolations } from './profile/options';
+export {
+  MAX_UPDATE_DUE_DAYS,
+  OPTION_BOUNDS,
+  optionViolations,
+} from './profile/options';
 export { providerViolations } from './profile/provider';
 export {
   agentViolations,
@@ -48,6 +52,8 @@ export interface ProfileOptions {
   idleTimeoutMinutes: number;
   /** minutes a turn hold lasts after its last refresh */
   holdMaxMinutes: number;
+  /** days after the last successful update before another is due */
+  updateDueIntervalDays: number;
 }
 
 /** default driver choices, keyed by the input that selects among them */

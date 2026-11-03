@@ -2,7 +2,7 @@ import type { IdleForm, KeepAwakeMode, WakeMode } from '#domain/declarations';
 import type { OsFamilyId } from '#domain/guest';
 import type { GuestAccount, GuestCommand } from '#domain/guest-command';
 import type { WorkstationProfile } from '#domain/profile';
-import type { ServiceDefinition } from '#domain/services';
+import type { PeriodicJob, ServiceDefinition } from '#domain/services';
 import type { ToolOwner, ToolSource } from '#domain/tools';
 
 /** the record's format version */
@@ -21,9 +21,9 @@ export interface EnvironmentTool {
   account: ToolOwner;
   /** executables a `brew` tool links into `/usr/local/bin` */
   executables: readonly string[];
-  /** the resolved source */
+  /** the resolved source; the updater upgrades by its `kind` */
   source: ToolSource;
-  /** the version the source's manager reports installed, which setup records; absent for a system tool or one whose version cannot be read */
+  /** the version the source's manager reports installed, which setup and the updater record; absent for a system tool or one whose version cannot be read */
   version?: string;
 }
 
@@ -112,17 +112,24 @@ export interface GuestEnvironment {
   };
   /** the guest's OS */
   os: {
-    /** family whose library setup sources */
+    /** family whose library and update fragment the updater sources */
     family: OsFamilyId;
   };
   /** the workstation's profile */
   profile: WorkstationProfile;
   /** the installed tools */
   tools: readonly EnvironmentTool[];
+  /** the updater's schedule */
+  schedule: {
+    /** days after the last successful update before the next is due */
+    dueDays: number;
+  };
   /** the provider's facts */
   provider: EnvironmentProvider;
   /** the agent's launch facts */
   agent: EnvironmentAgent;
   /** the services the provider runs, the agent's included */
   services: readonly ServiceDefinition[];
+  /** the commands the provider runs on a schedule */
+  jobs: readonly PeriodicJob[];
 }

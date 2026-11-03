@@ -57,6 +57,8 @@ export interface BrewRun {
   calls: string[];
   /** environment.json in the work directory once the shell ended, empty when absent */
   environment: string;
+  /** update-status.json in the work directory once the shell ended, empty when absent */
+  status: string;
 }
 
 /** the guest program directory the libraries are read from */
@@ -214,5 +216,6 @@ ${script}`;
     stdout,
     calls,
     environment: await left('environment.json'),
+    status: await left('update-status.json'),
   };
 }

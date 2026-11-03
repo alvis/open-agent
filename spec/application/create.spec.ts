@@ -41,7 +41,10 @@ const SERVED = {
 } as const;
 
 const OBSERVED = {
-  services: [{ name: 't3-code', needs: [], status: 'running' }],
+  services: [
+    { name: 't3-code', needs: [], status: 'running' },
+    { name: 'open-agent-cron', needs: [], status: 'running' },
+  ],
   network: {
     online: false,
     skipped: true,

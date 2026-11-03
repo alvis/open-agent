@@ -1,19 +1,19 @@
 import { guestAsset } from '#adapters/guest/platform/assets';
 import { ROOT_ONLY_MODE } from '#domain/guest';
 
-/** the Homebrew helpers: install Homebrew, and install and probe formulae from their bottles */
+/** the Homebrew helpers: install Homebrew, and install, upgrade and probe formulae from their bottles */
 export const HOMEBREW_LIBRARY = guestAsset(
   'tools/homebrew/lib.sh',
   ROOT_ONLY_MODE,
 );
 
-/** the npm helpers: install the agent's npm tools at a dist-tag */
+/** the npm helpers: install and upgrade the agent's npm tools at a dist-tag */
 export const NPM_LIBRARY = guestAsset('tools/npm/lib.sh', ROOT_ONLY_MODE);
 
-/** the rustup helpers: install the agent's Rust toolchain */
+/** the rustup helpers: install and update the agent's Rust toolchain */
 export const RUSTUP_LIBRARY = guestAsset('tools/rustup/lib.sh', ROOT_ONLY_MODE);
 
-/** the link helpers: link Homebrew tools' executables into `/usr/local/bin` */
+/** the link helpers: link Homebrew tools' executables into `/usr/local/bin` and restore them */
 export const LINKS_LIBRARY = guestAsset('tools/links.sh', ROOT_ONLY_MODE);
 
 /** the tool version record: record in environment.json the version each tool's manager reports installed */
@@ -28,7 +28,8 @@ export const HOMEBREW_INSTALLER = {
 /**
  * the Homebrew release every guest runs: Homebrew/brew's latest stable tag on
  * 2026-10-16 and the commit it names. Setup checks it out after the
- * installer, which leaves the newest tag, so a newer release arrives only
+ * installer, which leaves the newest tag, and the updater refreshes only
+ * formula data, never Homebrew's own code, so a newer release arrives only
  * with an open-agent release that names it, the next time setup runs
  */
 export const HOMEBREW_RELEASE = {

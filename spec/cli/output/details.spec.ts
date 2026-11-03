@@ -12,6 +12,7 @@ describe('fn:humanResultDetails', () => {
           agentEnvironment: { ok: false },
         },
         environment: { profile: { options: {} } },
+        updates: {},
       },
     });
 
@@ -20,10 +21,11 @@ describe('fn:humanResultDetails', () => {
       'Agent environment': { verified: false },
       'Installed tools': undefined,
       'services': undefined,
+      'Maintenance': { failedTools: undefined },
     });
   });
 
-  it('should skip unnamed tool records and list each tool by its source', () => {
+  it('should skip unnamed tool records and use only string versions from update observations', () => {
     const result = humanResultDetails({
       inspection: {
         environment: {
@@ -38,11 +40,18 @@ describe('fn:humanResultDetails', () => {
             ],
           },
         },
+        updates: {
+          tools: [
+            { to: 'unidentified' },
+            { name: 'claude', to: 1 },
+            { name: 'claude', to: '1.2.3\nextra output' },
+          ],
+        },
       },
     });
 
     expect(result.inspection).toMatchObject({
-      'Installed tools': { claude: 'npm' },
+      'Installed tools': { claude: '1.2.3' },
       'Skipped tools': { optional: 'no bottle' },
     });
   });

@@ -35,7 +35,7 @@ export interface InstallParams {
   interaction?: Interaction;
   /**
    * runs once the tools and environment.json are in place and before any
-   * service starts, such as the native configuration the agent's
+   * service or job starts, such as the native configuration the agent's
    * launcher reads only as it starts
    */
   beforeServices?: (guest: GuestChannel) => Promise<void>;
@@ -55,7 +55,7 @@ interface BottledAssembly {
  * have no bottle and those tools fall through to their next source, then the
  * whole plan runs, without the foundation steps that first run settled and
  * the plan left unchanged, then what the caller runs before the services, then the
- * backend's services; services a provider runs itself are
+ * backend's services and jobs; services a provider runs itself are
  * registered last. The environment.json the plan writes stays `incomplete`
  * until the caller marks the installation ready
  * @param mechanics the guest's plan and provider services
@@ -84,6 +84,7 @@ export async function installWorkstation(
     settled,
   });
   await params.beforeServices?.(await connection.guest());
+  await runSteps(mechanics, params, { steps: assembly.services });
   await traceStage({
     stage: 'setup.services',
     action: async () =>

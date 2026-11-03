@@ -8,6 +8,7 @@ import {
   PING_GROUP_RANGE,
 } from '#adapters/guest/platform/layout';
 import { libraryCommand } from '#adapters/guest/platform/library';
+import { CRON_LIBRARY } from '#adapters/guest/services/cron';
 import {
   HOMEBREW_LIBRARY,
   LINKS_LIBRARY,
@@ -15,6 +16,8 @@ import {
   RUSTUP_LIBRARY,
   VERSIONS_LIBRARY,
 } from '#adapters/guest/tools/libraries';
+
+import { UPDATE_GATE_ASSET, UPDATER_ASSET } from '#adapters/guest/updates';
 
 import { assetStep, assetStepId, fileStep } from './steps/file';
 import { homebrewStep } from './steps/homebrew';
@@ -28,7 +31,7 @@ import type { Resolution, ToolSpec } from '#domain/tools';
 
 /** id of the step that creates the agent account */
 const ACCOUNTS_STEP = 'accounts';
-/** id of the step that installs the bootstrap system packages */
+/** id of the step that installs the bootstrap system packages, cron among them */
 export const BOOTSTRAP_STEP = 'bootstrap';
 /** id of the best-effort step that lets every group open ping sockets */
 const SYSCTL_STEP = 'sysctl:ping';
@@ -117,8 +120,9 @@ export async function foundationSteps(
 
 /**
  * lists the guest programs setup installs before any step sources one: the
- * family's library, the tool libraries, the governor and the provider's awake
- * adapter, and the agent's launcher
+ * family's library and update fragment, the tool libraries, cron's, the
+ * governor and the provider's awake adapter, the update gate
+ * and updater, and the agent's launcher
  * @param context the provider, the selection and the family
  * @returns each asset once
  */
@@ -131,13 +135,17 @@ function guestAssets(
   const { registry, provider, profile, family } = context;
   const assets = [
     family.library,
+    family.updaterFragment,
     HOMEBREW_LIBRARY,
     NPM_LIBRARY,
     RUSTUP_LIBRARY,
     LINKS_LIBRARY,
     VERSIONS_LIBRARY,
+    CRON_LIBRARY,
     AWAKE_ASSET,
     ...(provider.awakeAsset ? [provider.awakeAsset] : []),
+    UPDATE_GATE_ASSET,
+    UPDATER_ASSET,
     registry.agents[profile.agent].launcher,
   ];
 
@@ -188,8 +196,8 @@ function accountsStep(family: OsFamily, needs: readonly string[]): SetupStep {
 }
 
 /**
- * builds the step that installs the family's bootstrap packages, skipping
- * the install when all are present
+ * builds the step that installs the family's bootstrap packages, cron among
+ * them, skipping the install when all are present
  * @param family the guest's OS family
  * @param packages distribution packages the release bootstraps with
  * @returns a critical step that installs any package missing

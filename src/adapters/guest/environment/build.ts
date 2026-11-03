@@ -16,7 +16,7 @@ import type {
   SkippedTool,
 } from '#domain/observations/environment';
 import type { WorkstationProfile } from '#domain/profile';
-import type { ServiceDefinition } from '#domain/services';
+import type { ServiceDefinition, PeriodicJob } from '#domain/services';
 import type {
   Resolution,
   ToolOwner,
@@ -60,6 +60,8 @@ interface EnvironmentParams {
   }>;
   /** the services the backend runs */
   services: readonly ServiceDefinition[];
+  /** the commands the backend runs on a schedule */
+  jobs: readonly PeriodicJob[];
 }
 
 /**
@@ -67,7 +69,7 @@ interface EnvironmentParams {
  * a tool without a usable source is recorded as skipped, and the idle settings
  * are capped at the furthest the provider can keep the workstation awake
  * @param declarations the data every registered driver declares, which the record is validated against
- * @param params version, outcome, selection, tools and services
+ * @param params version, outcome, selection, tools, services and jobs
  * @returns the record, validated
  * @throws {Error} when a resolution names an undeclared tool, the agent
  * publishes no port, or the record is inconsistent
@@ -89,6 +91,7 @@ export function buildEnvironment(
     os: { family: params.family },
     profile,
     tools,
+    schedule: { dueDays: profile.options.updateDueIntervalDays },
     provider: providerFacts(params.provider, profile),
     agent: {
       id: agent.id,
@@ -98,6 +101,7 @@ export function buildEnvironment(
       harnesses: params.harnesses.map(harnessEntry),
     },
     services: params.services,
+    jobs: params.jobs,
   };
   const problem = environmentProblem(declarations, environment);
   if (problem) {

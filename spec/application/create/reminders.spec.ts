@@ -15,6 +15,21 @@ const baseInput: ResolvedInputs = {
 };
 
 describe('fn:createPreflightSummary', () => {
+  it('should describe a longer maintenance interval', () => {
+    const profile = DISABLED_NETWORK_PROFILE;
+    const summary = createPreflightSummary(dependencies, {
+      ...baseInput,
+      profile: {
+        ...profile,
+        options: { ...profile.options, updateDueIntervalDays: 3 },
+      },
+    });
+
+    expect(summary.reminders).toEqual(
+      expect.arrayContaining([expect.stringMatching(/3 days have passed/)]),
+    );
+  });
+
   it('should provide applicable readiness checks and reminders without exposing input secrets', () => {
     const summary = createPreflightSummary(dependencies, {
       ...baseInput,
@@ -26,7 +41,10 @@ describe('fn:createPreflightSummary', () => {
         expect.stringMatching(/Required inputs/),
         expect.stringMatching(/Sprite prerequisites/),
       ],
-      reminders: [expect.stringMatching(/native sign-in/)],
+      reminders: [
+        expect.stringMatching(/hourly.*a day has passed/),
+        expect.stringMatching(/native sign-in/),
+      ],
     });
     expect(JSON.stringify(summary)).not.toMatch(/provider-secret/);
   });

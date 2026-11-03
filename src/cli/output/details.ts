@@ -78,12 +78,13 @@ function machineDetails(
 /**
  * summarizes current checks rather than exposing process arguments and probe inventories
  * @param value explicit inspection or readiness result
- * @returns grouped service, integration and harness details
+ * @returns grouped service, integration, harness, and maintenance details
  */
 function inspectionDetails(value: JsonValue | undefined): JsonObject {
   const inspection = asRecord(value);
   const native = asRecord(inspection.native);
   const recorded = asRecord(inspection.environment);
+  const updates = asRecord(inspection.updates);
   const environment = asRecord(native.agentEnvironment);
   const readiness = asRecord(inspection.readiness);
 
@@ -104,30 +105,55 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
       native.agentEnvironment === undefined
         ? undefined
         : environmentDetails(environment),
-    'Installed tools': installedTools(recorded.tools),
+    'Installed tools': installedTools(recorded.tools, updates.tools),
     'Skipped tools': skippedTools(asRecord(recorded.setup).skipped),
     'Idle governor':
       inspection.governor === undefined
         ? undefined
         : governorLine(asRecord(inspection.governor)),
+    'Maintenance':
+      inspection.updates === undefined
+        ? undefined
+        : {
+            lastSuccessfulUpdate: updates.lastSuccess,
+            lastUpdateStartedAt: updates.startedAt,
+            lastUpdateFinishedAt: updates.finishedAt,
+            failedTools: failedTools(updates.tools),
+          },
   };
 }
 
 /**
- * lists each installed tool with the source setup installed it from
+ * lists each installed tool with the version the last update left, or the
+ * source setup installed it from when no update recorded one
  * @param tools the tools environment.json records
- * @returns the source by tool, none when nothing is recorded
+ * @param outcomes what the last update did to each tool
+ * @returns the version or source by tool, none when nothing is recorded
  */
-function installedTools(tools: JsonValue | undefined): JsonObject | undefined {
+function installedTools(
+  tools: JsonValue | undefined,
+  outcomes: JsonValue | undefined,
+): JsonObject | undefined {
   if (!Array.isArray(tools)) {
     return undefined;
   }
+  const versions = new Map(
+    (Array.isArray(outcomes) ? outcomes : []).flatMap((entry) => {
+      const { name, to } = asRecord(entry);
+
+      return typeof name === 'string' && typeof to === 'string'
+        ? [[name, to.split('\n')[0]] as const]
+        : [];
+    }),
+  );
 
   return Object.fromEntries(
     tools.flatMap((entry) => {
       const { name, source } = asRecord(entry);
 
-      return typeof name === 'string' ? [[name, asRecord(source).kind]] : [];
+      return typeof name === 'string'
+        ? [[name, versions.get(name) ?? asRecord(source).kind]]
+        : [];
     }),
   );
 }
@@ -149,6 +175,21 @@ function skippedTools(value: JsonValue | undefined): JsonObject | undefined {
           return typeof name === 'string' ? [[name, reason]] : [];
         }),
       );
+}
+
+/**
+ * names the tools the last update failed
+ * @param value what the last update did to each tool
+ * @returns the failed tools, none when none failed
+ */
+function failedTools(value: JsonValue | undefined): string[] | undefined {
+  const failed = (Array.isArray(value) ? value : []).flatMap((entry) => {
+    const { name, outcome } = asRecord(entry);
+
+    return typeof name === 'string' && outcome === 'failed' ? [name] : [];
+  });
+
+  return failed.length === 0 ? undefined : failed;
 }
 
 /**

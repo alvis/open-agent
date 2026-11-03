@@ -15,7 +15,7 @@ import type { SetupContext } from '#application/setup/context';
 describe('fn:recordSetupMetadata', () => {
   it.each([
     { section: 'all', setup: 'ready' },
-    { section: 'network', setup: 'incomplete' },
+    { section: 'tools', setup: 'incomplete' },
   ] as const)(
     'should record the current version after $section setup',
     async ({ section, setup }) => {

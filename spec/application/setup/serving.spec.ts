@@ -60,7 +60,7 @@ describe('fn:exposeWhenServing readiness', () => {
       throw new Error('Expected readiness failure');
     }
     expect(failure.readiness.ready).toBe(false);
-    expect(failure.readiness.failures).toContain('T3 service');
+    expect(failure.readiness.failures).toContain('maintenance cron service');
     expect(expose).not.toHaveBeenCalled();
   });
 });

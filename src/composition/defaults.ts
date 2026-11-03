@@ -13,5 +13,7 @@ export const defaults = {
   options: {
     idleTimeoutMinutes: 5,
     holdMaxMinutes: 60,
+    // an update is due a day after the last successful one
+    updateDueIntervalDays: 1,
   },
 } as const satisfies ProfileDefaults;

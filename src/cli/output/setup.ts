@@ -1,5 +1,7 @@
 import { projectRetainedCredentials } from './credentials';
-import { projectFields, same } from './fields';
+import { projectSkippedTool, projectTool } from './environment';
+import { each, projectFields, same } from './fields';
+import { projectUpdates } from './inspection';
 import { projectMachine } from './machine';
 import { projectPairing } from './pairing';
 import { projectReadiness } from './readiness';
@@ -8,17 +10,38 @@ import type {
   AllSetupData,
   AppliedSetupSection,
   CommandFailureData,
+  ComponentCounts,
   NetworkSetupData,
   SetupData,
+  ToolsSetupData,
 } from '#application/data';
 
 import type { MachineSummary } from '#application/machine';
 import type { CredentialSaveResult } from '#domain/credentials';
 
 import type { RetainedCredentialsOutput } from './credentials';
+import type { EnvironmentToolOutput, SkippedToolOutput } from './environment';
+import type { UpdateStatusOutput } from './inspection';
 import type { MachineOutput } from './machine';
 import type { PairingOutput } from './pairing';
 import type { ReadinessOutput } from './readiness';
+
+/** how many tools an update left current, did not run for, and failed */
+export interface ComponentCountsOutput {
+  installed: number;
+  skipped: number;
+  failed: number;
+}
+
+/** the tools outcome: a verb, or the versions setup recorded */
+export type ToolsSetupOutput =
+  | string
+  | {
+      status: 'recorded versions';
+      tools: EnvironmentToolOutput[];
+      skipped: SkippedToolOutput[];
+      lastUpdate?: UpdateStatusOutput;
+    };
 
 /** the outcome of a setup section, or of replacing the local credential */
 export interface SetupDataOutput {
@@ -28,6 +51,8 @@ export interface SetupDataOutput {
   service?: 'configured';
   pairing?: PairingOutput;
   network?: { status: 'disabled'; readiness: 'skipped' };
+  components?: ComponentCountsOutput;
+  tools?: ToolsSetupOutput;
 }
 
 /** what a failed setup still observed */
@@ -44,6 +69,8 @@ type SetupFields = Partial<
   }
 >;
 
+type RecordedTools = Extract<ToolsSetupData['tools'], { status: string }>;
+
 /**
  * projects the network setup outcome
  * @param network internal outcome
@@ -59,6 +86,35 @@ function projectNetworkOutcome(
 }
 
 /**
+ * projects the tools outcome
+ * @param tools internal outcome
+ * @returns output outcome
+ */
+function projectToolsOutcome(tools: ToolsSetupData['tools']): ToolsSetupOutput {
+  return typeof tools === 'string'
+    ? tools
+    : projectFields<RecordedTools, ToolsSetupOutput>(tools, {
+        status: same,
+        tools: each(projectTool),
+        skipped: each(projectSkippedTool),
+        lastUpdate: projectUpdates,
+      });
+}
+
+/**
+ * projects the update counts
+ * @param counts internal counts
+ * @returns output counts
+ */
+function projectComponents(counts: ComponentCounts): ComponentCountsOutput {
+  return projectFields<ComponentCounts, ComponentCountsOutput>(counts, {
+    installed: same,
+    skipped: same,
+    failed: same,
+  });
+}
+
+/**
  * projects a setup outcome
  * @param data internal outcome, for one section or for the local credential
  * @returns output outcome
@@ -71,6 +127,8 @@ export function projectSetup(data: SetupData): SetupDataOutput {
     service: same,
     pairing: projectPairing,
     network: projectNetworkOutcome,
+    components: projectComponents,
+    tools: projectToolsOutcome,
   });
 }
 

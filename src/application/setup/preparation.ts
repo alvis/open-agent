@@ -240,7 +240,7 @@ async function resolveSetup(
     }),
     options,
   );
-  const persistsProfile = profileUpdateSelected(section);
+  const persistsProfile = profileUpdateSelected(section, profile, recorded);
   const input = await resolveSetupInputs(dependencies, {
     setup: params,
     profile,

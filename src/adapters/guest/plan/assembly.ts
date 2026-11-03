@@ -3,10 +3,11 @@ import {
   ENVIRONMENT_MODE,
   serializeEnvironment,
 } from '#adapters/guest/environment/contracts';
-import { guestServices } from '#adapters/guest/environment/services';
+import { guestJobs, guestServices } from '#adapters/guest/environment/services';
 import { idleStep, IDLE_STEP } from '#adapters/guest/governor';
 import { familyOf } from '#adapters/guest/os/families';
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
+import { jobsStep } from '#adapters/guest/services/cron';
 import { BASE_TOOLS } from '#adapters/guest/tools/base';
 import { resolveTools } from '#adapters/guest/tools/resolve';
 import { agentService } from '#domain/services';
@@ -89,7 +90,9 @@ export function assertImageTools(
  * assembles a workstation's setup plan: the guest libraries and assets, the
  * agent account, the bootstrap packages, Homebrew and the ping sysctl, then
  * every resolved tool, the idle governor's directories, environment.json and
- * the version each tool's manager reports installed, recorded into it
+ * the version each tool's manager reports installed, recorded into it; the
+ * cron jobs setup installs are a plan of their own, so the caller can
+ * configure the workstation before anything starts
  * @param registry every registered driver
  * @param params the provider, profile, probed release and version
  * @returns the steps, the resolved tools and the environment they record
@@ -150,6 +153,8 @@ export async function assemblePlan(
         needs: [ENVIRONMENT_STEP],
       }),
     ],
+    // they run once environment.json is written, which the steps include
+    services: [jobsStep({ family, needs: [] })],
   };
 }
 
@@ -194,6 +199,7 @@ function assembleEnvironment(
       };
     }),
     services: guestServices(agent),
+    jobs: guestJobs(),
   });
 }
 

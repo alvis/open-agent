@@ -25,7 +25,7 @@ interface OptionContext {
 
 /**
  * resolves the capability-driven options the run owns: idle minutes only when the provider keeps workstations awake; hold-max
- * is never asked
+ * and the update due interval are never asked
  * @param dependencies the registered drivers
  * @param context selected drivers, supplied values, prompts and base options
  * @returns the profile options
@@ -42,6 +42,8 @@ export async function resolveOptions(
       ? await resolveIdleMinutes(dependencies, context)
       : base.idleTimeoutMinutes,
     holdMaxMinutes: supplied.holdMaxMinutes ?? base.holdMaxMinutes,
+    updateDueIntervalDays:
+      supplied.updateDueIntervalDays ?? base.updateDueIntervalDays,
   };
 }
 

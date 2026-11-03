@@ -4,6 +4,7 @@ import type { GuestServiceState } from '#domain/services';
 
 import type { GuestEnvironment } from './environment';
 import type { GovernorReport } from './governor';
+import type { UpdateStatus } from './updates';
 
 /** current explicit guest inspection result */
 export interface GuestInspection {
@@ -12,6 +13,8 @@ export interface GuestInspection {
   native?: NativeConfigurationInspection;
   /** the environment setup recorded */
   environment: GuestEnvironment;
+  /** what the updater recorded about its last run; absent before it ran */
+  updates?: UpdateStatus;
   probeFailures: InspectionProbeFailure[];
   /** the idle governor's recorded state, reported but never a readiness failure */
   governor: GovernorReport;

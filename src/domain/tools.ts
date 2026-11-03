@@ -25,6 +25,8 @@ export interface SystemToolSource {
   family: OsFamilyId;
   /** package names */
   packages: readonly string[];
+  /** service units the packages ship that are masked, so only open-agent's own service runs */
+  vendorServices?: readonly string[];
   /** where the source is usable */
   when?: OsConstraint;
 }

@@ -7,7 +7,7 @@ import {
 } from '#application/input/selection';
 import { suppliedSelectionViolations } from '#application/input/selection/supplied';
 import { defaults } from '#composition/defaults';
-import { defaultProfile } from '#domain/profile';
+import { defaultProfile, MAX_UPDATE_DUE_DAYS } from '#domain/profile';
 
 import { dependencies } from '../../mocks/dependencies';
 
@@ -164,6 +164,49 @@ describe('fn:resolveCreateSelection', () => {
     ]);
   });
 
+  it('should take the update due interval from the flag, then the env file, then the process environment, then the default, without prompting', async () => {
+    const { interaction, asked } = recordingInteraction();
+    const sources: InputSources = {
+      processEnv: { OPEN_AGENT_UPDATE_DUE_DAYS: '3' },
+      fileEnv: { OPEN_AGENT_UPDATE_DUE_DAYS: '9' },
+    };
+
+    const fromSources = await resolveCreateSelection(dependencies, {
+      options: { network: 'none' },
+      sources,
+      interaction,
+    });
+    const fromFlags = await resolveCreateSelection(dependencies, {
+      options: { nonInteractive: true, updateDueDays: 2 },
+      sources,
+    });
+    const fromDefaults = await resolveCreateSelection(dependencies, {
+      options: { nonInteractive: true },
+      sources: empty,
+    });
+
+    expect(asked.filter((message) => /update/iu.test(message))).toEqual([]);
+    expect(
+      [fromSources, fromFlags, fromDefaults].map(
+        ({ candidate: { options } }) => options.updateDueIntervalDays,
+      ),
+    ).toEqual([9, 2, 1]);
+  });
+
+  it('should report an unreadable update interval instead of guessing', async () => {
+    const { problems } = await resolveCreateSelection(dependencies, {
+      options: { nonInteractive: true },
+      sources: {
+        processEnv: { OPEN_AGENT_UPDATE_DUE_DAYS: '1.5' },
+        fileEnv: {},
+      },
+    });
+
+    expect(problems).toEqual([
+      'OPEN_AGENT_UPDATE_DUE_DAYS must be a whole number',
+    ]);
+  });
+
   it('should report every unreadable number together without prompting', async () => {
     const { interaction, asked } = recordingInteraction();
 
@@ -230,16 +273,58 @@ describe('fn:resolveSetupSelection', () => {
     const { value, problems } = readSetupSelection(dependencies, {
       options: {},
       sources: {
-        processEnv: { OPEN_AGENT_IDLE_MINUTES: 'often' },
+        processEnv: {
+          OPEN_AGENT_UPDATE_DUE_DAYS: '3',
+          OPEN_AGENT_IDLE_MINUTES: '5',
+        },
         fileEnv: {},
       },
-      section: 'network',
+      section: 'tools',
     });
 
     expect(problems).toEqual([]);
     expect(value.options).toEqual({
+      updateDueIntervalDays: 3,
       idleTimeoutMinutes: undefined,
       holdMaxMinutes: undefined,
+    });
+  });
+});
+
+describe('fn:resolveSetupSelection update intervals', () => {
+  it('should apply a supplied update interval to the recorded profile when the tools section is targeted', async () => {
+    const recorded = defaultProfile(defaults);
+
+    const { candidate } = await resolveSetup({
+      options: { nonInteractive: true, updateDueDays: 3 },
+      sources: empty,
+      recorded,
+      section: 'tools',
+    });
+
+    expect(candidate.options).toEqual({
+      ...recorded.options,
+      updateDueIntervalDays: 3,
+    });
+  });
+
+  it('should not read an update interval the targeted section does not own', () => {
+    const { value, problems } = readSetupSelection(dependencies, {
+      options: {},
+      sources: {
+        processEnv: { OPEN_AGENT_UPDATE_DUE_DAYS: 'often' },
+        fileEnv: {},
+      },
+      section: 'agent',
+    });
+
+    expect({ problems, options: value.options }).toEqual({
+      problems: [],
+      options: {
+        idleTimeoutMinutes: undefined,
+        holdMaxMinutes: undefined,
+        updateDueIntervalDays: undefined,
+      },
     });
   });
 });
@@ -296,19 +381,34 @@ describe('fn:suppliedSelectionViolations', () => {
     ]);
   });
 
-  it('should report every option violation together', () => {
+  it('should report an update interval below one together with the other violations', () => {
     const violations = suppliedSelectionViolations(
       dependencies,
       {
         network: 'none',
-        options: { idleTimeoutMinutes: -2, holdMaxMinutes: 0 },
+        options: { holdMaxMinutes: 0, updateDueIntervalDays: -2 },
       },
       { isPairingRequested: false },
     );
 
     expect(violations.map(({ message }) => message)).toEqual([
-      expect.stringContaining('--idle-minutes'),
       expect.stringContaining('--hold-max-minutes'),
+      expect.stringContaining('--update-due-days'),
+    ]);
+  });
+
+  it('should state the allowed range when an update interval is beyond its upper bound', () => {
+    const violations = suppliedSelectionViolations(
+      dependencies,
+      {
+        network: 'none',
+        options: { updateDueIntervalDays: MAX_UPDATE_DUE_DAYS + 1 },
+      },
+      { isPairingRequested: false },
+    );
+
+    expect(violations.map(({ message }) => message)).toEqual([
+      `--update-due-days (OPEN_AGENT_UPDATE_DUE_DAYS) must be a whole number of days from 1 to ${String(MAX_UPDATE_DUE_DAYS)}`,
     ]);
   });
 

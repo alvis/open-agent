@@ -2,6 +2,7 @@ import type { AgentId } from '#domain/ids';
 import type { AgentEnvironments } from '#domain/observations/agent';
 import type { GuestEnvironment } from '#domain/observations/environment';
 import type { GuestInspection } from '#domain/observations/inspection';
+import type { UpdateStatus } from '#domain/observations/updates';
 import type { WorkstationProfile } from '#domain/profile';
 import type { ServiceDefinition } from '#domain/services';
 import type { RefusedSource } from '#domain/tools';
@@ -22,6 +23,10 @@ import type { SetupConnectionParams, SetupSession } from './session';
 export interface GuestFacts {
   /** the idle governor's command, run by hooks and holds */
   awakeCommand: string;
+  /** the update gate's installed command, run as root to force an update */
+  updateGateCommand: string;
+  /** the updater's log on the guest */
+  updateLog: string;
   /** where setup records environment.json */
   environmentPath: string;
 }
@@ -87,11 +92,17 @@ export interface GuestEnvironmentAccess {
    */
   write(guest: GuestChannel, environment: GuestEnvironment): Promise<void>;
   /**
-   * records a profile whose change no tool or service follows
+   * records a profile whose change no tool, service or job follows
    * @param guest target guest
    * @param profile the profile to record
    */
   writeProfile(guest: GuestChannel, profile: WorkstationProfile): Promise<void>;
+  /**
+   * reads what the updater recorded about its last run
+   * @param guest target guest
+   * @returns the record, or nothing when no update ran or it cannot be read
+   */
+  readUpdateStatus(guest: GuestChannel): Promise<UpdateStatus | undefined>;
 }
 
 /** the mechanics of a guest's native tooling configuration */
@@ -182,7 +193,7 @@ export interface GuestMechanics {
      * reads current service, route and installation state
      * @param guest target guest
      * @param params the probe observer
-     * @returns current service, network, native and environment status
+     * @returns current service, network, native, environment and update status
      */
     inspect(
       guest: GuestChannel,

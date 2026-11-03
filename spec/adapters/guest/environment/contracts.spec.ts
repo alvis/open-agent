@@ -37,10 +37,10 @@ describe('fn:parseEnvironment', () => {
   });
 
   it('should reject a malformed persisted field after accepting its schema', () => {
-    const persisted = { ...RECORDED, os: { family: 'unknown' } };
+    const persisted = { ...RECORDED, schedule: { dueDays: 0 } };
 
     expect(() => parseEnvironment(registry, JSON.stringify(persisted))).toThrow(
-      /os is malformed/u,
+      /schedule is malformed/u,
     );
   });
 

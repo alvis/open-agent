@@ -1,5 +1,7 @@
 import { harnessDrivers } from '#application/catalog/harnesses';
 import { networkDriver } from '#application/catalog/networks';
+import { finding } from '#domain/findings';
+import { CRON_SERVICE_NAME } from '#domain/services';
 
 import { CommandFault } from '#kernel/faults';
 
@@ -115,6 +117,13 @@ function readinessChecks(
 
   return [
     ...agent.service,
+    finding(
+      inspection.services.some(
+        (service) =>
+          service.name === CRON_SERVICE_NAME && service.status === 'running',
+      ),
+      'maintenance cron service',
+    ),
     ...agent.environment,
     ...network.readiness(inspection.network),
     ...drivers.flatMap((driver) => driver.readiness(native?.[driver.id])),

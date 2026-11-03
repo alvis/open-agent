@@ -29,7 +29,7 @@ export interface OsFamily {
    */
   runAs(account: ToolOwner): readonly string[];
   /**
-   * lists the system packages every setup installs first
+   * lists the system packages every setup installs first, cron included
    * @param release the guest's release
    * @returns package names
    */
@@ -40,8 +40,10 @@ export interface OsFamily {
    * @returns the support and its prerequisites, or why it is unsupported
    */
   homebrew(release: OsRelease): HomebrewSupport;
-  /** the family's helper library, sourced by setup */
+  /** the family's helper library, sourced by setup and the updater */
   library: GuestAsset;
+  /** the system-package fragment of the updater */
+  updaterFragment: GuestAsset;
 }
 
 /** what a service setup step is built with */

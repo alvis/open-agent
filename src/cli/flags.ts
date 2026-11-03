@@ -126,15 +126,24 @@ export const selectionFlags = {
     placeholder: 'MINUTES',
     brief: 'MINUTES · turn-hold lifetime after its last refresh (default 60)',
   },
+  updateDueDays: {
+    kind: 'parsed',
+    parse: parseWholeNumber,
+    optional: true,
+    placeholder: 'DAYS',
+    brief:
+      'DAYS · after the last successful update before another is due, at least 1 (default 1)',
+  },
 } as const;
 
 /** setup-only action selectors */
 export const setupFlags = {
   section: {
     kind: 'parsed',
-    parse: buildChoiceParser(['all', 'agent', 'network'] as const),
+    parse: buildChoiceParser(['all', 'agent', 'network', 'tools'] as const),
     optional: true,
     placeholder: 'SECTION',
-    brief: 'SECTION · all, agent, or network',
+    brief: 'SECTION · all, agent, network, or tools',
   },
+  update: { kind: 'boolean', default: false, brief: 'update managed tools' },
 } as const;

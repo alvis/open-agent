@@ -21,6 +21,10 @@ const SELECTION_INPUTS = {
     flag: '--hold-max-minutes',
     environment: 'OPEN_AGENT_HOLD_MAX_MINUTES',
   },
+  updateDueIntervalDays: {
+    flag: '--update-due-days',
+    environment: 'OPEN_AGENT_UPDATE_DUE_DAYS',
+  },
 } as const satisfies Record<string, SelectionInput>;
 
 /** a profile field a caller can select */

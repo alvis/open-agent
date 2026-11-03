@@ -11,6 +11,7 @@ import type { ReadinessAssessment } from '#application/readiness';
 import type { CommandResult } from '#application/result';
 import type { GovernorState } from '#domain/observations/governor';
 import type { GuestInspection } from '#domain/observations/inspection';
+import type { UpdateStatus } from '#domain/observations/updates';
 import type { CommandErrorCode } from '#kernel/faults';
 
 /** one characterized result and the output controls it is rendered with */
@@ -30,9 +31,12 @@ type ListedMachine = MachineSummary & {
 };
 
 /** credentials registered with the process before any result is rendered */
-export const CORPUS_SECRETS = ['v1-golden-nested-secret'] as const;
+export const CORPUS_SECRETS = [
+  'v1-golden-nested-secret',
+  'v1-golden-hidden-reason-secret',
+] as const;
 
-const [NESTED_SECRET] = CORPUS_SECRETS;
+const [NESTED_SECRET, REASON_SECRET] = CORPUS_SECRETS;
 
 const PAIRING = new PairingSecret({ token: 'v1-golden-pairing-token' });
 
@@ -119,6 +123,30 @@ const INSPECTION: GuestInspection = {
   governor: { recorded: true, state: RECORDED_GOVERNOR },
 };
 
+const UPDATES: UpdateStatus = {
+  startedAt: '2026-10-09T00:00:00.000Z',
+  finishedAt: '2026-10-09T00:01:00.000Z',
+  lastSuccess: '2026-10-08T00:01:00.000Z',
+  tools: [
+    {
+      name: 'ripgrep',
+      manager: 'brew',
+      required: false,
+      outcome: 'failed',
+      reason: 'no bottle',
+    },
+    {
+      name: 'gh',
+      manager: 'brew',
+      required: false,
+      outcome: 'installed',
+      from: '2.60.0',
+      to: '2.61.0\nsecond line',
+    },
+    { name: 'jq', manager: 'brew', required: true, outcome: 'skipped' },
+  ],
+};
+
 const INSTALLED_TOOLS: GuestInspection['environment']['tools'] = [
   {
     name: 'gh',
@@ -165,7 +193,7 @@ export const CORPUS: readonly CorpusCase[] = [
       profile: DISABLED_NETWORK_PROFILE,
       readiness: PASSING_READINESS,
       network: INSPECTION.network,
-      services: [{ name: 't3-code', state: 'running' }],
+      services: [{ name: 't3-code', state: 'running' }, { name: 'cron' }],
       native: INSPECTION.native,
       pairing: {
         status: 'created',
@@ -293,6 +321,8 @@ export const CORPUS: readonly CorpusCase[] = [
       service: 'configured',
       pairing: { status: 'not requested' },
       network: { status: 'disabled', readiness: 'skipped' },
+      components: { installed: 6, skipped: 1, failed: 1 },
+      tools: 'updated',
     },
   }),
   corpusCase('setup-all-disabled', {
@@ -302,6 +332,7 @@ export const CORPUS: readonly CorpusCase[] = [
       section: 'all',
       machine: MACHINE,
       network: { status: 'disabled', readiness: 'skipped' },
+      tools: 'unchanged',
     },
   }),
   corpusCase('setup-agent-pairing', {
@@ -341,6 +372,40 @@ export const CORPUS: readonly CorpusCase[] = [
       section: 'network',
       machine: MACHINE,
       network: { status: 'disabled', readiness: 'skipped' },
+    },
+  }),
+  corpusCase('setup-tools-updated', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'tools',
+      machine: MACHINE,
+      components: { installed: 6, skipped: 1, failed: 1 },
+      tools: 'updated',
+    },
+  }),
+  corpusCase('setup-tools-scheduled', {
+    command: 'setup',
+    ok: true,
+    data: { section: 'tools', machine: MACHINE, tools: 'scheduled' },
+  }),
+  corpusCase('setup-tools-unchanged', {
+    command: 'setup',
+    ok: true,
+    data: { section: 'tools', machine: MACHINE, tools: 'unchanged' },
+  }),
+  corpusCase('setup-tools-recorded-versions', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'tools',
+      machine: MACHINE,
+      tools: {
+        status: 'recorded versions',
+        tools: INSTALLED_TOOLS,
+        skipped: SKIPPED_TOOLS,
+        lastUpdate: UPDATES,
+      },
     },
   }),
   corpusCase('setup-failure-bare', {
@@ -494,6 +559,7 @@ export const CORPUS: readonly CorpusCase[] = [
           tools: INSTALLED_TOOLS,
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
+        updates: UPDATES,
         readiness: PASSING_READINESS,
       },
     },
@@ -578,7 +644,20 @@ export const CORPUS: readonly CorpusCase[] = [
           ...MACHINE,
           agentUrl: PAIRING.forUrl('https://primary.sprites.app/'),
         },
-        inspection: INSPECTION,
+        inspection: {
+          ...INSPECTION,
+          updates: {
+            tools: [
+              {
+                name: 'gh',
+                manager: 'brew',
+                required: false,
+                outcome: 'failed',
+                reason: REASON_SECRET,
+              },
+            ],
+          },
+        },
         pairing: { status: 'created', token: PAIRING },
       },
     },
@@ -594,6 +673,17 @@ export const CORPUS: readonly CorpusCase[] = [
         network: {
           ...INSPECTION.network,
           reason: `the network rejected ${NESTED_SECRET} twice: ${NESTED_SECRET}`,
+        },
+        updates: {
+          tools: [
+            {
+              name: 'gh',
+              manager: 'brew',
+              required: false,
+              outcome: 'failed',
+              reason: `updater rejected ${NESTED_SECRET} twice: ${NESTED_SECRET}`,
+            },
+          ],
         },
       },
     },
@@ -658,7 +748,7 @@ export const CORPUS: readonly CorpusCase[] = [
       }),
     },
   }),
-  corpusCase('doctor-tools', {
+  corpusCase('doctor-updates-and-tools', {
     command: 'doctor',
     ok: true,
     data: {
@@ -668,6 +758,7 @@ export const CORPUS: readonly CorpusCase[] = [
           tools: INSTALLED_TOOLS,
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
+        updates: UPDATES,
         skipped: sdkObservation<string[]>(['first', undefined, 'third']),
       }),
     },

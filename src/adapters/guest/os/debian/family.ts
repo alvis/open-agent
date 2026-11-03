@@ -25,8 +25,8 @@ const HOMEBREW_PREREQUISITES = [
   'procps',
 ];
 
-/** system packages every setup installs before any tool: TLS roots, the downloader and the jq root's programs read JSON with */
-const BOOTSTRAP_PACKAGES = ['ca-certificates', 'curl', 'jq'];
+/** system packages every setup installs before any tool: TLS roots, the downloader, the schedule's cron and the jq root's programs read JSON with */
+const BOOTSTRAP_PACKAGES = ['ca-certificates', 'curl', 'cron', 'jq'];
 
 /**
  * the Debian family: Debian itself and every distribution that names it in
@@ -57,6 +57,7 @@ export const debianFamily: OsFamily = {
   bootstrapPackages: () => BOOTSTRAP_PACKAGES,
   homebrew,
   library: guestAsset('os/debian/lib.sh', ROOT_ONLY_MODE),
+  updaterFragment: guestAsset('os/debian/update-system.sh', ROOT_ONLY_MODE),
 };
 
 /**

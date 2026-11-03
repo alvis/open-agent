@@ -20,6 +20,7 @@ const params = {
   agent: { id: 't3', service },
   harnesses: [],
   services: [service],
+  jobs: [],
 } satisfies Parameters<typeof buildEnvironment>[1];
 
 describe('fn:buildEnvironment', () => {

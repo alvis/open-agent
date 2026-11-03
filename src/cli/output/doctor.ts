@@ -5,6 +5,7 @@ import {
   projectNative,
   projectNetworkStatus,
   projectServiceSummary,
+  projectUpdates,
 } from './inspection';
 import { projectMachine } from './machine';
 import { projectProbeFailure } from './readiness';
@@ -17,6 +18,7 @@ import type {
   NativeOutput,
   NetworkOutput,
   ServiceSummaryOutput,
+  UpdateStatusOutput,
 } from './inspection';
 import type { MachineOutput } from './machine';
 import type { ProbeFailureOutput } from './readiness';
@@ -31,6 +33,7 @@ export interface CurrentReadinessOutput {
   native?: NativeOutput;
   services: ServiceSummaryOutput[];
   environment: EnvironmentOutput;
+  updates?: UpdateStatusOutput;
   governor: GovernorOutput;
 }
 
@@ -57,6 +60,7 @@ function projectCurrentReadiness(
     native: projectNative,
     services: each(projectServiceSummary),
     environment: projectEnvironment,
+    updates: projectUpdates,
     governor: projectGovernor,
   });
 }

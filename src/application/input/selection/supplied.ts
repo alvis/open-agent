@@ -36,6 +36,7 @@ export interface SuppliedSelection {
 const SELECTABLE_OPTIONS: readonly SelectableOption[] = [
   'idleTimeoutMinutes',
   'holdMaxMinutes',
+  'updateDueIntervalDays',
 ];
 
 /**
@@ -133,10 +134,11 @@ export function readSelection(
   };
 }
 
-/** the options whose values are whole numbers of minutes */
+/** the options whose values are whole numbers of minutes or days */
 const NUMBER_OPTIONS = [
   'idleTimeoutMinutes',
   'holdMaxMinutes',
+  'updateDueIntervalDays',
 ] as const satisfies readonly SelectableOption[];
 
 type NumberOption = (typeof NUMBER_OPTIONS)[number];
@@ -156,6 +158,7 @@ function readNumberOptions(
   const flags: Record<NumberOption, number | undefined> = {
     idleTimeoutMinutes: options.idleMinutes,
     holdMaxMinutes: options.holdMaxMinutes,
+    updateDueIntervalDays: options.updateDueDays,
   };
   const resolved = NUMBER_OPTIONS.map((field) => {
     const environment = owned(field);
