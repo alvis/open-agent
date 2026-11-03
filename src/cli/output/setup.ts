@@ -55,6 +55,7 @@ export interface SetupDataOutput {
   gitIdentity?: string;
   runtimeEnvironment?:
     { status: 'configured'; names: readonly string[] } | { status: 'skipped' };
+  setupFile?: 'ran' | 'skipped';
   components?: ComponentCountsOutput;
   tools?: ToolsSetupOutput;
 }
@@ -133,6 +134,7 @@ export function projectSetup(data: SetupData): SetupDataOutput {
     network: projectNetworkOutcome,
     github: same,
     gitIdentity: same,
+    setupFile: same,
     runtimeEnvironment: (environment) =>
       environment.status === 'configured'
         ? projectFields<

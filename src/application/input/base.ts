@@ -82,6 +82,7 @@ export async function resolveBaseInputs(
     providerToken: secrets.providerToken,
     profile,
     runtimeEnv,
+    setupFile: sources.setupFile,
     sources: sourceNames,
     missing: [],
   };

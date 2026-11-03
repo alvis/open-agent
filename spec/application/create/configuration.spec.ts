@@ -21,6 +21,7 @@ import {
 
 import type { Sprite } from '@fly/sprites';
 
+import type { ConfigureNewWorkstationParams } from '#application/create/configuration';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { SetupSession } from '#application/ports/session';
 import type { WorkstationProfile } from '#domain/profile';
@@ -52,6 +53,10 @@ vi.mock(
       'markInstallationReady'
     >,
 );
+
+type Configuration = ConfigureNewWorkstationParams['configuration'];
+
+const profile = { ...DISABLED_NETWORK_PROFILE, harnesses: [] };
 
 /**
  * stands in for the root setup session over the SDK mock
@@ -92,12 +97,53 @@ function recordingDependencies(
         configureRuntimeEnv: vi.fn(async () => {
           calls.push('configureNative');
         }),
+        runSetupFile: vi.fn(async (_guest, contents: Buffer) => {
+          calls.push(`runSetupFile:${contents.toString()}`);
+        }),
       },
     },
   };
 }
 
 describe('fn:configureNewWorkstation', () => {
+  it('should run the setup file after the native configuration when one is selected', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-configure-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    const calls: string[] = [];
+    const configuration: Configuration = {
+      hostname: 'box',
+      profile,
+      runtimeEnv: {},
+      setupFile: Buffer.from('#!/bin/sh\n'),
+    };
+
+    await configureNewWorkstation(recordingDependencies(calls), {
+      provider: providerOf(sprite.client),
+      connection: connectionOf(sprite),
+      configuration,
+    });
+
+    expect(calls).toEqual(['configureNative', 'runSetupFile:#!/bin/sh\n']);
+  });
+
+  it('should not run a setup file when none is selected', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-configure-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    const calls: string[] = [];
+
+    await configureNewWorkstation(recordingDependencies(calls), {
+      provider: providerOf(sprite.client),
+      connection: connectionOf(sprite),
+      configuration: { hostname: 'box', profile, runtimeEnv: {} },
+    });
+
+    expect(calls).toEqual(['configureNative']);
+  });
+
   it('should enroll the selected network under the workstation hostname', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-configure-network-'),

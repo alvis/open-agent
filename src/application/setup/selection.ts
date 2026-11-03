@@ -32,6 +32,11 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
     description: 'Configure variables for the agent and every shell',
   },
   {
+    value: 'system',
+    label: 'Setup file',
+    description: 'Run an executable once as root for system-wide settings',
+  },
+  {
     value: 'tools',
     label: 'Managed tools',
     description: 'View recorded versions or explicitly update tools in place',
@@ -58,6 +63,9 @@ export async function selectSetupSection(
   }
   if (options.withPairCode) {
     return 'agent';
+  }
+  if (options.setupFile) {
+    return 'system';
   }
   if (options.envFile) {
     return 'env';

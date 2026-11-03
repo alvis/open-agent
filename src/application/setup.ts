@@ -18,6 +18,7 @@ import {
   setupGit,
   setupGithub,
   setupAgent,
+  setupSystem,
 } from './setup/sections';
 import { selectSetupSection } from './setup/selection';
 import { setupTools } from './setup/tools';
@@ -303,6 +304,10 @@ async function applySection(
     env: async (): Promise<AppliedSetupSection> => ({
       section: 'env',
       ...(await setupEnvironment(dependencies, guest, context)),
+    }),
+    system: async (): Promise<AppliedSetupSection> => ({
+      section: 'system',
+      ...(await setupSystem(dependencies, guest, context)),
     }),
     tools: async (): Promise<AppliedSetupSection> => ({
       section: 'tools',

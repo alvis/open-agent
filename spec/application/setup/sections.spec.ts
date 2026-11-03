@@ -11,6 +11,7 @@ import {
   setupGit,
   setupGithub,
   stopService,
+  setupSystem,
 } from '#application/setup/sections';
 
 import { PairingSecret } from '#kernel/pairing-secret';
@@ -138,6 +139,22 @@ describe('fn:setupAgent', () => {
 });
 
 /**
+ * the real wiring whose setup file runner is replaced
+ * @param runSetupFile the runner to observe
+ * @returns dependencies setup runs on
+ */
+function withSetupRunner(
+  runSetupFile: typeof dependencies.guest.native.runSetupFile,
+): typeof dependencies {
+  return dependenciesWith({
+    guest: {
+      ...dependencies.guest,
+      native: { ...dependencies.guest.native, runSetupFile },
+    },
+  });
+}
+
+/**
  * builds a setup context over a guest that runs nothing
  * @param options parsed setup flags
  * @param root isolated guest filesystem root
@@ -239,6 +256,141 @@ describe('fn:setupEnvironment', () => {
 
     expect(result).toEqual({ runtimeEnvironment: { status: 'skipped' } });
     expect(context.mutation.started).toBe(false);
+  });
+});
+
+describe('fn:setupSystem', () => {
+  it('should run bytes from the interactively selected setup file', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-system-selection-'),
+    );
+    const path = join(directory.path, 'setup.sh');
+    const bytes = Buffer.from('#!/bin/sh\necho selected-script\n');
+    await writeFile(path, bytes);
+    const observedPath = join(directory.path, 'executed-script');
+    const { context, guest } = await quietSetup({}, directory.path);
+    const wired = withSetupRunner(async (_guest, input) =>
+      writeFile(observedPath, input),
+    );
+    const observed = await driveInk(
+      async (interaction) =>
+        setupSystem(wired, guest, { ...context, interaction }),
+      [{ waitFor: 'Setup file path', input: [path, '\r'] }],
+    );
+
+    expect({
+      result: observed.result,
+      matchedSteps: observed.matchedSteps,
+      started: context.mutation.started,
+      executed: await readFile(observedPath),
+    }).toEqual({
+      result: { setupFile: 'ran' },
+      matchedSteps: 1,
+      started: true,
+      executed: bytes,
+    });
+  });
+
+  it('should use the already resolved setup bytes even when the host file has since changed', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-system-prepared-'),
+    );
+    const path = join(directory.path, 'setup.sh');
+    await writeFile(path, '#!/bin/sh\necho changed\n');
+    const original = Buffer.from('#!/bin/sh\necho validated\n');
+    const observedPath = join(directory.path, 'executed-script');
+    const { context, guest } = await quietSetup(
+      { setupFile: path },
+      directory.path,
+    );
+    context.input.setupFile = original;
+
+    const result = await setupSystem(
+      withSetupRunner(async (_guest, input) => writeFile(observedPath, input)),
+      guest,
+      context,
+    );
+
+    expect({
+      result,
+      executed: await readFile(observedPath),
+      started: context.mutation.started,
+    }).toEqual({
+      result: { setupFile: 'ran' },
+      executed: original,
+      started: true,
+    });
+  });
+
+  it('should skip setup file prompting when explicit noninteractive mode accompanies a terminal', async () => {
+    const { context, guest } = await quietSetup({ nonInteractive: true });
+    const observed = await driveInk(
+      async (interaction) =>
+        setupSystem(dependencies, guest, { ...context, interaction }),
+      [],
+    );
+
+    expect({
+      result: observed.result,
+      output: observed.output,
+      started: context.mutation.started,
+    }).toEqual({
+      result: { setupFile: 'skipped' },
+      output: expect.not.stringContaining('Setup file path'),
+      started: false,
+    });
+  });
+
+  it('should skip the section without a setup file when it cannot prompt', async () => {
+    const { context, guest } = await quietSetup({ nonInteractive: true });
+    const runSetupFile = vi.fn<typeof dependencies.guest.native.runSetupFile>(
+      async () => undefined,
+    );
+
+    const result = await setupSystem(
+      withSetupRunner(runSetupFile),
+      guest,
+      context,
+    );
+
+    expect({
+      result,
+      calls: runSetupFile.mock.calls,
+      started: context.mutation.started,
+    }).toEqual({
+      result: { setupFile: 'skipped' },
+      calls: [],
+      started: false,
+    });
+  });
+
+  it('should run the selected setup file with its exact bytes', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-setup-system-'),
+    );
+    const path = join(directory.path, 'setup.sh');
+    const bytes = Buffer.from('#!/bin/sh\nexit 0\n');
+    await writeFile(path, bytes);
+    const { context, guest } = await quietSetup({ setupFile: path });
+    const runSetupFile = vi.fn<typeof dependencies.guest.native.runSetupFile>(
+      async () => undefined,
+    );
+
+    const result = await setupSystem(
+      withSetupRunner(runSetupFile),
+      guest,
+      context,
+    );
+
+    expect({
+      result,
+      calls: runSetupFile.mock.calls,
+      started: context.mutation.started,
+    }).toEqual({
+      result: { setupFile: 'ran' },
+      calls: [[guest, bytes]],
+      started: true,
+    });
   });
 });
 
