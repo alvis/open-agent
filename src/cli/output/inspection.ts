@@ -80,6 +80,7 @@ export interface HarnessStateOutput {
 /** native configuration the guest reports, by harness */
 export interface NativeOutput {
   claude?: NativeHarnessOutput;
+  codex?: NativeHarnessOutput;
   agentEnvironment?: AgentEnvironmentOutput;
   harnesses: Record<string, HarnessStateOutput>;
 }
@@ -237,6 +238,7 @@ export function projectNative(
 ): NativeOutput {
   return projectFields<NativeConfigurationInspection, NativeOutput>(native, {
     claude: projectNativeHarness,
+    codex: projectNativeHarness,
     agentEnvironment: projectAgentEnvironment,
     harnesses: mapValues(projectHarnessState),
   });

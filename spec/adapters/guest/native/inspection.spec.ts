@@ -38,6 +38,10 @@ const DRIVERS = {
       ...registry.harnesses.claude,
       inspect: vi.fn(async () => OBSERVATION),
     },
+    codex: {
+      ...registry.harnesses.codex,
+      inspect: vi.fn(async () => OBSERVATION),
+    },
   },
 } satisfies DriverRegistry;
 const INSPECTION = createNativeInspection({ registry: DRIVERS, defaults });
@@ -52,6 +56,7 @@ describe('fn:createNativeInspection', () => {
 
     expect(inspection.harnesses).toEqual({
       claude: { selectedPlugins: ['selected-plugin'], evidence: undefined },
+      codex: { selectedPlugins: ['selected-plugin'], evidence: undefined },
     });
   });
 });

@@ -293,9 +293,9 @@ describe('fn:createInteraction', () => {
   it('should carry literal choice values through real selection and back navigation', async () => {
     const choices = [
       { label: 'Claude harness', value: 'claude' },
-      { label: 'Other harness', value: 'other' },
+      { label: 'Codex harness', value: 'codex' },
     ] as const;
-    const consumeHarness = (harness: 'claude' | 'other') => harness;
+    const consumeHarness = (harness: 'claude' | 'codex') => harness;
     const observed = await driveInk(
       async (interaction) => {
         const nested = withBackNavigation(interaction, 'harness menu');

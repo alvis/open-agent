@@ -114,6 +114,8 @@ export interface CommandOptions {
   proxyApiKeySource?: string;
   /** source reference of the GitHub token */
   githubTokenSource?: string;
+  /** reuses the marketplace sources of the first harness, in catalog order, that has them for the other harnesses, once */
+  reuseMarketplaces?: boolean;
 }
 
 /** parsed command and its optional machine selection */

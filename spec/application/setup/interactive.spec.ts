@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { SpritesClient } from '@fly/sprites';
+import { parse } from 'smol-toml';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -213,7 +214,12 @@ describe('scoped setup', () => {
         isReleaseChanged: false,
         mutation: { started: false },
       };
+      await mkdir(join(root, 'home/agent/.codex'), { recursive: true });
       await mkdir(join(root, 'opt/open-agent'), { recursive: true });
+      await writeFile(
+        join(root, 'home/agent/.codex/config.toml'),
+        'model = "existing-model"',
+      );
       const observed = await driveInk(
         async (interaction) =>
           setupPlugins(dependencies, guestOf(sprite), {
@@ -223,23 +229,34 @@ describe('scoped setup', () => {
         [
           { waitFor: 'Select plugin harness', input: '\r' },
           { waitFor: 'Claude plugin action', input: '\x1b' },
-          { waitFor: 'Select plugin harness', input: '\r' },
-          { waitFor: 'Claude plugin action', input: 'Disable plugin' },
+          { waitFor: 'Select plugin harness', input: 'Codex' },
+          { waitFor: 'Search: Codex', input: '\r' },
+          { waitFor: 'Codex plugin action', input: 'Disable plugin' },
           { waitFor: 'Search: Disable plugin', input: '\r' },
           { waitFor: 'Native plugin identity:', input: '\x1b' },
-          { waitFor: 'Claude plugin action', input: 'Disable plugin' },
+          { waitFor: 'Codex plugin action', input: 'Disable plugin' },
           { waitFor: 'Search: Disable plugin', input: '\r' },
           { waitFor: 'Native plugin identity:', input: 'coding@alvis' },
           { waitFor: 'coding@alvis', input: '\r' },
-          { waitFor: 'Select plugin harness', input: '\r' },
-          { waitFor: 'Claude plugin action', input: 'Apply queued' },
+          { waitFor: 'Select plugin harness', input: 'Codex' },
+          { waitFor: 'Search: Codex', input: '\r' },
+          { waitFor: 'Codex plugin action', input: 'Apply queued' },
           { waitFor: 'Search: Apply queued', input: '\r' },
         ],
       );
+      const config = parse(
+        await readFile(join(root, 'home/agent/.codex/config.toml'), 'utf8'),
+      );
 
-      expect(observed.matchedSteps, observed.output).toBe(13);
+      expect(observed.matchedSteps, observed.output).toBe(15);
       expect(observed.result).toEqual({
-        plugins: { claude: 'applied' },
+        plugins: { claude: 'preserved', codex: 'applied' },
+      });
+      expect(config).toMatchObject({
+        model: 'existing-model',
+        plugins: {
+          'coding@alvis': { enabled: false },
+        },
       });
       expect(context.mutation.started).toBe(true);
     } finally {
@@ -288,7 +305,7 @@ describe('scoped setup', () => {
     }
   });
 
-  it('should apply an explicit Claude plugin action through the real setup workflow', async () => {
+  it('should apply an explicit Codex plugin action through the real setup workflow', async () => {
     const root = await mkdtemp(join(tmpdir(), 'open-agent-setup-'));
     try {
       const sprite = createFilesystemSprite({
@@ -303,7 +320,7 @@ describe('scoped setup', () => {
         ...workstationOf(sprite),
         options: pluginFlags({
           localCredentials: false,
-          disableClaudePlugin: ['coding@alvis'],
+          disableCodexPlugin: ['coding@alvis'],
         }),
         input: {
           profile: DISABLED_NETWORK_PROFILE,
@@ -316,17 +333,26 @@ describe('scoped setup', () => {
         isReleaseChanged: false,
         mutation: { started: false },
       };
+      await mkdir(join(root, 'home/agent/.codex'), { recursive: true });
       await mkdir(join(root, 'opt/open-agent'), { recursive: true });
+      await writeFile(
+        join(root, 'home/agent/.codex/config.toml'),
+        'model = "existing-model"',
+      );
 
       const outcome = await setupPlugins(
         dependencies,
         guestOf(sprite),
         context,
       );
+      const config = parse(
+        await readFile(join(root, 'home/agent/.codex/config.toml'), 'utf8'),
+      );
 
       expect(outcome).toEqual({
-        plugins: { claude: 'applied' },
+        plugins: { claude: 'preserved', codex: 'applied' },
       });
+      expect(config.model).toBe('existing-model');
       expect(context.mutation.started).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });

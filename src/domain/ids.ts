@@ -4,7 +4,7 @@ import type { ProductDeclarations } from '#domain/declarations';
 export const PROVIDER_IDS = ['sprite'] as const;
 
 /** every registered harness driver, in catalog order */
-export const HARNESS_IDS = ['claude'] as const;
+export const HARNESS_IDS = ['claude', 'codex'] as const;
 
 /** every registered ACP agent driver, in catalog order */
 export const AGENT_IDS = ['t3'] as const;

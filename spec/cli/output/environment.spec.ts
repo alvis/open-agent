@@ -27,6 +27,7 @@ describe('fn:projectEnvironment', () => {
               },
             },
           },
+          { id: 'codex', environment: { CODEX_HOME: '/home/agent/.codex' } },
         ],
       },
       jobs: [

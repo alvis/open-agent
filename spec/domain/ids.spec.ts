@@ -7,7 +7,7 @@ import type { AgentDeclaration } from '#domain/declarations';
 
 describe('fn:releaseChannelIds', () => {
   it('should offer no release choices for an agent without release channels', () => {
-    const agent: AgentDeclaration<'t3', 'claude'> = {
+    const agent: AgentDeclaration<'t3', 'claude' | 'codex'> = {
       ...registry.agents.t3,
     };
     delete agent.releaseChannels;

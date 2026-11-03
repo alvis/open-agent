@@ -8,6 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CLAUDE_WORK_HOOKS } from '#adapters/drivers/harnesses/claude/hooks';
 import { CLAUDE_SETTINGS } from '#adapters/drivers/harnesses/claude/paths';
+import { CODEX_WORK_HOOKS } from '#adapters/drivers/harnesses/codex/hooks';
+import { CODEX_HOOKS } from '#adapters/drivers/harnesses/codex/paths';
 import { mergeWorkHooks } from '#adapters/drivers/harnesses/shared/hooks';
 import {
   MANAGED_LABEL,
@@ -279,11 +281,18 @@ describe('cmd:show', () => {
         { owned, command: awakeHookCommand({ awakeCommand: AWAKE_COMMAND }) },
       );
     await sprite.filesystem().mkdir('/home/agent/.claude', { recursive: true });
+    await sprite.filesystem().mkdir('/home/agent/.codex', { recursive: true });
     await sprite
       .filesystem()
       .writeFile(
         CLAUDE_SETTINGS,
         JSON.stringify({ hooks: hooks(CLAUDE_WORK_HOOKS) }),
+      );
+    await sprite
+      .filesystem()
+      .writeFile(
+        CODEX_HOOKS,
+        JSON.stringify({ hooks: hooks(CODEX_WORK_HOOKS) }),
       );
 
     const result = await doctorWorkstation(dependencies, {

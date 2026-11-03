@@ -134,6 +134,13 @@ const OBSERVED = {
       awakeHooksInstalled: true,
       authentication: 'not-configured',
     },
+    codex: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
+      pluginListAvailable: false,
+      awakeHooksInstalled: true,
+      authentication: 'not-configured',
+    },
     agentEnvironment: {
       ok: true,
       serverVersion: '0.0.46-nightly.20261014.3118',
@@ -144,6 +151,7 @@ const OBSERVED = {
         selectedPlugins: [],
         evidence: { sdkPluginLoading: 'not-verified' },
       },
+      codex: { selectedPlugins: [], evidence: undefined },
     },
   },
   hub: { skipped: true, reachable: false },
@@ -173,6 +181,13 @@ const observed = {
       awakeHooksInstalled: true,
       authentication: 'not-configured',
     },
+    codex: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
+      pluginListAvailable: false,
+      awakeHooksInstalled: true,
+      authentication: 'not-configured',
+    },
     agentEnvironment: {
       ok: true,
       serverVersion: '0.0.46-nightly.20261014.3118',
@@ -182,6 +197,10 @@ const observed = {
       claude: {
         selectedPlugins: [],
         evidence: { sdkPluginLoading: 'not-verified' },
+      },
+      codex: {
+        selectedPlugins: [],
+        evidence: undefined,
       },
     },
   },

@@ -25,7 +25,7 @@ const request = {
     github: false,
     plugins: false,
     gitIdentity: false,
-    harness: ['claude'],
+    harness: ['claude', 'codex'],
     network: 'none',
     proxy: false,
     idleMinutes: 5,

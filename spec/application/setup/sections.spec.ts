@@ -35,6 +35,18 @@ vi.mock(
   '#adapters/guest/platform/session/open',
   async () => import('../../mocks/session'),
 );
+// Codex trusts its hooks through its app server, a guest process only the live specs run
+vi.mock(
+  '#adapters/drivers/harnesses/codex/hook-trust',
+  () =>
+    ({
+      trustCodexHooks: vi.fn(async () => undefined),
+    }) satisfies Pick<
+      typeof import('#adapters/drivers/harnesses/codex/hook-trust'),
+      'trustCodexHooks'
+    >,
+);
+
 describe('fn:setupAgent', () => {
   it('should report a native pairing without expiry metadata without exposing its token', async () => {
     await using directory = await mkdtempDisposable(

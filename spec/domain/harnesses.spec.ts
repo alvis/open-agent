@@ -4,7 +4,7 @@ import { harnessIds, harnessLabel, isHarnessId } from '#domain/harnesses';
 
 describe('fn:harnessIds', () => {
   it('should list every registered harness in registration order', () => {
-    expect(harnessIds()).toEqual(['claude']);
+    expect(harnessIds()).toEqual(['claude', 'codex']);
   });
 });
 
@@ -18,6 +18,6 @@ describe('fn:isHarnessId', () => {
 
 describe('fn:harnessLabel', () => {
   it('should capitalize the identifier', () => {
-    expect(harnessIds().map(harnessLabel)).toEqual(['Claude']);
+    expect(harnessIds().map(harnessLabel)).toEqual(['Claude', 'Codex']);
   });
 });

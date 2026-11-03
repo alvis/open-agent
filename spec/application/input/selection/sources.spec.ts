@@ -16,7 +16,7 @@ describe('fn:environmentReader', () => {
         CLIPROXYAPI_ENABLED: 'true',
       },
       fileEnv: {
-        OPEN_AGENT_HARNESSES: ' claude, , claude ',
+        OPEN_AGENT_HARNESSES: ' codex, , claude ',
         CLIPROXYAPI_ENABLED: 'off',
       },
       profile: {},
@@ -27,7 +27,7 @@ describe('fn:environmentReader', () => {
       harnesses: read.list('OPEN_AGENT_HARNESSES'),
       proxy: read.flag(undefined, 'CLIPROXYAPI_ENABLED'),
     }).toEqual({
-      harnesses: ['claude', 'claude'],
+      harnesses: ['codex', 'claude'],
       proxy: { value: false, problems: [] },
     });
   });

@@ -53,6 +53,18 @@ vi.mock(
   '#adapters/guest/platform/session/open',
   async () => import('../../mocks/session'),
 );
+// Codex trusts its hooks through its app server, a guest process only the live specs run
+vi.mock(
+  '#adapters/drivers/harnesses/codex/hook-trust',
+  () =>
+    ({
+      trustCodexHooks: vi.fn(async () => undefined),
+    }) satisfies Pick<
+      typeof import('#adapters/drivers/harnesses/codex/hook-trust'),
+      'trustCodexHooks'
+    >,
+);
+
 /**
  * builds the disabled-network profile with a chosen due interval
  * @param days days after a success before an update is due

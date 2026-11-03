@@ -46,6 +46,18 @@ vi.mock(
   '#adapters/guest/platform/session/open',
   async () => import('../../mocks/session'),
 );
+// Codex trusts its hooks through its app server, a guest process only the live specs run
+vi.mock(
+  '#adapters/drivers/harnesses/codex/hook-trust',
+  () =>
+    ({
+      trustCodexHooks: vi.fn(async () => undefined),
+    }) satisfies Pick<
+      typeof import('#adapters/drivers/harnesses/codex/hook-trust'),
+      'trustCodexHooks'
+    >,
+);
+
 /** the pairing token the guest's T3 Code mints */
 const PAIRING_TOKEN = 'release-drift-pairing';
 /** the T3 Code service, as the agent declares it */
@@ -76,7 +88,7 @@ const STABLE_PROFILE: WorkstationProfile = {
 /** what the guest's harnesses and agent report natively once the agent serves */
 const NATIVE: NativeConfigurationInspection = {
   ...Object.fromEntries(
-    (['claude'] as const).map((harness) => [
+    (['claude', 'codex'] as const).map((harness) => [
       harness,
       {
         gatewayConfigured: false,

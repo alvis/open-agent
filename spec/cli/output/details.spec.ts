@@ -38,7 +38,7 @@ describe('fn:humanResultDetails', () => {
         environment: {
           tools: [
             { source: { kind: 'npm' } },
-            { name: 'claude', source: { kind: 'npm' } },
+            { name: 'codex', source: { kind: 'npm' } },
           ],
           setup: {
             skipped: [
@@ -50,15 +50,15 @@ describe('fn:humanResultDetails', () => {
         updates: {
           tools: [
             { to: 'unidentified' },
-            { name: 'claude', to: 1 },
-            { name: 'claude', to: '1.2.3\nextra output' },
+            { name: 'codex', to: 1 },
+            { name: 'codex', to: '1.2.3\nextra output' },
           ],
         },
       },
     });
 
     expect(result.inspection).toMatchObject({
-      'Installed tools': { claude: '1.2.3' },
+      'Installed tools': { codex: '1.2.3' },
       'Skipped tools': { optional: 'no bottle' },
     });
   });

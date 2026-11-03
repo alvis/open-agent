@@ -22,6 +22,10 @@ export interface NormalizedPluginOptions {
   kind: 'skipped' | 'selected';
   /** parsed choices of every catalog harness, keyed by harness id */
   harnesses: Record<HarnessId, HarnessPluginOptions>;
+  /** whether harnesses without their own marketplaces reuse the first harness's sources */
+  reuseMarketplaces: boolean;
+  /** whether the reuse choice was made explicitly */
+  reuseMarketplacesSet: boolean;
 }
 
 /**
@@ -46,7 +50,22 @@ export function normalizePluginOptions(
         uninstallPlugins: selected?.uninstallPlugins ?? [],
       };
     }),
+    reuseMarketplaces: options.reuseMarketplaces === true,
+    reuseMarketplacesSet: options.reuseMarketplaces !== undefined,
   };
+}
+
+/**
+ * names the harness whose marketplace sources the others reuse
+ * @param selected normalized choices
+ * @returns the first harness, in catalog order, with selected marketplaces
+ */
+export function marketplaceSourceHarness(
+  selected: NormalizedPluginOptions,
+): HarnessId | undefined {
+  return harnessIds().find(
+    (id) => selected.harnesses[id].marketplaces.length > 0,
+  );
 }
 
 /**
@@ -60,6 +79,7 @@ export function resolvePluginActions(
   harnesses: readonly HarnessId[] = harnessIds(),
 ): HarnessPluginActions {
   assertPluginChoices(selected, harnesses);
+  const source = marketplaceSourceHarness(selected);
 
   return recordOf(harnessIds(), (id) => {
     const own = selected.harnesses[id];
@@ -67,7 +87,13 @@ export function resolvePluginActions(
       return emptyActions();
     }
 
-    return actions(own);
+    return {
+      ...actions(own),
+      marketplaces:
+        selected.reuseMarketplaces && source && own.marketplaces.length === 0
+          ? selected.harnesses[source].marketplaces
+          : own.marketplaces,
+    };
   });
 }
 
@@ -86,7 +112,10 @@ function assertPluginChoices(
   const withActions = harnessIds().filter((id) =>
     hasActions(selected.harnesses[id]),
   );
-  if (selected.kind === 'skipped' && withActions.length > 0) {
+  if (
+    selected.kind === 'skipped' &&
+    (withActions.length > 0 || selected.reuseMarketplaces)
+  ) {
     conflict('--no-plugins conflicts with explicit plugin actions');
   }
   for (const id of withActions) {
@@ -101,6 +130,15 @@ function assertPluginChoices(
       );
     }
   }
+  if (
+    selected.reuseMarketplaces &&
+    harnessIds().filter((id) => selected.harnesses[id].marketplaces.length > 0)
+      .length > 1
+  ) {
+    conflict(
+      '--reuse-marketplaces conflicts with marketplaces chosen for more than one harness',
+    );
+  }
 }
 
 /**
@@ -111,7 +149,10 @@ function assertPluginChoices(
 export function hasExplicitPluginActions(
   selected: NormalizedPluginOptions,
 ): boolean {
-  return harnessIds().some((id) => hasActions(selected.harnesses[id]));
+  return (
+    harnessIds().some((id) => hasActions(selected.harnesses[id])) ||
+    selected.reuseMarketplaces
+  );
 }
 
 /**

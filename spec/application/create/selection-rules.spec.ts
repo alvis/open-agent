@@ -50,16 +50,6 @@ const ORGANIZATION_TOKEN = 'selection-org/1234/0123abcd/4567ef89';
 
 const providerCalls = vi.fn();
 
-/**
- * makes the stand-in agent refuse Claude, the only shipped harness
- * @returns the spy to restore once the rule is checked
- */
-function dropClaudeSupport(): { mockRestore: () => void } {
-  return vi
-    .spyOn(registry.agents.t3.supportedHarnesses, 'includes')
-    .mockReturnValue(false);
-}
-
 /** fails every provider boundary if selection reaches it */
 function guardProviderBoundary(): void {
   vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
@@ -97,13 +87,16 @@ function guardProviderBoundary(): void {
 describe('fn:prepareCreate selection rules', () => {
   it('should reject a harness the selected agent does not support before any provider call', async () => {
     guardProviderBoundary();
-    const unsupported = dropClaudeSupport();
-    await expect(prepareCreate(dependencies, request)).rejects.toMatchObject({
+    await expect(
+      prepareCreate(dependencies, {
+        ...request,
+        options: { ...request.options, harness: ['claude', 'codex'] },
+      }),
+    ).rejects.toMatchObject({
       code: 'INPUT',
       message: 'The workstation selection is invalid',
-      details: ['ACP agent "t3" does not support harness "claude"'],
+      details: ['ACP agent "t3" does not support harness "codex"'],
     });
-    unsupported.mockRestore();
     expect(providerCalls).not.toHaveBeenCalled();
   });
 
@@ -124,20 +117,22 @@ describe('fn:prepareCreate selection rules', () => {
 
   it('should aggregate both unreachable rules into one error before any provider call', async () => {
     guardProviderBoundary();
-    const unsupported = dropClaudeSupport();
     await expect(
       prepareCreate(dependencies, {
         ...request,
-        options: { ...request.options, withPairCode: true },
+        options: {
+          ...request.options,
+          harness: ['codex'],
+          withPairCode: true,
+        },
       }),
     ).rejects.toMatchObject({
       code: 'INPUT',
       details: [
-        'ACP agent "t3" does not support harness "claude"',
+        'ACP agent "t3" does not support harness "codex"',
         'ACP agent "t3" does not support pairing (--with-pair-code)',
       ],
     });
-    unsupported.mockRestore();
     expect(providerCalls).not.toHaveBeenCalled();
   });
 

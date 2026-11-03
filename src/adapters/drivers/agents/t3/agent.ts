@@ -18,6 +18,7 @@ import type { T3Environment } from '#domain/observations/agent';
  */
 const T3_HARNESS_NAMES = {
   claude: 'claudeAgent',
+  codex: 'codex',
 } as const;
 
 /** a harness T3 supports */

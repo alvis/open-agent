@@ -42,8 +42,12 @@ vi.mock('#composition/registry', async (importOriginal) => {
     machines: [{ label: 'fixture', cpus: 8, memoryGb: 16 }],
     incompatibilities: [
       {
-        reason: 'Fixture provider cannot host a single-CPU workstation',
-        appliesTo: ({ options }) => options.minCpus === 1,
+        reason:
+          'Fixture provider cannot host a codex-only workstation without the proxy',
+        appliesTo: ({ options, harnesses }) =>
+          !options.isProxyEnabled &&
+          harnesses.length === 1 &&
+          harnesses[0] === 'codex',
       },
     ],
     prerequisites: {
@@ -83,11 +87,19 @@ vi.mock('#composition/registry', async (importOriginal) => {
       launch: { program: 'claude-acp', arguments: [] },
     },
   };
-  const t3: AgentDeclaration<'t3', 'claude'> = {
+  const codex: HarnessDeclaration<'codex'> = {
+    id: 'codex',
+    kind: 'harnesses',
+    displayName: 'Codex',
+    supportsProxy: false,
+    spawnEnvironment: {},
+    reservedEnvironment: [],
+  };
+  const t3: AgentDeclaration<'t3', 'claude' | 'codex'> = {
     id: 't3',
     kind: 'agents',
     displayName: 'T3 Code',
-    supportedHarnesses: ['claude'],
+    supportedHarnesses: ['claude', 'codex'],
     harnessLaunchMode: 'native-cli',
     supportsPairing: true,
     service: {
@@ -98,11 +110,11 @@ vi.mock('#composition/registry', async (importOriginal) => {
       needs: [],
     },
   };
-  const relay: AgentDeclaration<'relay', 'claude'> = {
+  const relay: AgentDeclaration<'relay', 'claude' | 'codex'> = {
     id: 'relay',
     kind: 'agents',
     displayName: 'Relay',
-    supportedHarnesses: ['claude'],
+    supportedHarnesses: ['claude', 'codex'],
     harnessLaunchMode: 'acp-adapter',
     supportsPairing: false,
     service: {
@@ -154,6 +166,7 @@ vi.mock('#composition/registry', async (importOriginal) => {
     harnesses: {
       ...original.registry.harnesses,
       claude: { ...original.registry.harnesses.claude, ...claude },
+      codex: { ...original.registry.harnesses.codex, ...codex },
     },
     agents: {
       ...original.registry.agents,
@@ -171,18 +184,10 @@ vi.mock('#composition/registry', async (importOriginal) => {
   >;
 });
 
-// the fixture catalog with Claude lacking an ACP adapter and proxy support,
-// standing in for a harness that declares neither
-const { acpAdapter: _adapter, ...bareClaude } = registry.harnesses.claude;
-const BARE = {
-  ...registry,
-  harnesses: { claude: { ...bareClaude, supportsProxy: false } },
-};
-
 const valid: ProfileCandidate = {
   provider: 'sprite',
   agent: 't3',
-  harnesses: ['claude'],
+  harnesses: ['claude', 'codex'],
   network: 'none',
   options: { ...defaults.options },
 };
@@ -211,7 +216,7 @@ describe('fn:defaultProfile', () => {
     expect(defaultProfile(defaults)).toEqual({
       provider: 'sprite',
       agent: 't3',
-      harnesses: ['claude'],
+      harnesses: ['claude', 'codex'],
       network: 'none',
       options: {
         isProxyEnabled: false,
@@ -292,9 +297,10 @@ describe('fn:validateProfile', () => {
   it('should identify the proxy flag and environment when no selected harness supports proxy routing', () => {
     expect(
       validateProfile({
-        declarations: BARE,
+        declarations: registry,
         candidate: {
           ...valid,
+          harnesses: ['codex'],
           options: { ...valid.options, isProxyEnabled: true },
         },
       }),
@@ -404,24 +410,17 @@ describe('fn:validateProfile', () => {
       ['invalid-option'],
     ],
     [
+      'an acp-adapter agent with a harness lacking an adapter',
+      { agent: 'relay' },
+      ['missing-acp-adapter'],
+    ],
+    [
       'a profile the provider declares incompatible',
-      { options: { ...valid.options, minCpus: 1 } },
+      { harnesses: ['codex'] },
       ['incompatible'],
     ],
   ])('should reject %s', (_, candidate, expected) => {
     expect(violationCodes(candidate)).toEqual(expected);
-  });
-
-  it('should reject an acp-adapter agent with a harness lacking an adapter', () => {
-    expect(
-      validateProfile({
-        declarations: BARE,
-        candidate: { ...valid, agent: 'relay' },
-      }),
-    ).toMatchObject({
-      isValid: false,
-      violations: [{ code: 'missing-acp-adapter' }],
-    });
   });
 
   it.each([

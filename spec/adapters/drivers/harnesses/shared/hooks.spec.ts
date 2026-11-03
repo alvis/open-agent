@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CLAUDE_WORK_HOOKS } from '#adapters/drivers/harnesses/claude/hooks';
+import { CODEX_WORK_HOOKS } from '#adapters/drivers/harnesses/codex/hooks';
 import {
   assertMergeableHooks,
   awakeBudgetMs,
@@ -17,6 +18,7 @@ import { awakeHookCommand } from '#application/catalog/awake';
 
 const COMMAND = { program: '/opt/open-agent/governor/awake.sh' };
 const CLAUDE = { owned: CLAUDE_WORK_HOOKS, command: COMMAND };
+const CODEX = { owned: CODEX_WORK_HOOKS, command: COMMAND };
 
 /**
  * the timeout of every owned handler in a merged hook map, by event
@@ -41,6 +43,16 @@ describe('fn:workHookCommands', () => {
       PreToolUse: `${COMMAND.program} heartbeat --source claude --session - --budget-ms 8000`,
       Stop: `${COMMAND.program} hold-close --source claude --session - --budget-ms 8000`,
       SessionEnd: `${COMMAND.program} hold-close --source claude --session - --budget-ms 8000`,
+    });
+  });
+
+  it('should release the Codex hold on session end and interrupt within a 2-second budget', () => {
+    expect(workHookCommands(CODEX)).toEqual({
+      UserPromptSubmit: `${COMMAND.program} hold-open --source codex --session - --budget-ms 8000`,
+      PreToolUse: `${COMMAND.program} heartbeat --source codex --session - --budget-ms 8000`,
+      Stop: `${COMMAND.program} hold-close --source codex --session - --budget-ms 8000`,
+      SessionEnd: `${COMMAND.program} hold-close --source codex --session - --budget-ms 2000`,
+      Interrupt: `${COMMAND.program} hold-close --source codex --session - --budget-ms 2000`,
     });
   });
 
@@ -71,7 +83,17 @@ describe('harness hook timeouts', () => {
     });
   });
 
-  it.each([CLAUDE_WORK_HOOKS])(
+  it('should keep the Codex session-end and interrupt timeouts within the 3-second cap Codex enforces', () => {
+    expect(timeoutsOf(mergeWorkHooks({}, CODEX))).toEqual({
+      UserPromptSubmit: [10],
+      PreToolUse: [10],
+      Stop: [10],
+      SessionEnd: [3],
+      Interrupt: [3],
+    });
+  });
+
+  it.each([CLAUDE_WORK_HOOKS, CODEX_WORK_HOOKS])(
     'should fit the awake run budget inside every $harness timeout with the start margin',
     ({ events }) => {
       const overruns = events.filter(({ timeoutSeconds }) => {
@@ -91,14 +113,14 @@ describe('fn:mergeWorkHooks', () => {
   it('should add the owned handlers beside foreign ones and stay idempotent', () => {
     const first = mergeWorkHooks(
       { Stop: [foreign], CustomEvent: [foreign] },
-      CLAUDE,
+      CODEX,
     );
-    const repeated = mergeWorkHooks(first, CLAUDE);
+    const repeated = mergeWorkHooks(first, CODEX);
     const owned = (event: string, timeout: number): unknown => ({
       hooks: [
         {
           type: 'command',
-          command: workHookCommands(CLAUDE)[event],
+          command: workHookCommands(CODEX)[event],
           timeout,
         },
       ],
@@ -109,7 +131,8 @@ describe('fn:mergeWorkHooks', () => {
       UserPromptSubmit: [owned('UserPromptSubmit', 10)],
       PreToolUse: [owned('PreToolUse', 10)],
       Stop: [foreign, owned('Stop', 10)],
-      SessionEnd: [owned('SessionEnd', 10)],
+      SessionEnd: [owned('SessionEnd', 3)],
+      Interrupt: [owned('Interrupt', 3)],
     });
     expect(repeated).toEqual(first);
   });
@@ -118,19 +141,19 @@ describe('fn:mergeWorkHooks', () => {
 describe('fn:assertMergeableHooks', () => {
   it('should refuse hooks a merge could not preserve', () => {
     expect(() => {
-      assertMergeableHooks({ Stop: 'not-a-list' }, CLAUDE_WORK_HOOKS);
-    }).toThrow('Native Stop hooks are not an array');
+      assertMergeableHooks({ Interrupt: 'not-a-list' }, CODEX_WORK_HOOKS);
+    }).toThrow('Native Interrupt hooks are not an array');
   });
 });
 
 describe('fn:hasWorkHooks', () => {
   const installed = mergeWorkHooks(
     { Stop: [{ hooks: [{ type: 'command', command: 'user-command' }] }] },
-    CLAUDE,
+    CODEX,
   );
 
   it('should accept hooks carrying every exact command beside foreign ones', () => {
-    expect(hasWorkHooks(installed, CLAUDE)).toBe(true);
+    expect(hasWorkHooks(installed, CODEX)).toBe(true);
   });
 
   it.each([
@@ -138,19 +161,23 @@ describe('fn:hasWorkHooks', () => {
     ['a hook list that is not an object', []],
     ['an empty hook map', {}],
   ])('should refuse %s', (_, hooks) => {
-    expect(hasWorkHooks(hooks, CLAUDE)).toBe(false);
+    expect(hasWorkHooks(hooks, CODEX)).toBe(false);
   });
 
-  it.each(['UserPromptSubmit', 'PreToolUse', 'Stop', 'SessionEnd'])(
-    'should refuse Claude hooks missing the %s command',
-    (event) => {
-      const { [event]: _removed, ...rest } = installed;
+  it.each([
+    'UserPromptSubmit',
+    'PreToolUse',
+    'Stop',
+    'SessionEnd',
+    'Interrupt',
+  ])('should refuse Codex hooks missing the %s command', (event) => {
+    const { [event]: _removed, ...rest } = installed;
 
-      expect(hasWorkHooks(rest, CLAUDE)).toBe(false);
-    },
-  );
+    expect(hasWorkHooks(rest, CODEX)).toBe(false);
+  });
 
-  it('should refuse a command for another action', () => {
+  it('should refuse a command for another harness or another action', () => {
+    expect(hasWorkHooks(installed, CLAUDE)).toBe(false);
     expect(
       hasWorkHooks(
         {
@@ -160,13 +187,13 @@ describe('fn:hasWorkHooks', () => {
               hooks: [
                 {
                   type: 'command',
-                  command: workHookCommands(CLAUDE).UserPromptSubmit,
+                  command: workHookCommands(CODEX).UserPromptSubmit,
                 },
               ],
             },
           ],
         },
-        CLAUDE,
+        CODEX,
       ),
     ).toBe(false);
   });

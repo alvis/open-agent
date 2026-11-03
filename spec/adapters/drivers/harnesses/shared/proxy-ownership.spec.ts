@@ -84,9 +84,9 @@ describe('fn:restoreOwnedFile', () => {
     );
     const sprite = createFilesystemSprite({ root: directory.path });
     const filesystem = sprite.filesystem();
-    await filesystem.mkdir('/home/agent/.claude', { recursive: true });
-    const previousPath = '/home/agent/.claude/previous-token';
-    const newPath = '/home/agent/.claude/new-token';
+    await filesystem.mkdir('/home/agent/.codex', { recursive: true });
+    const previousPath = '/home/agent/.codex/previous-token';
+    const newPath = '/home/agent/.codex/new-token';
     await filesystem.writeFile(previousPath, 'managed');
     await filesystem.writeFile(newPath, 'managed');
 

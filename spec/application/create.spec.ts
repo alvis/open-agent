@@ -31,6 +31,17 @@ import type { CommandRequest } from '#application/contracts';
 import type { SetupSession } from '#application/ports/session';
 import type { GuestInspection } from '#domain/observations/inspection';
 
+vi.mock(
+  '#adapters/drivers/harnesses/codex/hook-trust',
+  () =>
+    ({
+      trustCodexHooks: vi.fn(async () => undefined),
+    }) satisfies Pick<
+      typeof import('#adapters/drivers/harnesses/codex/hook-trust'),
+      'trustCodexHooks'
+    >,
+);
+
 const NAME = 'ready-workstation';
 const TOKEN = 'workflow-org/1234/0123abcd/4567ef89';
 
@@ -58,9 +69,20 @@ const OBSERVED = {
       awakeHooksInstalled: true,
       authentication: 'not-configured',
     },
+    codex: {
+      gatewayConfigured: false,
+      modelDiscoveryEnabled: false,
+      pluginListAvailable: false,
+      awakeHooksInstalled: true,
+      authentication: 'not-configured',
+    },
     agentEnvironment: SERVED,
     harnesses: {
       claude: {
+        selectedPlugins: [],
+        evidence: { sdkPluginLoading: 'not-verified' },
+      },
+      codex: {
         selectedPlugins: [],
         evidence: { sdkPluginLoading: 'not-verified' },
       },
@@ -83,7 +105,7 @@ const REQUEST = {
     github: false,
     plugins: false,
     gitIdentity: false,
-    harness: ['claude'],
+    harness: ['claude', 'codex'],
     network: 'none',
     proxy: false,
   },

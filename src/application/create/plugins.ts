@@ -1,5 +1,8 @@
 import { withBackNavigation } from '#application/navigation';
-import { normalizePluginOptions } from '#application/plugins';
+import {
+  marketplaceSourceHarness,
+  normalizePluginOptions,
+} from '#application/plugins';
 import { harnessLabel } from '#domain/harnesses';
 import { returnOnBack } from '#kernel/navigation';
 
@@ -81,6 +84,18 @@ async function promptHarnessChoices(
     return selected;
   }
   let choices = { ...selected };
+  const source = marketplaceSourceHarness(choices);
+  if (
+    source &&
+    source !== harness &&
+    choices.harnesses[harness].marketplaces.length === 0 &&
+    !choices.reuseMarketplaces
+  ) {
+    choices.reuseMarketplaces = await interaction.confirm({
+      message: `Use ${harnessLabel(source)} marketplace sources as editable one-time ${harnessLabel(harness)} defaults? Compatibility will be checked.`,
+    });
+    choices.reuseMarketplacesSet = true;
+  }
   for (;;) {
     const action = await interaction.select<'marketplace' | 'plugin' | 'done'>(
       { message: `${harnessLabel(harness)} plugin choices` },
@@ -127,7 +142,9 @@ function harnessChoicesAlreadySet(
   return (
     choices.skipped ||
     choices.marketplaces.length > 0 ||
-    choices.plugins.length > 0
+    choices.plugins.length > 0 ||
+    (selected.reuseMarketplaces &&
+      marketplaceSourceHarness(selected) !== harness)
   );
 }
 
@@ -150,6 +167,10 @@ function appendHarnessChoice(
   const { harness, action, value } = choice;
   const field = action === 'marketplace' ? 'marketplaces' : 'plugins';
   const current = selected.harnesses[harness];
+  const source = marketplaceSourceHarness(selected);
+  // a harness's own marketplace replaces the sources it would have reused
+  const isOverride =
+    action === 'marketplace' && source !== undefined && source !== harness;
 
   return {
     ...selected,
@@ -157,5 +178,7 @@ function appendHarnessChoice(
       ...selected.harnesses,
       [harness]: { ...current, [field]: [...current[field], value] },
     },
+    reuseMarketplaces: isOverride ? false : selected.reuseMarketplaces,
+    reuseMarketplacesSet: isOverride ? true : selected.reuseMarketplacesSet,
   };
 }

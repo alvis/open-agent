@@ -95,12 +95,12 @@ describe('command route dispatch', () => {
       },
     },
     {
-      argv: ['setup', 'dev-box', '--disable-claude-plugin', 'old'],
+      argv: ['setup', 'dev-box', '--disable-codex-plugin', 'old'],
       command: 'setup',
       machine: 'dev-box',
       options: {
         harnessPlugins: {
-          claude: expect.objectContaining({ disablePlugins: ['old'] }),
+          codex: expect.objectContaining({ disablePlugins: ['old'] }),
         },
       },
     },
