@@ -31,6 +31,7 @@
     "prepare": "run prepare",
     "test": "run test",
     "test:coverage": "run test:coverage --",
+    "test:e2e": "run test:e2e --",
     "typecheck": "run typecheck"
   },
   "dependencies": {
@@ -48,11 +49,13 @@
     "@presetter/preset-strict": "^9.1.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
+    "@types/ws": "^8.18.2",
     "@vitest/coverage-v8": "^4.0.0",
     "ink-testing-library": "^4.0.0",
     "presetter": "^9.1.0",
     "typescript": "^5.9.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "ws": "^8.22.0"
   },
   "packageManager": "pnpm@12.11.0",
   "devEngines": {
