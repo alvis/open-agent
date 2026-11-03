@@ -10,6 +10,7 @@ type ProgressActivity = ProgressUpdate & { startedAt: number };
 
 /** ordinary progress presentation settings for one command session */
 export interface ActivityOptions {
+  quiet?: boolean;
   stagesOwnProgress?: boolean;
 }
 
@@ -24,7 +25,7 @@ interface ActivityController {
  * tracks nested and parallel stage starts without owning terminal input
  * @param params stage presentation settings and output
  * @param params.output diagnostic stream
- * @param params.options progress source controls
+ * @param params.options suppression and source controls
  * @param params.onChange requests one root rerender
  * @param params.active whether the session still accepts progress
  * @returns active-stage controller with explicit cleanup
@@ -45,7 +46,7 @@ export function createActivityController({
   return {
     current: () => activities[activities.length - 1],
     publish: (update) => {
-      if (!active()) {
+      if (options.quiet || !active()) {
         return;
       }
       if (update.phase === 'start') {

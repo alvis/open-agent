@@ -59,8 +59,19 @@ describe('fn:createActivityController', () => {
     expect(String(output.read())).toContain('setup');
   });
 
-  it('should stop publishing progress after the session closes', () => {
+  it('should suppress routine progress when quiet and stop after the session closes', () => {
     const output = new PassThrough();
+    const quiet = createActivityController({
+      output,
+      options: { quiet: true },
+      onChange: () => undefined,
+      active: () => true,
+    });
+    quiet.publish({ stage: 'create', message: 'Running', phase: 'start' });
+    quiet.publish({ stage: 'create', message: 'Done', phase: 'complete' });
+    expect(quiet.current()).toBeUndefined();
+    expect(output.read()).toBeNull();
+
     const closed = createActivityController({
       output,
       options: {},

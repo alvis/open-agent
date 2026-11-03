@@ -17,11 +17,6 @@ vi.mock('#cli/parser', async (importOriginal) => {
 
 const parse = vi.mocked(parseApplication);
 
-/** stderr that carries only the stage progress lines non-interactive output writes */
-const STAGE_LINES_ONLY = expect.stringMatching(
-  /^(?:[\w.]+: (?:started|completed|failed)(?: \(\d+ ms\))?\n)*$/u,
-);
-
 describe('fn:cli', () => {
   it('should emit a successful JSON list without contacting a provider service', async () => {
     vi.stubEnv('SPRITES_TOKEN', 'test-org/1/0abc/0def');
@@ -62,6 +57,7 @@ describe('fn:cli', () => {
         '--provider',
         'sprite',
         '--non-interactive',
+        '--quiet',
         '--json',
       ]);
       exitCode = process.exitCode;
@@ -84,7 +80,7 @@ describe('fn:cli', () => {
         ok: true,
         data: { machines: [] },
       },
-      errorText: STAGE_LINES_ONLY,
+      errorText: '',
       exitCode: 0,
       signalListeners,
     });

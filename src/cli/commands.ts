@@ -28,8 +28,10 @@ import type { InvocationContext } from './parser';
 type BooleanKeys<T> = {
   [K in keyof T]-?: NonNullable<T[K]> extends boolean ? K : never;
 }[keyof T];
+type OptionalBooleanKey = 'color';
 type RequiredBooleanFields<T> = Omit<T, BooleanKeys<T>> &
-  Required<Pick<T, BooleanKeys<T>>>;
+  Required<Pick<T, Exclude<BooleanKeys<T>, OptionalBooleanKey>>> &
+  Pick<T, Extract<BooleanKeys<T>, OptionalBooleanKey>>;
 type FlagsFor<T> = RequiredBooleanFields<
   Pick<CommandOptions, Extract<keyof T, keyof CommandOptions>>
 >;

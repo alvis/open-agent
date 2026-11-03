@@ -180,6 +180,7 @@ ${Object.values(registry.providers)
   .join('\n')}
   OPEN_AGENT_*        Driver selection; see open-agent create --help.
   CI, NON_INTERACTIVE Disable prompts when set to 1, true, yes, or on.
+  NO_COLOR            Disable color unless --color is selected.
 
 LEARN MORE
 ${Object.values(registry.providers)

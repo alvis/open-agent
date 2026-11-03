@@ -8,6 +8,7 @@ import { withBackNavigation } from '#application/navigation';
 import { resultExitCode } from '#cli/exit';
 
 import { createInteraction } from '#cli/interaction';
+import { createStageReporter } from '#cli/reporting';
 
 import { InteractionExit, returnOnBack } from '#kernel/navigation';
 
@@ -15,7 +16,7 @@ import { driveInk } from '../fixtures/ink';
 import { dependencies } from '../mocks/dependencies';
 
 describe('fn:createInteraction', () => {
-  it('should show routine status, warnings and errors', async () => {
+  it('should suppress routine quiet-mode status while keeping warnings and errors visible', async () => {
     const controller = new AbortController();
     const input = Object.assign(new PassThrough(), {
       isTTY: true,
@@ -31,11 +32,13 @@ describe('fn:createInteraction', () => {
       captured += chunk.toString();
     });
     const session = createInteraction({
+      noColor: true,
       io: { stdin: input, stderr: output },
       cancellation: {
         signal: controller.signal,
         cancel: () => controller.abort(),
         interrupt: () => controller.abort(),
+        quiet: true,
       },
     });
     try {
@@ -50,7 +53,7 @@ describe('fn:createInteraction', () => {
           success: captured.includes('routine-success'),
           warning: captured.includes('visible-warning'),
           error: captured.includes('visible-error'),
-        }).toEqual({ info: true, success: true, warning: true, error: true });
+        }).toEqual({ info: false, success: false, warning: true, error: true });
       });
     } finally {
       await session.dispose();
@@ -70,6 +73,7 @@ describe('fn:createInteraction', () => {
       rows: 24,
     });
     const session = createInteraction({
+      noColor: true,
       io: { stdin: input, stderr: output },
     });
     try {
@@ -107,6 +111,7 @@ describe('fn:createInteraction', () => {
       rows: 24,
     });
     const session = createInteraction({
+      noColor: true,
       io: { stdin: input, stderr: output },
       cancellation: {
         signal: controller.signal,
@@ -195,6 +200,7 @@ describe('fn:createInteraction', () => {
       captured += chunk.toString();
     });
     const session = createInteraction({
+      noColor: true,
       io: { stdin: input, stderr: output },
     });
     let pending: Promise<string> | undefined;
@@ -429,6 +435,7 @@ describe('fn:createInteraction', () => {
     const inputListeners = input.listenerCount('readable');
     const controller = new AbortController();
     const session = createInteraction({
+      noColor: true,
       io: { stdin: input, stderr: output },
       cancellation: {
         signal: controller.signal,
@@ -461,6 +468,43 @@ describe('fn:createInteraction', () => {
     expect(captured).toBe(`${beforeOutput}post-dispose-output`);
     input.destroy();
     output.destroy();
+  });
+
+  it('should print verbose stage lines on stderr while an Ink prompt stays open', async () => {
+    const lines: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      lines.push(String(chunk));
+
+      return true;
+    });
+    const reportStage = createStageReporter(
+      { command: 'show', options: { verbose: true, quiet: true } },
+      () => undefined,
+    );
+    const observed = await driveInk(
+      async (interaction) => {
+        reportStage({ stage: 'command', event: 'start', targetKnown: false });
+        const answer = interaction.input({ message: 'Sprites API token' });
+        reportStage({
+          stage: 'command',
+          event: 'complete',
+          durationMs: 1,
+          outcome: 'ok',
+          targetKnown: false,
+        });
+
+        return answer;
+      },
+      [{ waitFor: 'Sprites API token', input: ['a', '\r'] }],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(1);
+    expect(observed.result).toBe('a');
+    expect(lines).toEqual([
+      '[verbose] stage=command event=start command=show targetKnown=false\n',
+      '[verbose] stage=command event=complete durationMs=1 outcome=ok command=show targetKnown=false\n',
+    ]);
+    expect(observed.output).not.toContain('[verbose]');
   });
 });
 

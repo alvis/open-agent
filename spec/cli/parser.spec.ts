@@ -109,15 +109,23 @@ async function parse(
 }
 
 describe('fn:parseApplication', () => {
-  it('should reject double negation before scanning', async () => {
-    const { parsed, state } = await parse(['create', '--no-no-yes']);
+  it.each([
+    {
+      label: 'double negation',
+      argv: ['--no-no-color'],
+      message: '--no-no-color is invalid',
+    },
+    {
+      label: 'opposing color flags',
+      argv: ['--color', '--no-color'],
+      message: '--color and --no-color are mutually exclusive',
+    },
+  ])('should reject $label before scanning', async ({ argv, message }) => {
+    const { parsed, state } = await parse(['create', ...argv]);
 
     expect(parsed).toEqual([]);
     expect(state.errors).toEqual([
-      {
-        code: 'USAGE',
-        message: expect.stringContaining('--no-no-yes is invalid'),
-      },
+      { code: 'USAGE', message: expect.stringContaining(message) },
     ]);
   });
 
@@ -143,7 +151,7 @@ describe('fn:parseApplication', () => {
   });
 
   it('should stop flag validation at the argument separator', async () => {
-    const { state } = await parse(['create', '--', '--no-no-yes']);
+    const { state } = await parse(['create', '--', '--no-no-color']);
 
     expect(state.errors).toEqual([expect.objectContaining({ code: 'USAGE' })]);
     expect(state.errors[0]?.message).not.toContain('is invalid');

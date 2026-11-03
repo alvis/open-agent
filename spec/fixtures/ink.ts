@@ -63,6 +63,7 @@ export async function driveInk<T>(
     }
   });
   const interaction = createInteraction({
+    noColor: true,
     io: { stdin: input, stderr: output },
   });
   try {

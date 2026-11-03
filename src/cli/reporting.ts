@@ -2,6 +2,7 @@ import { stderr } from 'node:process';
 
 import { redactResolved } from '#kernel/redaction';
 
+import type { CommandRequest } from '#application/contracts';
 import type { ProgressUpdate } from '#application/ports/interaction';
 import type { StageEvent } from '#kernel/operation';
 import type { StatusUpdate } from '#kernel/status';
@@ -12,14 +13,21 @@ type CurrentSession = () => InteractionSession | undefined;
 
 /**
  * reports real stage lifecycle events on stderr or the command-lifetime Ink root
+ * @param request selected command and output controls
  * @param session current interactive session, when available
  * @returns invocation-local stage observer
  */
 export function createStageReporter(
+  request: CommandRequest,
   session: CurrentSession,
 ): (event: StageEvent) => void {
   return (event) => {
-    publishStage(event, session);
+    if (!request.options.quiet) {
+      publishStage(event, session);
+    }
+    if (request.options.verbose) {
+      writeVerboseStage(event, request.command);
+    }
   };
 }
 
@@ -60,14 +68,39 @@ function publishStage(event: StageEvent, session: CurrentSession): void {
 }
 
 /**
- * reports warnings, errors and routine status on stderr or the command-lifetime Ink root
+ * retains the independent verbose diagnostic stream even with --quiet
+ * @param event whitelisted stage observation
+ * @param fallbackCommand parsed command before menu selection
+ */
+function writeVerboseStage(
+  event: StageEvent,
+  fallbackCommand: CommandRequest['command'],
+): void {
+  const timing =
+    event.durationMs === undefined ? '' : ` durationMs=${event.durationMs}`;
+  const outcome =
+    event.outcome === undefined ? '' : ` outcome=${event.outcome}`;
+  stderr.write(
+    redactResolved(
+      `[verbose] stage=${event.stage} event=${event.event}${timing}${outcome} command=${event.command ?? fallbackCommand} targetKnown=${event.targetKnown}\n`,
+    ),
+  );
+}
+
+/**
+ * keeps warnings and errors while suppressing routine status under --quiet
+ * @param request parsed output controls
  * @param session current interactive session, when available
  * @returns invocation-local status observer
  */
 export function createStatusReporter(
+  request: CommandRequest,
   session: CurrentSession,
 ): (update: StatusUpdate) => void {
   return (update) => {
+    if (request.options.quiet && ['info', 'success'].includes(update.kind)) {
+      return;
+    }
     const activeSession = session();
     if (activeSession) {
       activeSession.status(update);

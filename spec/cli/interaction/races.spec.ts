@@ -55,6 +55,7 @@ describe('fn:createInteraction renderer races', () => {
       rows: 24,
     });
     const session = createInteraction({
+      noColor: true,
       io: { stdin: input, stderr: output },
     });
     try {

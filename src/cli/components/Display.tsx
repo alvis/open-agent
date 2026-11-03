@@ -85,12 +85,15 @@ export function TaskProgress({
  * includes a word indicator as well as color in status text
  * @param root0 status props
  * @param root0.update reported status
+ * @param root0.noColor whether color is disabled
  */
 export function StatusMessage({
   update,
-}: Readonly<{ update: StatusUpdate }>): React.JSX.Element {
-  const color =
-    update.kind === 'error'
+  noColor = false,
+}: Readonly<{ update: StatusUpdate; noColor?: boolean }>): React.JSX.Element {
+  const color = noColor
+    ? undefined
+    : update.kind === 'error'
       ? 'red'
       : update.kind === 'warning'
         ? 'yellow'
