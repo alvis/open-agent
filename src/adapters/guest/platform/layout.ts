@@ -32,6 +32,12 @@ export const AGENT_ID = '2000';
 /** where the agent's own commands, such as the npm-installed harnesses, live */
 export const AGENT_BIN = `${AGENT_HOME}/.local/bin`;
 
+/** the agent's private open-agent configuration directory */
+export const AGENT_CONFIG = `${AGENT_HOME}/.config/open-agent`;
+
+/** the committer the agent configured */
+export const COMMITTER_PATH = `${AGENT_CONFIG}/committer.json`;
+
 /** home of the system account that owns the Homebrew prefix */
 export const LINUXBREW_HOME = accountHome('linuxbrew');
 

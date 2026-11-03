@@ -4,7 +4,8 @@ import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 import type { CommandName } from '#kernel/commands';
 
 /** targetable setup areas */
-export type SetupSection = 'all' | 'agent' | 'network' | 'github' | 'tools';
+export type SetupSection =
+  'all' | 'agent' | 'network' | 'github' | 'git' | 'tools';
 
 /** values parsed from CLI flags; secret-bearing fields contain references, never raw credentials */
 export interface CommandOptions {
@@ -48,6 +49,8 @@ export interface CommandOptions {
   quiet?: boolean;
   /** configures or skips the native GitHub CLI credential */
   github?: boolean;
+  /** configures or skips the Git and Jujutsu identity */
+  gitIdentity?: boolean;
   /** reads and saves credentials on this computer when enabled */
   localCredentials?: boolean;
   /** requests a pairing code from an agent that supports pairing */
@@ -56,6 +59,14 @@ export interface CommandOptions {
   inspect?: boolean;
   /** installs the latest managed tools in place, without restarting a service */
   update?: boolean;
+  /** Git author name */
+  gitName?: string;
+  /** Git author email */
+  gitEmail?: string;
+  /** Git committer name, defaulting to the author name */
+  gitCommitterName?: string;
+  /** Git committer email, defaulting to the author email */
+  gitCommitterEmail?: string;
   /** GitHub host the native credential authenticates against */
   githubHost?: string;
   /** source reference of the provider management credential */

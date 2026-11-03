@@ -105,6 +105,7 @@ describe('fn:setupWorkstation', () => {
           nonInteractive: true,
           localCredentials: false,
           github: false,
+          gitIdentity: false,
         },
       },
       provider,

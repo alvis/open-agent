@@ -4,15 +4,15 @@ import { operationSignal, runOperation } from '#kernel/operation';
 const GITHUB_REQUEST_TIMEOUT_MS = 10_000;
 
 /**
- * validates a selected GitHub token and fetch only the account login
+ * validates a selected GitHub token and fetch only account identity fields
  * @param token candidate GitHub credential
  * @param hostname selected native GitHub hostname
- * @returns login provided by the account endpoint
+ * @returns login, name, and email provided by the account endpoint
  */
 export async function githubAccount(
   token: string,
   hostname = 'github.com',
-): Promise<{ login: string }> {
+): Promise<{ login: string; name?: string; email?: string }> {
   const host = new URL(`https://${hostname}`);
   if (
     host.host !== hostname.toLowerCase() ||
@@ -60,5 +60,13 @@ export async function githubAccount(
     });
   }
 
-  return { login: user.login };
+  return {
+    login: user.login,
+    name:
+      'name' in user && typeof user.name === 'string' ? user.name : undefined,
+    email:
+      'email' in user && typeof user.email === 'string'
+        ? user.email
+        : undefined,
+  };
 }

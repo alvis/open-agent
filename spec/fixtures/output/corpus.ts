@@ -322,6 +322,7 @@ export const CORPUS: readonly CorpusCase[] = [
       service: 'configured',
       pairing: { status: 'not requested' },
       github: 'configured',
+      gitIdentity: 'preserved',
       network: { status: 'disabled', readiness: 'skipped' },
       components: { installed: 6, skipped: 1, failed: 1 },
       tools: 'updated',
@@ -390,6 +391,16 @@ export const CORPUS: readonly CorpusCase[] = [
     command: 'setup',
     ok: true,
     data: { section: 'github', machine: MACHINE, github: 'skipped' },
+  }),
+  corpusCase('setup-git-configured', {
+    command: 'setup',
+    ok: true,
+    data: { section: 'git', machine: MACHINE, gitIdentity: 'configured' },
+  }),
+  corpusCase('setup-git-preserved', {
+    command: 'setup',
+    ok: true,
+    data: { section: 'git', machine: MACHINE, gitIdentity: 'preserved' },
   }),
   corpusCase('setup-tools-updated', {
     command: 'setup',

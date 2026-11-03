@@ -56,7 +56,7 @@ export function reviewCreatePlan(
         `Suspend after idle: ${idleSummary(profile.options.idleTimeoutMinutes)}`,
         `${dependencies.registry.agents[profile.agent].displayName} exposed after readiness`,
         `${credential.label}: ${input.sources[credential.environment] ?? 'prompt/session'}`,
-        `GitHub: ${input.githubToken ? 'selected' : 'skipped'}`,
+        `GitHub: ${input.githubToken ? 'selected' : 'skipped'}; Git identity: ${input.gitIdentity ? 'configured' : 'skipped'}`,
       ].join('\n'),
     },
     interaction,

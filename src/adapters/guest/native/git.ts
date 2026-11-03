@@ -1,5 +1,15 @@
-import { USER, ensurePrivateDirectory } from '#adapters/guest/platform/account';
-import { ACCOUNT_PATH, accountHome } from '#adapters/guest/platform/layout';
+import {
+  USER,
+  ensurePrivateDirectory,
+  runAsAgent,
+  writeOwnedFile,
+} from '#adapters/guest/platform/account';
+import {
+  ACCOUNT_PATH,
+  AGENT_CONFIG,
+  COMMITTER_PATH,
+  accountHome,
+} from '#adapters/guest/platform/layout';
 import { runGuestResult } from '#adapters/guest/platform/run';
 import { HOMEBREW_GH } from '#adapters/guest/tools/accounts';
 import { CommandFault } from '#kernel/faults';
@@ -7,9 +17,51 @@ import { redactResolved } from '#kernel/redaction';
 
 import type { GithubTarget } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
+import type { GitIdentity } from '#domain/git';
 import type { Secret } from '#kernel/secret';
 
 const GITHUB_DIAGNOSTIC_LIMIT = 1200;
+
+/**
+ * sets the selected Git and Jujutsu identity for the non-root runtime account
+ * @param guest target guest
+ * @param identity selected author and committer identity
+ */
+export async function configureGit(
+  guest: GuestChannel,
+  identity: GitIdentity,
+): Promise<void> {
+  const settings = [
+    ['user.name', identity.authorName],
+    ['user.email', identity.authorEmail],
+    ['user.useConfigOnly', 'true'],
+  ];
+  for (const [key, value] of settings) {
+    await runAsAgent(guest, ['git', 'config', '--global', key!, value!]);
+  }
+  await runAsAgent(guest, [
+    'jj',
+    'config',
+    'set',
+    '--user',
+    'user.name',
+    identity.authorName,
+  ]);
+  await runAsAgent(guest, [
+    'jj',
+    'config',
+    'set',
+    '--user',
+    'user.email',
+    identity.authorEmail,
+  ]);
+  await ensurePrivateDirectory(guest, AGENT_CONFIG);
+  await writeOwnedFile(
+    guest,
+    COMMITTER_PATH,
+    `${JSON.stringify({ name: identity.committerName, email: identity.committerEmail })}\n`,
+  );
+}
 
 /**
  * authenticates GitHub CLI using a selected credential over stdin

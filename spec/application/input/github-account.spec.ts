@@ -5,7 +5,7 @@ import { githubAccount } from '#application/input/github-account';
 const token = 'selected-github-token';
 
 describe('fn:githubAccount', () => {
-  it('should return the account login from a verified response', async () => {
+  it('should return public account identity fields from a verified response', async () => {
     const account = {
       login: 'account',
       name: 'Account',
@@ -16,7 +16,7 @@ describe('fn:githubAccount', () => {
       vi.fn<typeof fetch>(async () => Response.json(account)),
     );
 
-    await expect(githubAccount(token)).resolves.toEqual({ login: 'account' });
+    await expect(githubAccount(token)).resolves.toEqual(account);
   });
 
   it('should reject an HTTP authentication failure', async () => {
@@ -38,6 +38,22 @@ describe('fn:githubAccount', () => {
 
       await expect(githubAccount(token)).rejects.toMatchObject({
         code: 'PROVIDER',
+      });
+    },
+  );
+
+  it.each([{ login: 'account' }, { login: 'account', name: null, email: 7 }])(
+    'should leave unavailable public identity fields absent: %j',
+    async (account) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>(async () => Response.json(account)),
+      );
+
+      await expect(githubAccount(token)).resolves.toEqual({
+        login: 'account',
+        name: undefined,
+        email: undefined,
       });
     },
   );

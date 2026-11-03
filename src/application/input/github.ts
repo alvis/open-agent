@@ -20,7 +20,7 @@ export interface GithubTokenCandidate {
   provenance: 'provided' | 'gh-discovery';
 }
 
-/** verified credential and account selected for guest setup */
+/** verified credential and account selected for guest setup and Git identity */
 interface SelectedGithubCredential {
   token: string;
   account: GithubAccount;

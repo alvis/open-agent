@@ -86,6 +86,7 @@ async function resolveCase(entry: ResolverCase) {
     return {
       ok: true,
       githubToken: result.githubToken,
+      gitIdentity: result.gitIdentity,
       missing: result.missing,
     };
   } catch (error) {

@@ -21,6 +21,10 @@ describe('fn:validateCommandRequest', () => {
 
   it('should reject conflicting requests before credentials or remote access', () => {
     const conflicts: CommandOptions[] = [
+      { gitIdentity: false, gitName: 'Author' },
+      { gitIdentity: false, gitEmail: 'author@example.test' },
+      { gitIdentity: false, gitCommitterName: 'Committer' },
+      { gitIdentity: false, gitCommitterEmail: 'committer@example.test' },
       { github: false, githubTokenSource: 'env:TEST_GITHUB_TOKEN' },
       {
         localCredentials: false,
@@ -39,7 +43,7 @@ describe('fn:validateCommandRequest', () => {
     expect(() =>
       validateCommandRequest({
         command: 'create',
-        options: { section: 'github' },
+        options: { section: 'git' },
       }),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
@@ -51,7 +55,7 @@ describe('fn:validateCommandRequest', () => {
     expect(() =>
       validateCommandRequest({
         command: 'setup',
-        options: { section: 'github', withPairCode: true },
+        options: { section: 'git', withPairCode: true },
       }),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
   });
@@ -74,7 +78,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
       validateSetupIntegrationOptions({ network: 'none' }, 'network'),
     ).not.toThrow();
     expect(() =>
-      validateSetupIntegrationOptions({ network: 'none' }, 'github'),
+      validateSetupIntegrationOptions({ network: 'none' }, 'git'),
     ).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() =>
       validateSetupIntegrationOptions({ idleMinutes: 30 }, 'network'),
@@ -84,7 +88,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
   it.each([{ release: 'latest' }] satisfies CommandOptions[])(
     'should refuse integration input outside the section that applies it: %j',
     (options) => {
-      expect(() => validateSetupIntegrationOptions(options, 'github')).toThrow(
+      expect(() => validateSetupIntegrationOptions(options, 'git')).toThrow(
         expect.objectContaining({ code: 'USAGE' }),
       );
     },
@@ -97,7 +101,7 @@ describe('fn:validateSetupIntegrationOptions', () => {
       validateSetupIntegrationOptions(options, 'tools'),
     ).not.toThrow();
     expect(() => validateSetupIntegrationOptions(options, 'all')).not.toThrow();
-    expect(() => validateSetupIntegrationOptions(options, 'github')).toThrow(
+    expect(() => validateSetupIntegrationOptions(options, 'git')).toThrow(
       expect.objectContaining({ code: 'USAGE' }),
     );
     expect(() =>

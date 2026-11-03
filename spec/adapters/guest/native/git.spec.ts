@@ -10,7 +10,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { configureGithub } from '#adapters/guest/native/git';
+import { configureGit, configureGithub } from '#adapters/guest/native/git';
 import { ACCOUNT_PATH, accountHome } from '#adapters/guest/platform/layout';
 import { HOMEBREW_GH } from '#adapters/guest/tools/accounts';
 import { Secret } from '#kernel/secret';
@@ -18,6 +18,7 @@ import { Secret } from '#kernel/secret';
 import {
   createFilesystemSprite,
   createNativeCommandExecutor,
+  guestOf,
   sessionGuestOf,
 } from '../../../mocks/sprites';
 
@@ -43,6 +44,84 @@ function protectedGithubArgs(user: string, args: string[]): string[] {
     ...args,
   ];
 }
+
+describe('fn:configureGit', () => {
+  it('should replace the persisted committer when author and committer identities are reconfigured', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-git-'),
+    );
+    const first = {
+      authorName: 'First Author',
+      authorEmail: 'first@example.test',
+      committerName: 'First Committer',
+      committerEmail: 'committer-first@example.test',
+    };
+    const second = {
+      authorName: 'Second Author',
+      authorEmail: 'second@example.test',
+      committerName: 'Second Committer',
+      committerEmail: 'committer-second@example.test',
+    };
+    const commands = [first, second].flatMap((identity) => [
+      {
+        argv: ['git', 'config', '--global', 'user.name', identity.authorName],
+        result: success,
+      },
+      {
+        argv: ['git', 'config', '--global', 'user.email', identity.authorEmail],
+        result: success,
+      },
+      {
+        argv: ['git', 'config', '--global', 'user.useConfigOnly', 'true'],
+        result: success,
+      },
+      {
+        argv: [
+          'jj',
+          'config',
+          'set',
+          '--user',
+          'user.name',
+          identity.authorName,
+        ],
+        result: success,
+      },
+      {
+        argv: [
+          'jj',
+          'config',
+          'set',
+          '--user',
+          'user.email',
+          identity.authorEmail,
+        ],
+        result: success,
+      },
+    ]);
+    const sprite = createFilesystemSprite({
+      root: directory.path,
+      execute: createNativeCommandExecutor(commands),
+    });
+    const committerPath = join(
+      directory.path,
+      '/home/agent/.config/open-agent/committer.json',
+    );
+
+    await configureGit(guestOf(sprite), first);
+    const initial: unknown = JSON.parse(await readFile(committerPath, 'utf8'));
+    await configureGit(guestOf(sprite), second);
+    const updated: unknown = JSON.parse(await readFile(committerPath, 'utf8'));
+
+    expect(initial).toEqual({
+      name: first.committerName,
+      email: first.committerEmail,
+    });
+    expect(updated).toEqual({
+      name: second.committerName,
+      email: second.committerEmail,
+    });
+  });
+});
 
 describe('fn:configureGithub', () => {
   it('should report a failed login even when the command returns no diagnostic', async () => {

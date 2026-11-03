@@ -22,6 +22,11 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
     description: 'Configure the native GitHub CLI credential',
   },
   {
+    value: 'git',
+    label: 'Git / Jujutsu identity',
+    description: 'Configure author and committer names and emails',
+  },
+  {
     value: 'tools',
     label: 'Managed tools',
     description: 'View recorded versions or explicitly update tools in place',

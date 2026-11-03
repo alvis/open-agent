@@ -121,6 +121,7 @@ async function configureAndFinalize(
       profile: context.input.profile,
       githubToken: context.input.githubToken,
       githubHost: context.options.githubHost,
+      gitIdentity: context.input.gitIdentity,
     },
   });
   const observed = await inspectUntilServing(

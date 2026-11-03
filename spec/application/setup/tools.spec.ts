@@ -353,7 +353,7 @@ describe('fn:profileUpdateSelected', () => {
     },
   );
 
-  it.each(['agent', 'github'] as const)(
+  it.each(['agent', 'git', 'github'] as const)(
     'should report the %s section as leaving the profile alone',
     (section) => {
       expect(profileUpdateSelected(section, recorded, recorded)).toBe(false);

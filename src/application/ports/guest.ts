@@ -1,3 +1,4 @@
+import type { GitIdentity } from '#domain/git';
 import type { AgentId } from '#domain/ids';
 import type { AgentEnvironments } from '#domain/observations/agent';
 import type { GuestEnvironment } from '#domain/observations/environment';
@@ -137,6 +138,12 @@ export interface GuestNativeConfiguration {
     guest: GuestChannel,
     agent?: AgentId,
   ): Promise<AgentEnvironments[AgentId] | undefined>;
+  /**
+   * sets the selected Git and Jujutsu identity for the non-root runtime account
+   * @param guest target guest
+   * @param identity selected author and committer identity
+   */
+  configureGit(guest: GuestChannel, identity: GitIdentity): Promise<void>;
   /**
    * authenticates GitHub CLI using a selected credential over stdin
    * @param guest target guest, running over a setup session

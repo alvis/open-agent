@@ -8,7 +8,7 @@ import { traceStage } from '#kernel/operation';
 
 import { installSetupPlan } from './installation';
 import { setupNetwork } from './network';
-import { setupGithub, setupAgent, stopService } from './sections';
+import { setupGit, setupGithub, setupAgent, stopService } from './sections';
 import { exposeWhenServing } from './serving';
 
 import type { AllSetupData } from '#application/data';
@@ -91,6 +91,10 @@ async function configureSections(
     options.github === false
       ? undefined
       : await setupGithub(dependencies, guest, context);
+  const git =
+    options.gitIdentity === false
+      ? undefined
+      : await setupGit(dependencies, guest, context);
   await configureHarnesses(guest, {
     drivers: harnessDrivers(dependencies.registry, context.profile.harnesses),
     awakeHook: awakeHookCommand(dependencies.guest.facts),
@@ -99,5 +103,6 @@ async function configureSections(
   return {
     ...network,
     ...github,
+    ...git,
   };
 }

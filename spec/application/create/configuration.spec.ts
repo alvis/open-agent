@@ -135,7 +135,7 @@ describe('fn:configureNewWorkstation', () => {
     });
   });
 
-  it('should apply selected GitHub configuration', async () => {
+  it('should apply selected GitHub and Git configuration', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-configure-options-'),
     );
@@ -151,6 +151,11 @@ describe('fn:configureNewWorkstation', () => {
       .spyOn(wired.guest.native, 'configureGithub')
       .mockImplementation(async () => {
         calls.push('github configured');
+      });
+    using git = vi
+      .spyOn(wired.guest.native, 'configureGit')
+      .mockImplementation(async () => {
+        calls.push('git configured');
       });
     vi.spyOn(registry.harnesses.claude, 'configure').mockImplementation(
       async () => {
@@ -171,6 +176,12 @@ describe('fn:configureNewWorkstation', () => {
         profile,
         githubToken: 'selected-github-token',
         githubHost: 'github.com',
+        gitIdentity: {
+          authorName: 'A User',
+          authorEmail: 'author@example.test',
+          committerName: 'A User',
+          committerEmail: 'author@example.test',
+        },
       },
     });
 
@@ -178,14 +189,26 @@ describe('fn:configureNewWorkstation', () => {
       guest,
       calls,
       github: github.mock.calls,
+      git: git.mock.calls,
     }).toEqual({
       guest: await connection.guest(),
-      calls: ['github configured', 'harness configured', 'hook installed'],
+      calls: [
+        'github configured',
+        'git configured',
+        'harness configured',
+        'hook installed',
+      ],
       github: [
         [
           expect.anything(),
           expect.any(Secret),
           expect.objectContaining({ hostname: 'github.com' }),
+        ],
+      ],
+      git: [
+        [
+          expect.anything(),
+          expect.objectContaining({ authorEmail: 'author@example.test' }),
         ],
       ],
     });

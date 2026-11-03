@@ -1,7 +1,7 @@
 import { createEnvironmentAccess } from './environment/store';
 import { createInspection } from './inspection';
 import { writeWorkstationLabel } from './label';
-import { configureGithub } from './native/git';
+import { configureGit, configureGithub } from './native/git';
 import { createNativeInspection } from './native/inspection';
 import { assertImageTools, assemblePlan } from './plan/assembly';
 import { needsBottleProbe, probeBottles } from './plan/bottles';
@@ -71,6 +71,7 @@ export function createGuestMechanics(
     native: {
       inspectAgentEnvironment: async (guest, agent) =>
         native.inspectAgentEnvironment(guest, agent),
+      configureGit,
       configureGithub,
     },
     label: { write: writeWorkstationLabel },

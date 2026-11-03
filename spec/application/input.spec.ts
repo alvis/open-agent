@@ -16,6 +16,8 @@ import { resolveProviderCredential } from '#application/input/provider-credentia
 import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
 import { dependencies } from '../mocks/dependencies';
 
+import type { Interaction } from '#application/ports/interaction';
+
 describe('fn:requireValidProfile', () => {
   it('should return a valid resolved profile', () => {
     expect(
@@ -116,6 +118,139 @@ describe('fn:requireValidSuppliedSelection', () => {
 });
 
 describe('fn:resolveInputs', () => {
+  it('should resolve independent author and committer identity without local credential discovery', async () => {
+    const input = await resolveInputs(dependencies, {
+      options: {
+        nonInteractive: true,
+        localCredentials: false,
+        github: false,
+        gitName: 'Flag Author',
+        gitCommitterEmail: 'flag-committer@example.test',
+      },
+      requirementSelection: {
+        sources: {
+          processEnv: {
+            GIT_AUTHOR_NAME: 'Process Author',
+            GIT_AUTHOR_EMAIL: 'process-author@example.test',
+            GIT_COMMITTER_NAME: 'Process Committer',
+          },
+          fileEnv: {
+            GIT_AUTHOR_EMAIL: 'file-author@example.test',
+            GIT_COMMITTER_NAME: 'File Committer',
+            GIT_COMMITTER_EMAIL: 'file-committer@example.test',
+          },
+        },
+        required: ['gitIdentity'],
+      },
+    });
+
+    expect({ identity: input.gitIdentity, missing: input.missing }).toEqual({
+      identity: {
+        authorName: 'Flag Author',
+        authorEmail: 'file-author@example.test',
+        committerName: 'File Committer',
+        committerEmail: 'flag-committer@example.test',
+      },
+      missing: [],
+    });
+  });
+
+  it('should keep a known Git identity during a noninteractive run with an interaction attached', async () => {
+    const unexpected = (): never => {
+      throw new Error('A noninteractive run prompted for input');
+    };
+    const interaction: Interaction = {
+      input: async () => unexpected(),
+      secret: async () => unexpected(),
+      select: async () => unexpected(),
+      multiselect: async () => unexpected(),
+      confirm: async () => unexpected(),
+      progress: () => undefined,
+      status: () => undefined,
+    };
+    const input = await resolveInputs(dependencies, {
+      options: {
+        nonInteractive: true,
+        localCredentials: false,
+        github: false,
+        gitName: 'Known Author',
+        gitEmail: 'known@example.test',
+      },
+      interaction,
+      requirementSelection: {
+        sources: { processEnv: {}, fileEnv: {} },
+        required: ['gitIdentity'],
+      },
+    });
+
+    expect(input.gitIdentity).toMatchObject({
+      authorName: 'Known Author',
+      authorEmail: 'known@example.test',
+    });
+    expect(input.missing).toEqual([]);
+  });
+
+  it('should include missing Git identity both before and after mandatory input resolution', async () => {
+    vi.stubEnv('SPRITES_TOKEN', undefined);
+    vi.stubEnv('GIT_AUTHOR_NAME', undefined);
+    vi.stubEnv('GIT_AUTHOR_EMAIL', undefined);
+    const directory = await mkdtemp(
+      join(tmpdir(), 'open-agent-missing-identity-'),
+    );
+    vi.stubEnv('HOME', directory);
+    const options = {
+      nonInteractive: true,
+      localCredentials: false,
+      github: false,
+    };
+
+    try {
+      const before = await resolveInputs(dependencies, {
+        options,
+        requirementSelection: {
+          sources: { processEnv: {}, fileEnv: {} },
+          required: ['providerToken', 'gitIdentity'],
+        },
+      });
+      const after = await resolveInputs(dependencies, {
+        options,
+        requirementSelection: ['gitIdentity'],
+      });
+      const known = await resolveInputs(dependencies, {
+        options: {
+          ...options,
+          gitName: 'Known Author',
+          gitEmail: 'known@example.test',
+        },
+        requirementSelection: {
+          sources: { processEnv: {}, fileEnv: {} },
+          required: ['providerToken', 'gitIdentity'],
+        },
+      });
+      const missingNameAndIdentity = await resolveInputs(dependencies, {
+        options,
+        requirementSelection: {
+          sources: { processEnv: {}, fileEnv: {} },
+          required: ['name', 'gitIdentity'],
+        },
+      });
+
+      // the provider token is a declared provider prerequisite, reported by
+      // the aggregated provider preflight rather than as a missing input
+      expect([before.missing, after.missing, known.missing]).toEqual([
+        [expect.stringContaining('Git author')],
+        [expect.stringContaining('Git author')],
+        [],
+      ]);
+      expect(missingNameAndIdentity.missing).toEqual([
+        expect.stringContaining('--name'),
+        expect.stringContaining('Git author'),
+      ]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('should derive create preflight requirements from the selected integrations', async () => {
     vi.stubEnv('SPRITES_TOKEN', undefined);
     const directory = await mkdtemp(join(tmpdir(), 'open-agent-create-input-'));
@@ -127,6 +262,7 @@ describe('fn:resolveInputs', () => {
         nonInteractive: true,
         localCredentials: false,
         github: false,
+        gitIdentity: false,
       });
 
       expect({
@@ -204,7 +340,7 @@ describe('fn:resolveInputs', () => {
           processEnv: { GH_TOKEN: 'unvalidated-account-candidate' },
           fileEnv: {},
         },
-        required: ['name'],
+        required: ['name', 'gitIdentity'],
       },
     });
 

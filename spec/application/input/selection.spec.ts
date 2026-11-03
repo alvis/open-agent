@@ -249,7 +249,7 @@ describe('fn:resolveSetupSelection', () => {
         fileEnv: {},
       },
       recorded,
-      section: 'github',
+      section: 'git',
     });
 
     expect(candidate).toMatchObject({
@@ -323,7 +323,7 @@ describe('fn:resolveSetupSelection update intervals', () => {
         processEnv: { OPEN_AGENT_UPDATE_DUE_DAYS: 'often' },
         fileEnv: {},
       },
-      section: 'github',
+      section: 'git',
     });
 
     expect({ problems, options: value.options }).toEqual({
