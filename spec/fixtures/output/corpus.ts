@@ -378,6 +378,11 @@ export const CORPUS: readonly CorpusCase[] = [
     ok: true,
     data: { machine: DETAILED_MACHINE },
   }),
+  corpusCase('show-copy-action', {
+    command: 'show',
+    ok: true,
+    data: { machine: DETAILED_MACHINE, action: 'copy' },
+  }),
   corpusCase('show-inspection-disabled', {
     command: 'show',
     ok: true,

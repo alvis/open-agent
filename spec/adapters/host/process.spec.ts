@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { runLocal } from '#adapters/host/process';
+import { runLocal, sendLocalInput } from '#adapters/host/process';
 import { OperationContext, withOperation } from '#kernel/operation';
 
 import type { Options, Result, ResultPromise } from 'execa';
@@ -88,6 +88,63 @@ describe('fn:runLocal', () => {
 
       await expect(
         runLocal({ program: 'generated-program', arguments: [] }),
+      ).rejects.toEqual(
+        expect.objectContaining({ message: expect.stringContaining(reason) }),
+      );
+    },
+  );
+});
+
+describe('fn:sendLocalInput', () => {
+  it('should deliver private standard input through the active operation', async () => {
+    const context = new OperationContext({
+      signal: new AbortController().signal,
+    });
+
+    await expect(
+      withOperation(context, async () =>
+        sendLocalInput({
+          program: 'generated-program',
+          arguments: ['-i'],
+          input: 'generated-secret',
+        }),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(execa.mock.calls).toEqual([
+      [
+        'generated-program',
+        ['-i'],
+        {
+          input: 'generated-secret',
+          timeout: 15_000,
+          cancelSignal: context.signal,
+          stdout: 'ignore',
+          stderr: 'pipe',
+          reject: false,
+        },
+      ],
+    ]);
+  });
+
+  it.each([
+    { name: 'exit', result: { exitCode: 2 }, reason: '(2)' },
+    { name: 'timeout', result: {}, reason: '(timeout)' },
+  ])(
+    'should reject an unverified input delivery $name',
+    async ({ result, reason }) => {
+      execa.mockReturnValueOnce(
+        Promise.resolve(
+          result satisfies Partial<Result> as Result,
+        ) as ResultPromise,
+      );
+
+      await expect(
+        sendLocalInput({
+          program: 'generated-program',
+          arguments: [],
+          input: 'generated-secret',
+        }),
       ).rejects.toEqual(
         expect.objectContaining({ message: expect.stringContaining(reason) }),
       );

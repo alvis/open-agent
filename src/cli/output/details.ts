@@ -25,7 +25,9 @@ export function humanResultDetails(data: JsonObject): JsonObject {
                 data.inspection !== undefined ||
                   data.currentReadiness !== undefined,
               )
-            : value,
+            : key === 'action' && value === 'copy'
+              ? 'Agent URL copied to clipboard'
+              : value,
       ]),
   );
 }

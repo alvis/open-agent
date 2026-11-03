@@ -2,7 +2,10 @@ import { execa } from 'execa';
 
 import { currentOperation, runOperation } from '#kernel/operation';
 
-import type { LocalProcessParams } from '#application/ports/host';
+import type {
+  LocalInputParams,
+  LocalProcessParams,
+} from '#application/ports/host';
 
 const DEFAULT_PROCESS_TIMEOUT_MS = 15_000;
 
@@ -33,4 +36,26 @@ export async function runLocal(params: LocalProcessParams): Promise<string> {
   }
 
   return result.stdout.trim();
+}
+
+/**
+ * sends private input to a local program without shell interpolation
+ * @param params executable, argument array and private standard input
+ * @throws {Error} when the process exits unsuccessfully
+ */
+export async function sendLocalInput(params: LocalInputParams): Promise<void> {
+  const { program, arguments: arguments_, input } = params;
+  const result = await runOperation(async () =>
+    execa(program, arguments_, {
+      input,
+      timeout: DEFAULT_PROCESS_TIMEOUT_MS,
+      cancelSignal: currentOperation()?.signal,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      reject: false,
+    }),
+  );
+  if (result.exitCode !== 0) {
+    throw new Error(`${program} failed (${result.exitCode ?? 'timeout'})`);
+  }
 }

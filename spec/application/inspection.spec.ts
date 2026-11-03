@@ -14,6 +14,7 @@ import {
 import { ENVIRONMENT_PATH } from '#adapters/guest/platform/layout';
 import { doctorWorkstation, showWorkstation } from '#application/inspection';
 import { runCommand } from '#application/workstation';
+import { chooseWorkstationAction } from '#application/workstation/actions';
 import { resultExitCode } from '#cli/exit';
 import { prepareResult, writePreparedResult } from '#cli/output';
 import { projectResult } from '#cli/output/project';
@@ -27,6 +28,7 @@ import { rememberSecret } from '#kernel/redaction';
 import { OPEN_AGENT_VERSION } from '#kernel/version';
 
 import { environmentOf } from '../fixtures/environment';
+import { driveInk } from '../fixtures/ink';
 import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
 
 import { dependencies } from '../mocks/dependencies';
@@ -34,6 +36,7 @@ import {
   createFilesystemSprite,
   providerOf,
   serveServiceRegistry,
+  writtenPaths,
 } from '../mocks/sprites';
 
 import type { Sprite } from '@fly/sprites';
@@ -191,6 +194,54 @@ describe('cmd:show', () => {
     expect(diagnostic).toContain('Workstation: primary');
     expect(diagnostic).not.toContain('sdk-private-rejection');
   });
+
+  it('should report the executed menu action when its provider lookup fails', async () => {
+    for (const [label, command] of [
+      ['Configure a section', 'setup'],
+      ['Permanently terminate', 'terminate'],
+    ] as const) {
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-action-failure-'),
+      );
+      const { client, sprite } = await installedSprite(directory.path);
+      vi.mocked(client.getSprite)
+        .mockResolvedValueOnce(sprite)
+        .mockRejectedValueOnce(new Error('provider lookup unavailable'));
+
+      const observed = await driveInk(
+        async (interaction) =>
+          chooseWorkstationAction(dependencies, {
+            request: { command: 'show', machine: 'temporary', options: {} },
+            provider: providerOf(client),
+            interaction,
+          }),
+        [
+          { waitFor: 'Workstation action', input: label },
+          { waitFor: `Search: ${label}`, input: '\r' },
+          ...(command === 'setup'
+            ? [
+                { waitFor: 'Choose setup section', input: 'Network' },
+                { waitFor: 'Search: Network', input: '\r' },
+              ]
+            : []),
+        ],
+      );
+
+      expect(observed.matchedSteps, observed.output).toBe(
+        command === 'setup' ? 4 : 2,
+      );
+      expect(observed.result).toMatchObject({
+        command,
+        ok: false,
+        error: {
+          code: 'UNEXPECTED',
+          machine: 'temporary',
+          machineId: 'sprite-temporary',
+        },
+      });
+      expect(client.deleteSprite).not.toHaveBeenCalled();
+    }
+  }, 15_000);
 
   it('should return a ready doctor result only from current service and environment endpoint evidence', async () => {
     await using directory = await mkdtempDisposable(
@@ -406,6 +457,240 @@ describe('cmd:show', () => {
       pending.resolve([]);
     }
   });
+
+  it('should not carry show --yes into termination after selecting a workstation', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-terminate-'),
+    );
+    const { client, execute } = await installedSprite(directory.path);
+
+    const observed = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: { command: 'show', options: { yes: true } },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [
+        { waitFor: 'Select a workstation', input: '\r' },
+        { waitFor: 'Workstation action', input: 'Permanently terminate' },
+        { waitFor: 'Search: Permanently terminate', input: '\r' },
+        { waitFor: 'Type temporary to delete it', input: 'wrong-name' },
+        { waitFor: 'wrong-name', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(5);
+    expect(observed.result).toMatchObject({
+      command: 'terminate',
+      ok: false,
+      error: { code: 'CANCELLED' },
+    });
+    expect(client.deleteSprite).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('should not carry show consent into setup, and still navigates real sections', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-setup-'),
+    );
+    const { client, sprite, execute } = await installedSprite(directory.path);
+    const observed = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: {
+            command: 'show',
+            options: {
+              yes: true,
+              inspect: true,
+            },
+          },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [
+        { waitFor: 'Select a workstation', input: '\r' },
+        { waitFor: 'Workstation action', input: 'Configure a section' },
+        { waitFor: 'Search: Configure a section', input: '\r' },
+        { waitFor: 'Choose setup section', input: 'Network' },
+        { waitFor: 'Search: Network', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(5);
+    expect(observed.result).toMatchObject({
+      command: 'setup',
+      ok: true,
+      data: { section: 'network', network: { status: 'disabled' } },
+    });
+    expect(writtenPaths(sprite)).toEqual([ENVIRONMENT_PATH]);
+    expect(execute).not.toHaveBeenCalled();
+    expect(sprite.listServices).not.toHaveBeenCalled();
+    expect(client.deleteSprite).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('should keep inspection off for details, then inspects only when selected', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-inspect-'),
+    );
+    const { client, sprite, execute } = await installedSprite(directory.path);
+    const details = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: {
+            command: 'show',
+            machine: 'temporary',
+            options: {
+              inspect: true,
+            },
+          },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [{ waitFor: 'Workstation action', input: '\r' }],
+    );
+
+    expect(details.matchedSteps, details.output).toBe(1);
+    expect(details.result).toMatchObject({ command: 'show', ok: true });
+    expect(details.result.data).not.toHaveProperty('inspection');
+    expect(sprite.listServices).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+
+    const inspection = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: { command: 'show', machine: 'temporary', options: {} },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [
+        { waitFor: 'Workstation action', input: 'Inspect workstation' },
+        { waitFor: 'Search: Inspect workstation', input: '\r' },
+      ],
+    );
+
+    expect(inspection.matchedSteps, inspection.output).toBe(2);
+    expect(inspection.result).toMatchObject({
+      command: 'show',
+      ok: true,
+      data: { inspection: { services: [] } },
+    });
+    expect(sprite.listServices).toHaveBeenCalledOnce();
+    expect(client.deleteSprite).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('should copy the selected workstation URL without opening its guest', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-copy-'),
+    );
+    const { client, sprite, execute } = await installedSprite(directory.path);
+    const copyUrl = vi.spyOn(dependencies.host.clipboard, 'copyUrl');
+    copyUrl.mockResolvedValue(undefined);
+
+    const observed = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: { command: 'show', machine: 'temporary', options: {} },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [
+        { waitFor: 'Workstation action', input: 'Copy T3 Code URL' },
+        { waitFor: 'Search: Copy T3 Code URL', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(2);
+    expect(observed.result).toMatchObject({
+      command: 'show',
+      ok: true,
+      data: { action: 'copy' },
+    });
+    expect(copyUrl).toHaveBeenCalledExactlyOnceWith(sprite.url);
+    expect(execute).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('should report a missing provider URL without writing to the clipboard', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-copy-no-url-'),
+    );
+    const { client, sprite } = await installedSprite(directory.path);
+    Object.assign(sprite, { url: undefined });
+    const copyUrl = vi.spyOn(dependencies.host.clipboard, 'copyUrl');
+
+    const observed = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: { command: 'show', machine: 'temporary', options: {} },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [
+        { waitFor: 'Workstation action', input: 'Copy T3 Code URL' },
+        { waitFor: 'Search: Copy T3 Code URL', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(2);
+    expect(observed.result).toMatchObject({
+      command: 'show',
+      ok: false,
+      error: { code: 'PROVIDER', machine: 'temporary' },
+    });
+    expect(copyUrl).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('should return from the action menu to workstation selection before a new action', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-back-'),
+    );
+    const { client } = await installedSprite(directory.path);
+    const observed = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: { command: 'show', options: {} },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [
+        { waitFor: 'Select a workstation', input: '\r' },
+        { waitFor: 'Workstation action', input: '\x1b' },
+        { waitFor: 'Select a workstation', input: '\r' },
+        { waitFor: 'Workstation action', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(4);
+    expect(observed.result).toMatchObject({ command: 'show', ok: true });
+    expect(client.getSprite).toHaveBeenCalledTimes(3);
+    expect(client.deleteSprite).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('should return from setup section selection to the same workstation action menu', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-setup-back-'),
+    );
+    const { client, sprite } = await installedSprite(directory.path);
+    const observed = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: { command: 'show', machine: 'temporary', options: {} },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [
+        { waitFor: 'Workstation action', input: 'Configure a section' },
+        { waitFor: 'Search: Configure a section', input: '\r' },
+        { waitFor: 'Choose setup section', input: '\x1b' },
+        { waitFor: 'Workstation action', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(4);
+    expect(observed.result).toMatchObject({ command: 'show', ok: true });
+    expect(writtenPaths(sprite)).toEqual([]);
+    expect(client.deleteSprite).not.toHaveBeenCalled();
+  }, 15_000);
 
   it('should show the ordinary URL without opening the guest', async () => {
     await using directory = await mkdtempDisposable(

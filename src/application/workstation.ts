@@ -21,6 +21,7 @@ import {
   promptUnavailableDetail,
 } from '#kernel/operation';
 
+import { chooseWorkstationAction } from './workstation/actions';
 import {
   enterCommandCredential,
   resolveCommandCredential,
@@ -263,7 +264,13 @@ async function dispatchAuthenticated(
   const { request, provider, interaction } = params;
   const actions = {
     show: async () =>
-      showWorkstation(dependencies, { request, provider, interaction }),
+      interaction && !request.options.inspect
+        ? chooseWorkstationAction(dependencies, {
+            request,
+            provider,
+            interaction,
+          })
+        : showWorkstation(dependencies, { request, provider, interaction }),
     doctor: async () =>
       doctorWorkstation(dependencies, {
         provider,

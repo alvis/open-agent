@@ -54,7 +54,8 @@ export const showDocumentation = {
   customUsage: ['[<workstation>] [--inspect] [options]'],
   fullDescription: `Shows current provider details and the ordinary agent URL without
 waking the guest. --inspect checks live guest services and may wake it; use
-doctor for a readiness-focused report. ${PROVIDER_SELECTION} Credentials precede
+doctor for a readiness-focused report. A bare interactive show
+opens the workstation action menu. ${PROVIDER_SELECTION} Credentials precede
 output controls below.
 
 EXAMPLES
