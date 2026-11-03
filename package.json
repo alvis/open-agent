@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Persistent coding workstations with your choice of machine provider, ACP agent, harnesses and network",
+  "homepage": "https://github.com/alvis/open-agent#readme",
   "bugs": {
     "url": "https://github.com/alvis/open-agent/issues"
   },
