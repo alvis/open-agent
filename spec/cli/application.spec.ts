@@ -1,5 +1,6 @@
 import process from 'node:process';
 
+import { SpritesClient } from '@fly/sprites';
 import { describe, expect, it, vi } from 'vitest';
 
 import { cli } from '#cli/application';
@@ -16,8 +17,14 @@ vi.mock('#cli/parser', async (importOriginal) => {
 
 const parse = vi.mocked(parseApplication);
 
+/** stderr that carries only the stage progress lines non-interactive output writes */
+const STAGE_LINES_ONLY = expect.stringMatching(
+  /^(?:[\w.]+: (?:started|completed|failed)(?: \(\d+ ms\))?\n)*$/u,
+);
+
 describe('fn:cli', () => {
-  it('should emit a rejected create without contacting a provider service', async () => {
+  it('should emit a successful list without contacting a provider service', async () => {
+    vi.stubEnv('SPRITES_TOKEN', 'test-org/1/0abc/0def');
     const originalExitCode = process.exitCode;
     const signalListeners = {
       sigint: process.listenerCount('SIGINT'),
@@ -26,6 +33,9 @@ describe('fn:cli', () => {
     let outputText = '';
     let errorText = '';
     let exitCode: typeof process.exitCode;
+    using providerList = vi
+      .spyOn(SpritesClient.prototype, 'listAllSprites')
+      .mockImplementation(async () => []);
     using outbound = vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(async (): Promise<Response> => {
@@ -47,7 +57,7 @@ describe('fn:cli', () => {
     });
 
     try {
-      await cli(['create', '--name', 'Not A Name!', '--non-interactive']);
+      await cli(['list', '--provider', 'sprite', '--non-interactive']);
       exitCode = process.exitCode;
     } finally {
       process.exitCode = originalExitCode;
@@ -63,11 +73,11 @@ describe('fn:cli', () => {
       },
     }).toMatchObject({
       outputText: '',
-      errorText:
-        'Workstation name must be a lowercase DNS label of at most 63 characters\n',
-      exitCode: 1,
+      errorText: STAGE_LINES_ONLY,
+      exitCode: 0,
       signalListeners,
     });
+    expect(providerList.mock.calls).toEqual([[]]);
     expect(outbound.mock.calls).toEqual([]);
   });
 
@@ -92,7 +102,7 @@ describe('fn:cli', () => {
   it('should report a missing command if parsing returns without output', async () => {
     parse.mockResolvedValueOnce(undefined);
 
-    const { stdout, stderr, exitCode } = await captureCli(['create']);
+    const { stdout, stderr, exitCode } = await captureCli(['list']);
 
     expect(stdout).toBe('');
     expect(stderr).toBe('A command is required.\n');
@@ -102,7 +112,7 @@ describe('fn:cli', () => {
   it('should hide unexpected parser failures behind a generic result', async () => {
     parse.mockRejectedValueOnce(new Error('private parser detail'));
 
-    const { stdout, stderr, exitCode } = await captureCli(['create']);
+    const { stdout, stderr, exitCode } = await captureCli(['list']);
 
     expect(stdout).toBe('');
     expect(stderr).toBe('The command could not complete safely.\n');
@@ -115,7 +125,7 @@ describe('fn:cli', () => {
       throw new Error('late parser failure');
     });
 
-    const { stdout, stderr, exitCode } = await captureCli(['create']);
+    const { stdout, stderr, exitCode } = await captureCli(['list']);
 
     expect(stdout).toBe('');
     expect(stderr).toBe('');

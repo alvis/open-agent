@@ -1,3 +1,5 @@
+import type { ProviderDriver } from '#application/ports/drivers';
+import type { Interaction } from '#application/ports/interaction';
 import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 import type { CommandName } from '#kernel/commands';
 
@@ -27,4 +29,14 @@ export interface CommandOptions {
 export interface CommandRequest {
   command: CommandName;
   options: CommandOptions;
+}
+
+/** the request, the provider it targets and the optional interaction one workstation command acts with */
+export interface WorkstationCommandParams<Provider = ProviderDriver> {
+  /** parsed command and options */
+  request: CommandRequest;
+  /** the provider the command targets, authenticated unless a credential is still being resolved */
+  provider: Provider;
+  /** optional prompts, status and progress boundary */
+  interaction?: Interaction;
 }

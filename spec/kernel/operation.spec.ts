@@ -123,12 +123,12 @@ describe('invocation-scoped operations', () => {
 
     await Promise.all([
       withOperation(first, async () => {
-        first.select('create');
+        first.select('list');
         first.identify({ name: 'first' });
 
         return traceStage({
           stage: 'command',
-          action: async () => providerOf(firstClient).isNameTaken('disposable'),
+          action: async () => providerOf(firstClient).list(),
         });
       }),
       withOperation(second, async () => {
@@ -136,13 +136,12 @@ describe('invocation-scoped operations', () => {
 
         return traceStage({
           stage: 'command',
-          action: async () =>
-            providerOf(secondClient).isNameTaken('disposable'),
+          action: async () => providerOf(secondClient).list(),
         });
       }),
     ]);
 
-    expect(first.command).toBe('create');
+    expect(first.command).toBe('list');
 
     expect(firstEvents.map(({ event }) => event)).toEqual([
       'start',
@@ -153,13 +152,8 @@ describe('invocation-scoped operations', () => {
       'complete',
     ]);
     expect(firstEvents).toMatchObject([
-      { command: 'create', targetKnown: true, stage: 'command' },
-      {
-        command: 'create',
-        targetKnown: true,
-        stage: 'command',
-        outcome: 'ok',
-      },
+      { command: 'list', targetKnown: true, stage: 'command' },
+      { command: 'list', targetKnown: true, stage: 'command', outcome: 'ok' },
     ]);
     expect(secondEvents).toMatchObject([
       { command: 'create', targetKnown: false, stage: 'command' },
@@ -193,7 +187,7 @@ describe('invocation-scoped operations', () => {
         action: async () => {
           await gate.promise;
 
-          return providerOf(client).isNameTaken('disposable');
+          return providerOf(client).list();
         },
       }).catch((error: unknown) => error);
       expect(events.map(({ event }) => event)).toEqual(['start']);
@@ -207,7 +201,7 @@ describe('invocation-scoped operations', () => {
 
     const afterClose = await traceStage({
       stage: 'command',
-      action: async () => providerOf(client).isNameTaken('disposable'),
+      action: async () => providerOf(client).list(),
       context,
     }).catch((error: unknown) => error);
     expect(afterClose).toMatchObject({ action: 'cancel' });
@@ -282,18 +276,18 @@ describe('invocation-scoped operations', () => {
     const first = withOperation(firstContext, async () => {
       expect(currentOperation()).toBe(firstContext);
 
-      return providerOf(firstClient).isNameTaken('disposable');
+      return providerOf(firstClient).list();
     });
     const second = withOperation(secondContext, async () => {
       expect(currentOperation()).toBe(secondContext);
 
-      return providerOf(secondClient).isNameTaken('disposable');
+      return providerOf(secondClient).list();
     });
     firstController.abort();
     secondPending.resolve([]);
 
     await expect(first).rejects.toMatchObject({ action: 'cancel' });
-    await expect(second).resolves.toBe(false);
+    await expect(second).resolves.toEqual([]);
     expect(firstContext.closed).toBe(true);
     expect(secondContext.closed).toBe(true);
     expect(currentOperation()).toBeUndefined();
@@ -358,7 +352,7 @@ describe('invocation-scoped operations', () => {
       const client = new SpritesClient('sdk-only-late-token');
       vi.spyOn(client, 'listAllSprites').mockReturnValue(pending.promise);
       const first = withOperation(firstContext, async () =>
-        providerOf(client).isNameTaken('disposable'),
+        providerOf(client).list(),
       );
 
       cancelled.abort();
@@ -390,16 +384,16 @@ describe('invocation-scoped operations', () => {
       labels: [MANAGED_LABEL],
     });
     client.listAllSprites = vi.fn(async () => [sprite]);
-    const unscoped = await providerOf(client).isNameTaken('disposable');
+    const unscoped = await providerOf(client).list();
     const context = new OperationContext({
       signal: new AbortController().signal,
     });
     const scoped = await withOperation(context, async () =>
-      providerOf(client).isNameTaken('disposable'),
+      providerOf(client).list(),
     );
 
-    expect(unscoped).toBe(true);
-    expect(scoped).toBe(true);
+    expect(unscoped).toMatchObject([{ name: sprite.name }]);
+    expect(scoped).toMatchObject([{ name: sprite.name }]);
     expect(context.closed).toBe(true);
     expect(client.listAllSprites).toHaveBeenCalledTimes(2);
   });
@@ -489,9 +483,7 @@ describe('invocation-scoped operations', () => {
     controller.abort();
 
     await expect(
-      withOperation(context, async () =>
-        providerOf(client).isNameTaken('disposable'),
-      ),
+      withOperation(context, async () => providerOf(client).list()),
     ).rejects.toMatchObject({
       action: 'cancel',
     });

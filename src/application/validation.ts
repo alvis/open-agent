@@ -8,7 +8,7 @@ import type { CommandRequest } from '#application/contracts';
  */
 export function validateCommandRequest(request: CommandRequest): void {
   const options = request.options;
-  if (options.name !== undefined) {
+  if (request.command === 'create' && options.name !== undefined) {
     validateMachineName(options.name);
   }
 }

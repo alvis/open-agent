@@ -1,8 +1,10 @@
 import type { CreatePreflight } from '#application/create/context';
 import type { MachineSummary } from '#application/machine';
 import type { ReadinessAssessment } from '#application/readiness';
+import type { ProviderId } from '#domain/ids';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { WorkstationProfile } from '#domain/profile';
+import type { CommandErrorCode } from '#kernel/faults';
 
 /** current service state without executable arguments */
 export interface ServiceSummary {
@@ -22,9 +24,33 @@ export interface CreateData {
   native: GuestInspection['native'];
 }
 
+/** a provider list could not query, with the normalized failure code */
+export interface UnavailableProvider {
+  /** provider that could not be queried */
+  provider: ProviderId;
+  /** failure class, such as AUTH for a revoked credential */
+  code: CommandErrorCode;
+  /** redacted reason */
+  reason: string;
+}
+
+/** live control-plane list merged across every provider with credentials */
+export interface ListData {
+  machines: Array<
+    MachineSummary & {
+      provider: ProviderId;
+      /** the release that set it up, when newer than this open-agent */
+      newerRelease?: string;
+    }
+  >;
+  /** providers that could not be queried, with the reason */
+  unavailable: UnavailableProvider[];
+}
+
 /** success payload for each executed command */
 export interface CommandData {
   create: CreateData;
+  list: ListData;
 }
 
 /** failed creation can still preserve verified preflight facts */
@@ -41,4 +67,5 @@ export interface CreateFailureData {
 /** typed observations that remain meaningful after failure */
 export interface CommandFailureData {
   create: CreateFailureData;
+  list: never;
 }

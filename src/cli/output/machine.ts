@@ -6,7 +6,7 @@ import type { MachineSummary } from '#application/machine';
 import type { FieldProjectors } from './fields';
 import type { ProfileSummaryOutput } from './profile';
 
-/** a workstation as its provider records it, before any guest inspection */
+/** a workstation as listed or shown, before any guest inspection */
 export interface MachineOutput {
   id: string;
   name: string;

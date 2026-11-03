@@ -5,9 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { runCommand } from '#application/workstation';
 import { createCommandCancellation } from '#cli/cancellation';
 import { execute } from '#cli/execution';
-import { prepareResult } from '#cli/output';
 
-import { CORPUS } from '../fixtures/output/corpus';
 import {
   dependenciesWith,
   dependencies as baseDependencies,
@@ -200,17 +198,17 @@ vi.mock('node:process', async (importOriginal) => {
   } satisfies typeof import('node:process') & { default: NodeJS.Process };
 });
 
-vi.mock('#application/workstation', async () => {
-  const { CORPUS } = await import('../fixtures/output/corpus');
-  const created = CORPUS.find(({ name }) => name === 'create-success-default');
-  if (!created) {
-    throw new Error('The corpus has no default create success');
-  }
-
-  return {
-    runCommand: vi.fn<typeof runCommand>(async () => created.result),
-  } satisfies Partial<typeof import('#application/workstation')>;
-});
+vi.mock(
+  '#application/workstation',
+  () =>
+    ({
+      runCommand: vi.fn<typeof runCommand>(async () => ({
+        command: 'list',
+        ok: true,
+        data: { machines: [], unavailable: [] },
+      })),
+    }) satisfies Partial<typeof import('#application/workstation')>,
+);
 vi.mock(
   '#cli/cancellation',
   () =>
@@ -241,27 +239,18 @@ const readInputFile = vi.fn<HostPorts['readInputFile']>(async (path) => {
 const dependencies = dependenciesWith({
   host: { ...baseDependencies.host, readInputFile },
 });
-const success = createdResult();
+const success: CommandResult = {
+  command: 'list',
+  ok: true,
+  data: { machines: [], unavailable: [] },
+};
 const request: CommandRequest = {
-  command: 'create',
+  command: 'list',
   options: { nonInteractive: true },
 };
 
-/** the human output of the corpus's default create success */
-const SUCCESS_OUTPUT = prepareResult({ result: success }).text;
-
-/**
- * finds the corpus's default create success
- * @returns the successful create result the corpus renders by default
- */
-function createdResult(): CommandResult {
-  const created = CORPUS.find(({ name }) => name === 'create-success-default');
-  if (!created) {
-    throw new Error('The corpus has no default create success');
-  }
-
-  return created.result;
-}
+/** the human list output when no workstation exists: one empty table line */
+const EMPTY_LIST_OUTPUT = '\n';
 
 /** stderr that carries only the stage progress lines non-interactive output writes */
 const STAGE_LINES_ONLY = expect.stringMatching(
@@ -329,10 +318,10 @@ describe('fn:execute', () => {
       exitCode: captured.exitCode,
       state: captured.state,
     }).toEqual({
-      stdout: SUCCESS_OUTPUT,
+      stdout: EMPTY_LIST_OUTPUT,
       stderr: STAGE_LINES_ONLY,
       exitCode: 0,
-      state: { command: 'create', emitted: true, errors: [] },
+      state: { command: 'list', emitted: true, errors: [] },
     });
     expect(run.mock.calls).toEqual([
       [
@@ -357,7 +346,7 @@ describe('fn:execute', () => {
       stderr: captured.stderr,
       exitCode: captured.exitCode,
     }).toEqual({
-      stdout: SUCCESS_OUTPUT,
+      stdout: EMPTY_LIST_OUTPUT,
       stderr: STAGE_LINES_ONLY,
       exitCode: 0,
     });
@@ -516,7 +505,7 @@ describe('fn:execute', () => {
       stdout: '',
       cancellations: 1,
       exitCode: 130,
-      state: { command: 'create', emitted: true, errors: [] },
+      state: { command: 'list', emitted: true, errors: [] },
     });
   });
 
@@ -594,10 +583,10 @@ describe('fn:execute', () => {
       exitCode: captured.exitCode,
       state: captured.state,
     }).toEqual({
-      stdout: SUCCESS_OUTPUT,
+      stdout: EMPTY_LIST_OUTPUT,
       stderr: STAGE_LINES_ONLY,
       exitCode: 0,
-      state: { command: 'create', emitted: true, errors: [] },
+      state: { command: 'list', emitted: true, errors: [] },
     });
     expect(observedForce.mock.calls).toEqual([[]]);
   });

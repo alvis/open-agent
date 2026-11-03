@@ -64,7 +64,10 @@ function preparationFailure(result: CommandResult): CommandResult {
 function successRecovery(
   result: CommandSuccess,
 ): Pick<CommandError, 'machine' | 'machineId' | 'setupIncomplete' | 'outcome'> {
-  const { machine } = result.data;
+  const machine = result.command === 'list' ? undefined : result.data.machine;
+  if (!machine) {
+    return {};
+  }
 
   return {
     machine: machine.name,

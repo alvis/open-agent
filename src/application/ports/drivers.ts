@@ -63,6 +63,11 @@ export interface ProviderDriver<
    */
   authenticate(binding: ProviderBinding): ProviderDriver<Name>;
   /**
+   * lists managed workstations from live provider records
+   * @returns managed workstations
+   */
+  list(): Promise<WorkstationRecord[]>;
+  /**
    * tells whether any provider resource, managed or not, already uses a name
    * @param name proposed workstation name
    * @returns true when creating the name would collide

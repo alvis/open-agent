@@ -2,7 +2,10 @@ import { stderr, stdout } from 'node:process';
 
 import { renderToString } from 'ink';
 
-import { resultDetailsElement } from '#cli/components/OutputPresentation';
+import {
+  machineTableElement,
+  resultDetailsElement,
+} from '#cli/components/OutputPresentation';
 
 import { humanResultDetails } from './output/details';
 import { projectResult } from './output/project';
@@ -12,7 +15,7 @@ import type { Writable } from 'node:stream';
 
 import type { CommandResult } from '#application/result';
 
-import type { JsonObject, SerializedResult } from './serialization';
+import type { JsonObject, JsonValue, SerializedResult } from './serialization';
 
 interface ResultStream extends Writable {
   isTTY?: boolean;
@@ -22,6 +25,11 @@ interface ResultStream extends Writable {
 interface ResultStreams {
   stdout: ResultStream;
   stderr: ResultStream;
+}
+
+interface MachineRows {
+  entries: JsonValue[];
+  rows: Array<Record<string, string>>;
 }
 
 /** completed result used to prepare one payload */
@@ -34,10 +42,22 @@ export interface PrepareResultParams {
 export interface PreparedResult {
   channel: 'stdout' | 'stderr';
   text: string;
+  /** what the main text cannot carry, written to stderr after it so it is never lost */
+  notes?: string;
 }
 
 const DEFAULT_COLUMNS = 80;
 const DEFAULT_STREAMS: ResultStreams = { stdout, stderr };
+const LIST_TSV_COLUMNS = [
+  'name',
+  'id',
+  'state',
+  'createdAt',
+  'agentUrl',
+  'setup',
+  'organization',
+  'provider',
+] as const;
 
 /**
  * prepares the entire redacted result before any output is written
@@ -51,6 +71,18 @@ export function prepareResult({
   streams = DEFAULT_STREAMS,
 }: PrepareResultParams): PreparedResult {
   const safe = serializeResult(projectResult(result));
+  if (safe.ok && safe.command === 'list' && !streams.stdout.isTTY) {
+    const rows = machineRows(safe.data);
+    if (rows) {
+      const notes = listNotes(safe.data, rows.entries);
+
+      return {
+        channel: 'stdout',
+        text: formatListTsv(rows.rows),
+        notes,
+      };
+    }
+  }
   const channel = safe.ok ? 'stdout' : 'stderr';
   const stream = streams[channel];
   const columns = stream.isTTY
@@ -70,6 +102,9 @@ export function writePreparedResult(
   streams: ResultStreams = DEFAULT_STREAMS,
 ): void {
   streams[prepared.channel].write(prepared.text);
+  if (prepared.notes) {
+    streams.stderr.write(prepared.notes);
+  }
 }
 
 /**
@@ -82,6 +117,10 @@ function humanResult(result: SerializedResult, columns: number): string {
   const error = result.ok ? '' : humanError(result);
   if (result.command === null || result.data === undefined) {
     return error;
+  }
+  const machines = machineRows(result.data);
+  if (result.command === 'list' && machines) {
+    return `${error}${renderToString(machineTableElement(machines.rows, columns))}\n${listNotes(result.data, machines.entries)}`;
   }
   const details = renderToString(
     resultDetailsElement(result.command, humanResultDetails(result.data)),
@@ -137,4 +176,99 @@ function humanError(result: Extract<SerializedResult, { ok: false }>): string {
   }
 
   return lines.join('');
+}
+
+/**
+ * formats redacted list rows as one headerless TSV record per workstation
+ * @param rows printable workstation fields
+ * @returns escaped tab-separated records, or no text for an empty list
+ */
+function formatListTsv(rows: Array<Record<string, string>>): string {
+  return rows.length === 0
+    ? ''
+    : `${rows
+        .map((row) =>
+          LIST_TSV_COLUMNS.map((column) =>
+            escapeTsvCell(row[column] ?? ''),
+          ).join('\t'),
+        )
+        .join('\n')}\n`;
+}
+
+/**
+ * escapes record delimiters and literal backslashes in one TSV field
+ * @param value redacted field value
+ * @returns field with delimiters, backslashes, and ANSI introducers escaped
+ */
+function escapeTsvCell(value: string): string {
+  return value
+    .replaceAll('\\', '\\\\')
+    .replaceAll('\t', '\\t')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+    .replaceAll('\u001b', '\\u001b')
+    .replaceAll('\u009b', '\\u009b');
+}
+
+/**
+ * names what a list leaves out or cannot manage, so a missing or refused
+ * workstation is not mistaken for an absent or ordinary one
+ * @param data list command data
+ * @param machines raw entries from the list's machines array
+ * @returns one line per unavailable provider and per workstation a newer open-agent set up
+ */
+function listNotes(data: JsonObject, machines: JsonValue[]): string {
+  const unavailable = Array.isArray(data.unavailable) ? data.unavailable : [];
+
+  return [
+    ...unavailable
+      .filter(isJsonObject)
+      .map(
+        ({ provider, reason }) =>
+          `Unavailable provider ${typeof provider === 'string' ? provider : 'unknown'}: ${typeof reason === 'string' ? reason : 'not reported'}\n`,
+      ),
+    ...machines
+      .filter(isJsonObject)
+      .flatMap(({ name, newerRelease }) =>
+        typeof newerRelease === 'string'
+          ? [
+              `Workstation ${typeof name === 'string' ? name : 'unknown'} was set up by open-agent ${newerRelease}; upgrade open-agent to manage it\n`,
+            ]
+          : [],
+      ),
+  ].join('');
+}
+
+/**
+ * selects machine rows from the application result
+ * @param data command data
+ * @returns raw and printable machine rows, when present
+ */
+function machineRows(data: JsonObject | undefined): MachineRows | undefined {
+  const candidate = data?.machines;
+  if (!Array.isArray(candidate)) {
+    return undefined;
+  }
+
+  const entries: JsonValue[] = candidate;
+
+  return {
+    entries,
+    rows: entries.map((item) => {
+      if (!isJsonObject(item)) {
+        return { name: 'null' };
+      }
+
+      return Object.fromEntries(
+        Object.entries(item).map(([key, value]) => [
+          key,
+          value === null || value === undefined
+            ? ''
+            : typeof value === 'object'
+              ? JSON.stringify(value)
+              : String(value),
+        ]),
+      );
+    }),
+  };
 }

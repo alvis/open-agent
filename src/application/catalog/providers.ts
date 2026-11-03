@@ -4,6 +4,14 @@ import type {
 } from '#application/ports/drivers';
 import type { ProviderId } from '#domain/ids';
 
+/** a provider bound to its management credential */
+export interface BoundProvider {
+  /** provider identifier */
+  id: ProviderId;
+  /** provider bound to a credential */
+  driver: ProviderDriver;
+}
+
 /**
  * binds a provider to its management credential and to the agent services a
  * provider may stop and restore while replacing a service they depend on

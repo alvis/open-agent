@@ -167,17 +167,48 @@ describe('mt:SpriteProvider.preflight', () => {
   });
 });
 
+describe('mt:SpriteProvider.list', () => {
+  it('should map both provider pages and exclude workstations without the ownership label', async () => {
+    const workstations = await provider.list();
+
+    expect(workstations).toEqual([
+      {
+        id: 'sprite-primary',
+        name: 'primary',
+        organization: 'test-organization',
+        createdAt: createdAt.toISOString(),
+        state: 'running',
+        url: primaryInfo.url,
+        metadata: { setup: 'not recorded' },
+      },
+      {
+        id: 'sprite-second',
+        name: 'second',
+        organization: 'test-organization',
+        createdAt: createdAt.toISOString(),
+        state: 'cold',
+        url: primaryInfo.url,
+        metadata: { setup: 'not recorded' },
+      },
+    ]);
+    expect(boundary.listSprites.mock.calls).toEqual([
+      [{ prefix: undefined, maxResults: 50, continuationToken: undefined }],
+      [{ prefix: undefined, maxResults: 50, continuationToken: 'next-page' }],
+    ]);
+  });
+
+  it('should reject every call before a credential is bound', async () => {
+    await expect(unboundProvider.list()).rejects.toMatchObject({
+      code: 'authentication',
+      message: 'SPRITES_TOKEN is required.',
+    });
+  });
+});
+
 describe('mt:SpriteProvider.isNameTaken', () => {
   it('should reserve unmanaged names and leave absent names available', async () => {
     expect(await provider.isNameTaken('unmanaged')).toBe(true);
     expect(await provider.isNameTaken('available')).toBe(false);
-  });
-
-  it('should reject every call before a credential is bound', async () => {
-    await expect(unboundProvider.isNameTaken('primary')).rejects.toMatchObject({
-      code: 'authentication',
-      message: 'SPRITES_TOKEN is required.',
-    });
   });
 });
 

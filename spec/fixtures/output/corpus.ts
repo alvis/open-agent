@@ -16,6 +16,12 @@ export interface CorpusCase {
   result: CommandResult;
 }
 
+/** a workstation of any provider as the list command reports it */
+type ListedMachine = MachineSummary & {
+  provider: 'sprite';
+  newerRelease?: string;
+};
+
 /** credentials registered with the process before any result is rendered */
 export const CORPUS_SECRETS = ['v1-golden-nested-secret'] as const;
 
@@ -29,6 +35,8 @@ const MACHINE: MachineSummary = {
   setup: 'ready',
   readiness: 'not inspected',
 };
+
+const SPRITE_LISTED: ListedMachine = { ...MACHINE, provider: 'sprite' };
 
 const PREFLIGHT: CreatePreflight = {
   checks: ['Provider token verified', 'Workstation name is available'],
@@ -163,6 +171,101 @@ export const CORPUS: readonly CorpusCase[] = [
     },
   }),
 
+  // list
+  corpusCase('list-populated', {
+    command: 'list',
+    ok: true,
+    data: {
+      unavailable: [],
+      machines: [
+        {
+          ...SPRITE_LISTED,
+          name: 'alpha',
+          id: 'sprite-alpha',
+          createdAt: '2026-10-09T12:00:00.000Z',
+          agentUrl: 'https://alpha.sprites.app/',
+          organization: 'org-one',
+        },
+        {
+          ...SPRITE_LISTED,
+          name: 'beta',
+          id: 'sprite-beta',
+          state: 'cold',
+          createdAt: undefined,
+          agentUrl: undefined,
+          setup: 'not recorded',
+          organization: 'org-two',
+        },
+      ],
+    },
+  }),
+  corpusCase('list-unavailable-providers', {
+    command: 'list',
+    ok: true,
+    data: {
+      machines: [{ ...SPRITE_LISTED, name: 'alpha', id: 'sprite-alpha' }],
+      unavailable: [
+        { provider: 'sprite', code: 'AUTH', reason: 'the token was revoked' },
+      ],
+    },
+  }),
+  corpusCase('list-newer-release', {
+    command: 'list',
+    ok: true,
+    data: {
+      unavailable: [],
+      machines: [
+        {
+          ...SPRITE_LISTED,
+          name: 'future',
+          id: 'sprite-future',
+          newerRelease: '9.9.9',
+        },
+        { ...SPRITE_LISTED, name: 'current', id: 'sprite-current' },
+      ],
+    },
+  }),
+  corpusCase('list-empty', {
+    command: 'list',
+    ok: true,
+    data: { machines: [], unavailable: [] },
+  }),
+  corpusCase('list-empty-unavailable', {
+    command: 'list',
+    ok: true,
+    data: {
+      machines: [],
+      unavailable: [
+        { provider: 'sprite', code: 'PROVIDER', reason: 'timed out' },
+      ],
+    },
+  }),
+  corpusCase('list-control-characters-and-secret', {
+    command: 'list',
+    ok: true,
+    data: {
+      unavailable: [],
+      machines: [
+        {
+          ...SPRITE_LISTED,
+          name: 'tab\tline\nslash\\tail',
+          id: 'sprite-\u001b[31m',
+          state: 'run\rring',
+          createdAt: sdkObservation<string>(
+            new Date('2026-10-09T12:00:00.000Z'),
+          ),
+          agentUrl: `https://primary.sprites.app/#token=${NESTED_SECRET}`,
+          organization: 'org\u009b[0m',
+        },
+      ],
+    },
+  }),
+  corpusCase('list-failure', {
+    command: 'list',
+    ok: false,
+    error: { code: 'PROVIDER', message: 'List unavailable' },
+  }),
+
   corpusCase('create-failure-secret-error', {
     command: 'create',
     ok: false,
@@ -207,27 +310,26 @@ export const CORPUS: readonly CorpusCase[] = [
 
   // structural serialization
   corpusCase('serialization-date-and-undefined', {
-    command: 'create',
+    command: 'list',
     ok: true,
     data: {
-      machine: {
-        ...MACHINE,
-        name: 'dated',
-        createdAt: sdkObservation<string>(new Date('2026-10-09T12:00:00.000Z')),
-        agentUrl: undefined,
-        profile: sdkObservation<MachineSummary['profile']>({
-          provider: 'sprite',
-          agent: 't3',
-          harnesses: ['claude', undefined],
-          network: 'none',
-        }),
-      },
-      preflight: PREFLIGHT,
-      profile: DISABLED_NETWORK_PROFILE,
-      readiness: PASSING_READINESS,
-      network: INSPECTION.network,
-      services: [{ name: 't3-code', state: 'running' }],
-      native: INSPECTION.native,
+      unavailable: [],
+      machines: [
+        {
+          ...SPRITE_LISTED,
+          name: 'dated',
+          createdAt: sdkObservation<string>(
+            new Date('2026-10-09T12:00:00.000Z'),
+          ),
+          agentUrl: undefined,
+          profile: sdkObservation<MachineSummary['profile']>({
+            provider: 'sprite',
+            agent: 't3',
+            harnesses: ['claude', undefined],
+            network: 'none',
+          }),
+        },
+      ],
     },
   }),
 ];

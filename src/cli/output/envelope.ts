@@ -2,15 +2,18 @@ import type { CommandName } from '#kernel/commands';
 
 import type { CreateDataOutput, CreateFailureDataOutput } from './create';
 import type { ErrorOutput } from './failure';
+import type { ListDataOutput } from './list';
 
 /** success payload each command reports */
 export interface CommandDataOutput {
   create: CreateDataOutput;
+  list: ListDataOutput;
 }
 
 /** observations each command keeps after failure */
 export interface CommandFailureDataOutput {
   create: CreateFailureDataOutput;
+  list: never;
 }
 
 /** a successful command */

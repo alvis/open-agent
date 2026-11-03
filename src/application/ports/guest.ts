@@ -5,6 +5,7 @@ import type { GuestInspection } from '#domain/observations/inspection';
 import type { WorkstationProfile } from '#domain/profile';
 import type { ServiceDefinition } from '#domain/services';
 import type { RefusedSource } from '#domain/tools';
+import type { WorkstationRecord } from '#domain/workstation';
 import type { CommandFault } from '#kernel/faults';
 
 import type { ProviderDriver } from './drivers';
@@ -166,5 +167,14 @@ export interface GuestMechanics {
      * @param label name of the workstation the guest belongs to
      */
     write(guest: GuestChannel, label: string): Promise<void>;
+  };
+  release: {
+    /**
+     * names the release a workstation's metadata records when it is newer
+     * than this one, without waking the guest
+     * @param workstation record of the machine checked
+     * @returns the newer recorded release, or nothing
+     */
+    newerMetadata(workstation: WorkstationRecord): string | undefined;
   };
 }

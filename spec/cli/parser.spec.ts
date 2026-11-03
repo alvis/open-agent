@@ -198,7 +198,7 @@ describe('fn:parseApplication', () => {
 });
 
 describe('fn:requestedCommand', () => {
-  it.each(['create'] as const)(
+  it.each(['create', 'list'] as const)(
     'should recognize %s as a command',
     (command) => {
       expect(requestedCommand([command])).toBe(command);
