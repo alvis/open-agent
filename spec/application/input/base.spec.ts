@@ -9,10 +9,42 @@ import { profileWith } from '../../fixtures/profile';
 
 import { dependencies } from '../../mocks/dependencies';
 
-const proxyless = profileWith({ cliproxyapi: false });
-const everything = profileWith({ cliproxyapi: true });
+const networkOnly = profileWith({
+  network: true,
+  cliproxyapi: false,
+});
+const everything = profileWith({
+  network: true,
+  cliproxyapi: true,
+});
 
 describe('fn:resolveBaseInputs', () => {
+  it('should label a selected stored network credential without exposing its value', async () => {
+    const host = {
+      ...dependencies.host,
+      credentials: {
+        ...dependencies.host.credentials,
+        read: vi.fn(async (name) =>
+          name === 'tailscale' ? 'stored-network-key' : undefined,
+        ),
+      },
+    } satisfies typeof dependencies.host;
+
+    const resolved = await resolveBaseInputs(
+      { ...dependencies, host },
+      {
+        options: { github: false },
+        sources: { processEnv: {}, fileEnv: {}, profile: {} },
+        selection: { profile: networkOnly },
+      },
+    );
+
+    expect(resolved.input).toMatchObject({
+      networkKey: 'stored-network-key',
+      sources: { TAILSCALE_API_KEY: 'local credential store' },
+    });
+  });
+
   it('should retain a completed sibling secret when another Promise.all source rejects', async () => {
     const secret = 'saf08-partial-sibling-secret';
     const sources = {
@@ -26,10 +58,10 @@ describe('fn:resolveBaseInputs', () => {
         options: {
           localCredentials: false,
           github: false,
-          proxyApiKeySource: 'file:/nonexistent/saf08-secret-source',
+          networkKeySource: 'file:/nonexistent/saf08-secret-source',
         },
         sources,
-        selection: { profile: everything },
+        selection: { profile: networkOnly },
       }),
     ).rejects.toMatchObject({ code: 'INPUT' });
     expect(redactResolved(`provider rejected ${secret}`)).toBe(
@@ -46,12 +78,14 @@ describe('fn:resolveBaseInputs', () => {
     const resolved = await resolveBaseInputs(dependencies, {
       options: {
         name: 'chosen',
+        networkAccount: 'flag-tailnet',
         localCredentials: false,
         credentialFile: 'selected.env',
       },
       sources: {
         processEnv: {
           SPRITES_TOKEN: 'process-management-token',
+          TAILSCALE_API_KEY: 'process-tailnet-token',
           CLIPROXYAPI_BASE_URL: 'https://process.example.test',
           GH_TOKEN: 'process-github-token',
         },
@@ -62,23 +96,29 @@ describe('fn:resolveBaseInputs', () => {
         },
         runtimeFileEnv: { APP_TOKEN: 'runtime-secret-value' },
         profile: {
+          TAILSCALE_TAILNET: 'profile-tailnet',
           CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
         },
       },
-      selection: { profile: proxyless },
+      selection: { profile: networkOnly },
     });
 
     expect(resolved).toEqual({
       input: {
         name: 'chosen',
         providerToken: 'file-management-token',
+        networkKey: 'process-tailnet-token',
+        enrollmentKey: undefined,
+        networkAccount: 'flag-tailnet',
         proxyUrl: 'https://file.example.test',
         proxyApiKey: undefined,
-        profile: proxyless,
+        profile: networkOnly,
         runtimeEnv: { APP_TOKEN: 'runtime-secret-value' },
         sources: {
           SPRITES_TOKEN: 'SPRITES_TOKEN in selected.env',
+          TAILSCALE_API_KEY: 'process environment',
           GH_TOKEN: 'process environment',
+          TAILSCALE_TAILNET: 'flag',
           CLIPROXYAPI_BASE_URL: 'selected.env',
         },
         missing: [],
@@ -87,13 +127,14 @@ describe('fn:resolveBaseInputs', () => {
     });
     expect(
       redactResolved(
-        'file-management-token process-github-token runtime-secret-value',
+        'file-management-token process-tailnet-token process-github-token runtime-secret-value',
       ),
-    ).toBe('[REDACTED] [REDACTED] [REDACTED]');
+    ).toBe('[REDACTED] [REDACTED] [REDACTED] [REDACTED]');
   });
 
   it('should select explicit secret references and record source descriptions without values', async () => {
     vi.stubEnv('OPEN_AGENT_BASE_SPRITES', 'explicit-sprites-secret');
+    vi.stubEnv('OPEN_AGENT_BASE_TAILSCALE', 'explicit-tailscale-secret');
     vi.stubEnv('OPEN_AGENT_BASE_PROXY', 'explicit-proxy-secret');
     vi.stubEnv('OPEN_AGENT_BASE_GITHUB', 'explicit-github-secret');
 
@@ -101,12 +142,16 @@ describe('fn:resolveBaseInputs', () => {
       options: {
         localCredentials: false,
         providerTokenSource: 'env:OPEN_AGENT_BASE_SPRITES',
+        networkKeySource: 'env:OPEN_AGENT_BASE_TAILSCALE',
         proxyApiKeySource: 'env:OPEN_AGENT_BASE_PROXY',
         githubTokenSource: 'env:OPEN_AGENT_BASE_GITHUB',
       },
       sources: {
         processEnv: {},
-        fileEnv: {},
+        fileEnv: {
+          TAILSCALE_AUTH_KEY: 'file-enrollment-secret',
+          TAILSCALE_TAILNET: 'file-tailnet',
+        },
         profile: {
           CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
         },
@@ -119,14 +164,20 @@ describe('fn:resolveBaseInputs', () => {
         githubCandidate: 'explicit-github-secret',
         input: expect.objectContaining({
           providerToken: 'explicit-sprites-secret',
+          networkKey: 'explicit-tailscale-secret',
           proxyApiKey: 'explicit-proxy-secret',
+          enrollmentKey: 'file-enrollment-secret',
+          networkAccount: 'file-tailnet',
           proxyUrl: 'https://profile.example.test',
           runtimeEnv: {},
           sources: {
             SPRITES_TOKEN:
               '--provider-token-source env:OPEN_AGENT_BASE_SPRITES',
+            TAILSCALE_API_KEY: 'explicit secret reference',
             CLIPROXYAPI_API_KEY: 'explicit secret reference',
             GH_TOKEN: 'explicit secret reference',
+            TAILSCALE_AUTH_KEY: 'credential file',
+            TAILSCALE_TAILNET: 'credential file',
             CLIPROXYAPI_BASE_URL: 'saved profile',
           },
         }),
@@ -134,9 +185,9 @@ describe('fn:resolveBaseInputs', () => {
     );
     expect(
       redactResolved(
-        'explicit-sprites-secret explicit-proxy-secret explicit-github-secret',
+        'explicit-sprites-secret explicit-tailscale-secret explicit-proxy-secret explicit-github-secret file-enrollment-secret',
       ),
-    ).toBe('[REDACTED] [REDACTED] [REDACTED]');
+    ).toBe('[REDACTED] [REDACTED] [REDACTED] [REDACTED] [REDACTED]');
   });
 
   it('should leave GitHub discovery disabled when requested and use its legacy token fallback otherwise', async () => {

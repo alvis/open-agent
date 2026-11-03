@@ -25,6 +25,7 @@ interface NewWorkstationConfiguration {
   hostname: string;
   /** validated selection the workstation is created with */
   profile: WorkstationProfile;
+  authKey?: Secret;
   proxyUrl?: string;
   proxyApiKey?: string;
   githubToken?: string;
@@ -114,10 +115,23 @@ async function enrolAndConfigure(
   const { guest, configuration, interaction } = params;
   const { profile } = configuration;
   const network = networkDriver(dependencies.registry, profile.network);
+  if (network.daemon) {
+    interaction?.progress({
+      stage: 'network',
+      message: `Configuring ${network.displayName} connectivity`,
+    });
+  }
   await traceStage({
     stage: 'create.network',
     action: async () =>
-      network.enroll(guest, { hostname: configuration.hostname }),
+      network.enroll(guest, {
+        hostname: configuration.hostname,
+        credential: configuration.authKey,
+        recordIdentity: dependencies.guest.environment.identityRecorder(
+          guest,
+          network.id,
+        ),
+      }),
   });
   interaction?.progress({
     stage: 'configuration',

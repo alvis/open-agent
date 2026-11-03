@@ -91,7 +91,7 @@ async function configureSections(
   context: SetupContext,
 ): Promise<Omit<AllSetupData, 'tools'>> {
   const { options } = context;
-  const network = setupNetwork();
+  const network = await setupNetwork(dependencies, guest, context);
   const github =
     options.github === false
       ? undefined

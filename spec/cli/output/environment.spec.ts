@@ -3,14 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { projectEnvironment } from '#cli/output/environment';
 
 import { environmentOf } from '../../fixtures/environment';
-import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
+import { TAILSCALE_PROFILE } from '../../fixtures/profile';
 
 import type { GuestEnvironment } from '#domain/observations/environment';
 
 describe('fn:projectEnvironment', () => {
-  it('should retain a selected harness adapter and scheduled job', () => {
-    const base = environmentOf(DISABLED_NETWORK_PROFILE);
-    const launchFacts: Pick<GuestEnvironment, 'agent' | 'jobs'> = {
+  it('should retain a selected harness adapter, network launcher, scheduled job, and enrolled device identity', () => {
+    const base = environmentOf(TAILSCALE_PROFILE);
+    const launchFacts: Pick<
+      GuestEnvironment,
+      'agent' | 'network' | 'jobs' | 'networkIdentity'
+    > = {
       agent: {
         ...base.agent,
         harnesses: [
@@ -30,6 +33,15 @@ describe('fn:projectEnvironment', () => {
           { id: 'codex', environment: { CODEX_HOME: '/home/agent/.codex' } },
         ],
       },
+      network: {
+        id: 'tailscale',
+        daemon: 'tailscaled',
+        launcher: {
+          stateDirectory: '/opt/open-agent/state/tailscale',
+          socket: '/var/run/tailscale/tailscaled.sock',
+          tun: 'tailscale0',
+        },
+      },
       jobs: [
         {
           name: 'update-gate',
@@ -41,8 +53,13 @@ describe('fn:projectEnvironment', () => {
           },
         },
       ],
+      networkIdentity: {
+        network: 'tailscale',
+        deviceId: 'node-123',
+        ip: '192.0.2.7',
+      },
     };
-    const environment = environmentOf(DISABLED_NETWORK_PROFILE, launchFacts);
+    const environment = environmentOf(TAILSCALE_PROFILE, launchFacts);
 
     expect(projectEnvironment(environment)).toEqual({
       ...base,

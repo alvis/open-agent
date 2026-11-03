@@ -12,6 +12,10 @@ const source = {
   kind: 'system',
   family: 'debian',
   packages: ['custom'],
+  repository: {
+    id: 'custom',
+    key: { url: 'https://packages.example.test/key', fingerprints: ['ABC'] },
+  },
 } satisfies SystemToolSource;
 const tool = {
   name: 'custom',
@@ -27,6 +31,18 @@ describe('fn:toolSteps', () => {
     expect(() => toolSteps([{ tool: tool.name, source }], [], context)).toThrow(
       expect.objectContaining({
         message: expect.stringMatching(/No tool custom/u),
+      }),
+    );
+  });
+
+  it('should reject a repository without an entry for the system source family', () => {
+    expect(() =>
+      toolSteps([{ tool: tool.name, source }], [tool], context),
+    ).toThrow(
+      expect.objectContaining({
+        message: expect.stringMatching(
+          /Repository custom has no debian entry/u,
+        ),
       }),
     );
   });

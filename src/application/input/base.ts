@@ -1,3 +1,4 @@
+import { networkDriver } from '#application/catalog/networks';
 import { defaultProfile } from '#domain/profile';
 import { runOperation } from '#kernel/operation';
 
@@ -12,6 +13,7 @@ import type {
   CredentialStoreLocation,
   ManagementCredentialName,
 } from '#domain/credentials';
+import type { NetworkInputs } from '#domain/declarations';
 import type { WorkstationProfile } from '#domain/profile';
 
 import type { InputSources } from './sources';
@@ -22,6 +24,8 @@ type SourceReader = (name: string, explicit?: string) => string | undefined;
 interface SecretValues {
   providerToken?: string;
   providerTokenSource?: string;
+  networkKey?: string;
+  enrollmentKey?: string;
   proxyApiKey?: string;
   githubCandidate?: string;
 }
@@ -30,12 +34,23 @@ interface SecretValues {
 interface BaseInputSelection {
   /** driver selection whose declared inputs are read */
   profile?: WorkstationProfile;
+  /** the workflow may fall back to the saved network management credential */
+  networkEnrollment?: boolean;
   credentialStore?: CredentialStoreLocation;
 }
 
-/** environment names of the provider credentials this run reads */
+/** environment names of the provider and network credentials this run reads */
 interface DeclaredNames {
   provider: { environment: string; store: ManagementCredentialName };
+  network?: NetworkInputs;
+}
+
+interface ManagementSecretSelection {
+  reference?: string;
+  environment: string;
+  store: ManagementCredentialName;
+  useStore: boolean;
+  location?: CredentialStoreLocation;
 }
 
 /** the named inputs of resolve base inputs */
@@ -72,6 +87,8 @@ export async function resolveBaseInputs(
     value,
     profile,
     sources,
+    names,
+    useNetworkStore: selection.networkEnrollment ?? names.network !== undefined,
     credentialStore: selection.credentialStore,
   });
   annotateSecretSources(options, secrets, {
@@ -80,9 +97,15 @@ export async function resolveBaseInputs(
       dependencies.registry.gateways.cliproxyapi.inputs.apiKey.environment,
     sources: sourceNames,
   });
+  const network = names.network;
   const input: ResolvedInputs = {
     name: options.name,
     providerToken: secrets.providerToken,
+    networkKey: secrets.networkKey,
+    enrollmentKey: secrets.enrollmentKey,
+    networkAccount: network
+      ? value(network.account.environment, options.networkAccount)
+      : options.networkAccount,
     proxyUrl: value(
       dependencies.registry.gateways.cliproxyapi.inputs.baseUrl.environment,
       options.proxyUrl,
@@ -102,7 +125,7 @@ export async function resolveBaseInputs(
  * reads the credential and input names the selected drivers declare
  * @param dependencies the registered drivers
  * @param profile driver selection
- * @returns provider credential names
+ * @returns provider credential names and the network's inputs, when it has a driver
  */
 function declaredNames(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
@@ -113,6 +136,7 @@ function declaredNames(
 
   return {
     provider: { environment: credential.environment, store: credential.store },
+    network: networkDriver(dependencies.registry, profile.network).inputs,
   };
 }
 
@@ -157,6 +181,10 @@ interface ResolveSelectedSecretsParams {
   profile: WorkstationProfile;
   /** process and credential file values */
   sources: InputSources;
+  /** credential names the selected drivers declare */
+  names: DeclaredNames;
+  /** the network management credential may come from the local store */
+  useNetworkStore: boolean;
   /** optional explicitly selected real store */
   credentialStore?: CredentialStoreLocation;
 }
@@ -164,16 +192,18 @@ interface ResolveSelectedSecretsParams {
 /**
  * resolves secret references without transferring management credentials to the guest
  * @param dependencies the registered drivers, what this computer provides
- * @param params the call's inputs: options, value, profile, sources, credentialStore
+ * @param params the call's inputs: options, value, profile, sources, names, useNetworkStore, credentialStore
  * @returns selected secrets before optional GitHub confirmation
  */
 async function resolveSelectedSecrets(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'host'>,
   params: ResolveSelectedSecretsParams,
 ): Promise<SecretValues> {
-  const { options, value, profile, sources, credentialStore } = params;
-  const [provider, proxyApiKey, githubCandidate] = await runOperation(
-    async () =>
+  const { options, value, profile, sources, names } = params;
+  const { useNetworkStore, credentialStore } = params;
+  const useStore = options.localCredentials !== false;
+  const [provider, networkKey, enrollmentKey, proxyApiKey, githubCandidate] =
+    await runOperation(async () =>
       Promise.all([
         resolveProviderCredential(dependencies, {
           options,
@@ -184,6 +214,17 @@ async function resolveSelectedSecrets(
             credentialStore,
           },
         }),
+        resolveNetworkSecret(dependencies, {
+          ...params,
+          useNetworkStore: useStore && useNetworkStore,
+        }),
+        resolveSecret(
+          dependencies,
+          options.networkAuthKeySource,
+          names.network
+            ? value(names.network.enrollment.environment)
+            : undefined,
+        ),
         resolveSecret(
           dependencies,
           options.proxyApiKeySource,
@@ -200,14 +241,86 @@ async function resolveSelectedSecrets(
               value('GH_TOKEN') ?? value('GITHUB_TOKEN'),
             ),
       ]),
-  );
+    );
 
   return {
     providerToken: provider.token,
     providerTokenSource: provider.source,
+    networkKey,
+    enrollmentKey,
     proxyApiKey,
     githubCandidate,
   };
+}
+
+/** the named inputs of resolve network secret */
+interface ResolveNetworkSecretParams {
+  /** parsed secret references and local credential policy */
+  options: CommandOptions;
+  /** non-secret precedence reader for environment values */
+  value: SourceReader;
+  /** credential names the selected drivers declare */
+  names: DeclaredNames;
+  /** the credential may come from the local store */
+  useNetworkStore: boolean;
+  /** optional explicitly selected real store */
+  credentialStore?: CredentialStoreLocation;
+}
+
+/**
+ * resolves the selected network's management credential, when a network is selected
+ * @param dependencies what this computer provides
+ * @param params the call's inputs: options, value, names, useNetworkStore, credentialStore
+ * @returns the network management credential, if any
+ */
+async function resolveNetworkSecret(
+  dependencies: Pick<ApplicationDependencies, 'host'>,
+  params: ResolveNetworkSecretParams,
+): Promise<string | undefined> {
+  const { options, value, names, useNetworkStore, credentialStore } = params;
+  const { network } = names;
+
+  return network
+    ? resolveManagementSecret(
+        dependencies,
+        {
+          reference: options.networkKeySource,
+          environment: network.management.environment,
+          store: network.management.store,
+          useStore: useNetworkStore,
+          location: credentialStore,
+        },
+        value,
+      )
+    : undefined;
+}
+
+/**
+ * reads a local credential only when neither an explicit nor direct value won
+ * @param dependencies what this computer provides
+ * @param selection source and store fallback selected by the workflow
+ * @param value direct source reader in precedence order
+ * @returns selected secret with its value registered for redaction
+ */
+async function resolveManagementSecret(
+  dependencies: Pick<ApplicationDependencies, 'host'>,
+  selection: ManagementSecretSelection,
+  value: SourceReader,
+): Promise<string | undefined> {
+  if (selection.reference) {
+    return resolveSecret(dependencies, selection.reference, undefined);
+  }
+  const direct = value(selection.environment);
+  const fallback =
+    direct ??
+    (selection.useStore
+      ? await dependencies.host.credentials.read(
+          selection.store,
+          selection.location,
+        )
+      : undefined);
+
+  return resolveSecret(dependencies, undefined, fallback);
 }
 
 /**
@@ -229,8 +342,26 @@ function annotateSecretSources(
   },
 ): void {
   const { names, proxyApiKey, sources } = context;
+  const label = (
+    environment: string,
+    reference: string | undefined,
+    resolved: string | undefined,
+  ): void => {
+    if (reference) {
+      sources[environment] = 'explicit secret reference';
+    } else if (resolved && !sources[environment]) {
+      sources[environment] = 'local credential store';
+    }
+  };
   if (secrets.providerTokenSource) {
     sources[names.provider.environment] = secrets.providerTokenSource;
+  }
+  if (names.network) {
+    label(
+      names.network.management.environment,
+      options.networkKeySource,
+      secrets.networkKey,
+    );
   }
   if (options.proxyApiKeySource) {
     sources[proxyApiKey] = 'explicit secret reference';

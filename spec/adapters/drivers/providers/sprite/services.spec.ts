@@ -8,18 +8,18 @@ import { guestOf } from '../../../../mocks/sprites';
 
 import type { ServiceWithState } from '@fly/sprites';
 
-const daemon = {
-  name: 'syncd',
+const tailscale = {
+  name: 'tailscaled',
   cmd: '/usr/bin/sudo',
-  args: ['-n', '-E', '--', '/usr/sbin/syncd', '--old-flag'],
+  args: ['-n', '-E', '--', '/usr/sbin/tailscaled', '--old-flag'],
   needs: [],
-  state: { name: 'syncd', status: 'running' },
+  state: { name: 'tailscaled', status: 'running' },
 } satisfies ServiceWithState;
 const dependent = {
   name: 't3-code',
   cmd: '/usr/bin/sudo',
   args: ['-n', '-E', '--', '/opt/open-agent/t3/start'],
-  needs: ['syncd'],
+  needs: ['tailscaled'],
   httpPort: 3000,
   state: { name: 't3-code', status: 'running' },
 } satisfies ServiceWithState;
@@ -103,11 +103,11 @@ describe('mt:SpriteServiceControl.ensure', () => {
   });
 
   it('should remove managed dependent registrations before replacing a changed service and recreate them afterward', async () => {
-    const sprite = createServiceSprite([daemon, dependent]);
+    const sprite = createServiceSprite([tailscale, dependent]);
 
     await guestOf(sprite).services.ensure({
-      name: 'syncd',
-      command: '/usr/sbin/syncd',
+      name: 'tailscaled',
+      command: '/usr/sbin/tailscaled',
       arguments: ['--new-flag'],
       account: 'root',
       needs: [],
@@ -139,17 +139,17 @@ describe('mt:SpriteServiceControl.ensure', () => {
     expect(mutations).toEqual([
       { action: 'stop', name: 't3-code' },
       { action: 'delete', name: 't3-code' },
-      { action: 'stop', name: 'syncd' },
-      { action: 'delete', name: 'syncd' },
-      { action: 'create', name: 'syncd' },
+      { action: 'stop', name: 'tailscaled' },
+      { action: 'delete', name: 'tailscaled' },
+      { action: 'create', name: 'tailscaled' },
       { action: 'create', name: 't3-code' },
     ]);
     expect(create.mock.calls).toEqual([
       [
-        'syncd',
+        'tailscaled',
         {
           cmd: '/usr/bin/sudo',
-          args: ['-n', '-E', '--', '/usr/sbin/syncd', '--new-flag'],
+          args: ['-n', '-E', '--', '/usr/sbin/tailscaled', '--new-flag'],
           needs: [],
         },
         '5s',
@@ -159,11 +159,11 @@ describe('mt:SpriteServiceControl.ensure', () => {
   });
 
   it('should reconcile an unchanged service without stopping or deleting registrations', async () => {
-    const sprite = createServiceSprite([daemon, dependent]);
+    const sprite = createServiceSprite([tailscale, dependent]);
 
     await guestOf(sprite).services.ensure({
-      name: 'syncd',
-      command: '/usr/sbin/syncd',
+      name: 'tailscaled',
+      command: '/usr/sbin/tailscaled',
       arguments: ['--old-flag'],
       account: 'root',
       needs: [],
@@ -172,10 +172,10 @@ describe('mt:SpriteServiceControl.ensure', () => {
     expect(sprite.stopService).not.toHaveBeenCalled();
     expect(sprite.deleteService).not.toHaveBeenCalled();
     expect(sprite.createService).toHaveBeenCalledExactlyOnceWith(
-      'syncd',
+      'tailscaled',
       {
         cmd: '/usr/bin/sudo',
-        args: ['-n', '-E', '--', '/usr/sbin/syncd', '--old-flag'],
+        args: ['-n', '-E', '--', '/usr/sbin/tailscaled', '--old-flag'],
         needs: [],
       },
       '5s',
@@ -188,10 +188,10 @@ describe('mt:SpriteServiceControl.ensure', () => {
       state: { name: 't3-code', status: 'stopped' },
     } satisfies ServiceWithState;
     const idle = {
-      name: daemon.name,
-      cmd: daemon.cmd,
-      args: daemon.args,
-      needs: daemon.needs,
+      name: tailscale.name,
+      cmd: tailscale.cmd,
+      args: tailscale.args,
+      needs: tailscale.needs,
     } satisfies ServiceWithState;
     const sprite = createServiceSprite([idle, stopped]);
     vi.mocked(sprite.createService).mockImplementationOnce(
@@ -203,8 +203,8 @@ describe('mt:SpriteServiceControl.ensure', () => {
 
     await expect(
       guestOf(sprite).services.ensure({
-        name: 'syncd',
-        command: '/usr/sbin/syncd',
+        name: 'tailscaled',
+        command: '/usr/sbin/tailscaled',
         arguments: ['--new-flag'],
         account: 'root',
         needs: [],
@@ -214,7 +214,7 @@ describe('mt:SpriteServiceControl.ensure', () => {
     expect(sprite.stopService).not.toHaveBeenCalled();
     expect(vi.mocked(sprite.deleteService).mock.calls).toEqual([
       ['t3-code'],
-      ['syncd'],
+      ['tailscaled'],
     ]);
     expect(sprite.createService).toHaveBeenLastCalledWith(
       't3-code',
@@ -224,7 +224,7 @@ describe('mt:SpriteServiceControl.ensure', () => {
   });
 
   it('should preserve a provider failure, its prior cause, and the actual dependent restoration error', async () => {
-    const sprite = createServiceSprite([daemon, dependent]);
+    const sprite = createServiceSprite([tailscale, dependent]);
     const prior = new Error('prior provider cause');
     const primary = new CommandFault({
       code: 'PROVIDER',
@@ -238,8 +238,8 @@ describe('mt:SpriteServiceControl.ensure', () => {
 
     const failure: unknown = await guestOf(sprite)
       .services.ensure({
-        name: 'syncd',
-        command: '/usr/sbin/syncd',
+        name: 'tailscaled',
+        command: '/usr/sbin/tailscaled',
         arguments: ['--new-flag'],
         account: 'root',
         needs: [],
@@ -254,7 +254,7 @@ describe('mt:SpriteServiceControl.ensure', () => {
     ]);
     expect(
       vi.mocked(sprite.createService).mock.calls.map(([name]) => name),
-    ).toEqual(['syncd', 't3-code']);
+    ).toEqual(['tailscaled', 't3-code']);
     expect(commandError(primary)).toMatchObject({
       code: 'PROVIDER',
       details: [
@@ -265,7 +265,7 @@ describe('mt:SpriteServiceControl.ensure', () => {
   });
 
   it('should fail honestly when dependent restoration alone fails after replacement succeeds', async () => {
-    const sprite = createServiceSprite([daemon, dependent]);
+    const sprite = createServiceSprite([tailscale, dependent]);
     const restoration = new Error('dependent restore failed after replacement');
     vi.mocked(sprite.createService)
       .mockResolvedValueOnce(
@@ -277,8 +277,8 @@ describe('mt:SpriteServiceControl.ensure', () => {
 
     await expect(
       guestOf(sprite).services.ensure({
-        name: 'syncd',
-        command: '/usr/sbin/syncd',
+        name: 'tailscaled',
+        command: '/usr/sbin/tailscaled',
         arguments: ['--new-flag'],
         account: 'root',
         needs: [],
@@ -286,7 +286,7 @@ describe('mt:SpriteServiceControl.ensure', () => {
     ).rejects.toBe(restoration);
     expect(
       vi.mocked(sprite.createService).mock.calls.map(([name]) => name),
-    ).toEqual(['syncd', 't3-code']);
+    ).toEqual(['tailscaled', 't3-code']);
   });
 
   it('should refuse unmanaged dependents before any service mutation', async () => {
@@ -294,12 +294,12 @@ describe('mt:SpriteServiceControl.ensure', () => {
       ...dependent,
       name: 'user-service',
     } satisfies ServiceWithState;
-    const sprite = createServiceSprite([daemon, dependent, unmanaged]);
+    const sprite = createServiceSprite([tailscale, dependent, unmanaged]);
 
     await expect(
       guestOf(sprite).services.ensure({
-        name: 'syncd',
-        command: '/usr/sbin/syncd',
+        name: 'tailscaled',
+        command: '/usr/sbin/tailscaled',
         arguments: ['--new-flag'],
         account: 'root',
         needs: [],
@@ -314,16 +314,16 @@ describe('mt:SpriteServiceControl.ensure', () => {
 
 describe('mt:SpriteServiceControl.stop', () => {
   it('should report a clean stop', async () => {
-    const sprite = createServiceSprite([daemon]);
+    const sprite = createServiceSprite([tailscale]);
 
-    const result = await guestOf(sprite).services.stop('syncd');
+    const result = await guestOf(sprite).services.stop('tailscaled');
 
     expect(result).toBe(true);
-    expect(sprite.stopService).toHaveBeenCalledWith('syncd', '15s');
+    expect(sprite.stopService).toHaveBeenCalledWith('tailscaled', '15s');
   });
 
   it('should report a stop failure the service emits instead of throwing', async () => {
-    const sprite = createServiceSprite([daemon]);
+    const sprite = createServiceSprite([tailscale]);
     vi.mocked(sprite.stopService).mockResolvedValueOnce(
       new ServiceLogStream(
         new Response(
@@ -332,7 +332,7 @@ describe('mt:SpriteServiceControl.stop', () => {
       ),
     );
 
-    const result = await guestOf(sprite).services.stop('syncd');
+    const result = await guestOf(sprite).services.stop('tailscaled');
 
     expect(result).toBe(false);
   });

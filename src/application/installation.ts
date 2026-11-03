@@ -29,14 +29,14 @@ export interface InstallParams {
   connection: SetupSession;
   /** the profile setup applies */
   profile: WorkstationProfile;
-  /** the environment an earlier setup recorded, whose services carry over */
+  /** the environment an earlier setup recorded, whose device identity and services carry over */
   previous?: GuestEnvironment;
   /** receives each step's progress */
   interaction?: Interaction;
   /**
    * runs once the tools and environment.json are in place and before any
-   * service or job starts, such as the native configuration the agent's
-   * launcher reads only as it starts
+   * service or job starts, such as the network enrolment and native
+   * configuration the agent's launcher reads only as it starts
    */
   beforeServices?: (guest: GuestChannel) => Promise<void>;
 }
@@ -74,6 +74,7 @@ export async function installWorkstation(
     release: connection.release,
     version: OPEN_AGENT_VERSION,
     setupAt: new Date().toISOString(),
+    networkIdentity: previous?.networkIdentity,
   };
   const { assembly, settled } = await bottledAssembly(mechanics, params, base);
   await runSteps(mechanics, params, {

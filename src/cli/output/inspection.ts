@@ -38,6 +38,8 @@ export interface ServiceSummaryOutput {
 
 /** what the guest network reports */
 export interface NetworkOutput {
+  deviceId?: string;
+  ip?: string;
   online: boolean;
   skipped: boolean;
   reason?: string;
@@ -158,6 +160,8 @@ export function projectServiceSummary(
  */
 export function projectNetworkStatus(network: NetworkStatus): NetworkOutput {
   return projectFields<NetworkStatus, NetworkOutput>(network, {
+    deviceId: same,
+    ip: same,
     online: same,
     skipped: same,
     reason: same,

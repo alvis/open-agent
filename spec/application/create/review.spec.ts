@@ -7,7 +7,10 @@ import {
 } from '#application/plugins';
 import { OperationContext, withOperation } from '#kernel/operation';
 
-import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
+import {
+  DISABLED_NETWORK_PROFILE,
+  TAILSCALE_PROFILE,
+} from '../../fixtures/profile';
 
 import { dependencies } from '../../mocks/dependencies';
 
@@ -20,7 +23,7 @@ const plugins = resolvePluginActions(
   }),
 );
 const input = {
-  profile: DISABLED_NETWORK_PROFILE,
+  profile: TAILSCALE_PROFILE,
   runtimeEnv: {},
   sources: {},
   missing: [],
@@ -75,9 +78,9 @@ describe('fn:reviewCreatePlan', () => {
       onStatus: status,
     });
     const profile = {
-      ...DISABLED_NETWORK_PROFILE,
+      ...TAILSCALE_PROFILE,
       options: {
-        ...DISABLED_NETWORK_PROFILE.options,
+        ...TAILSCALE_PROFILE.options,
         idleTimeoutMinutes: 0,
         isProxyEnabled: true,
       },
@@ -97,6 +100,7 @@ describe('fn:reviewCreatePlan', () => {
             committerName: 'Author',
             committerEmail: 'author@example.test',
           },
+          enrollmentKey: 'enrollment-key',
         },
         plugins,
         preflight: { checks: [], reminders: [] },
@@ -107,12 +111,12 @@ describe('fn:reviewCreatePlan', () => {
       [
         {
           kind: 'info',
-          message: expect.stringMatching(/No private network/),
+          message: expect.stringMatching(/Tailscale enabled/),
         },
       ],
     ]);
     expect(JSON.stringify(status.mock.calls)).not.toMatch(
-      /private-token|github-token/,
+      /private-token|github-token|enrollment-key/,
     );
   });
 });

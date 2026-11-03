@@ -1,3 +1,4 @@
+import { networkDriver } from '#application/catalog/networks';
 import { defaultProfile, registeredSummary } from '#domain/profile';
 import { CommandFault } from '#kernel/faults';
 
@@ -55,6 +56,42 @@ export function assertSameWorkstationKind(
       message: `Setup cannot change the provider (${recorded.provider}) or ACP agent (${recorded.agent}) of an existing workstation; a new workstation is required`,
     });
   }
+}
+
+/** the named inputs of is network enrolled */
+export interface IsNetworkEnrolledParams {
+  /** selected managed guest */
+  guest: GuestChannel;
+  /** recorded environment, absent before initial installation */
+  environment: GuestEnvironment | undefined;
+  /** whether this run targets the installed network, and the selection */
+  target: { isTargeted: boolean; profile: WorkstationProfile };
+}
+
+/**
+ * tells whether the guest is enrolled now, by asking the installed network
+ * daemon; the identity environment.json recorded is cleanup data and never
+ * proves enrolment, because a guest can lose its registration while the record stays
+ * @param dependencies the registered drivers
+ * @param params the call's inputs: guest, environment, target
+ * @returns true when the live daemon reports a device identity
+ */
+export async function isNetworkEnrolled(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  params: IsNetworkEnrolledParams,
+): Promise<boolean> {
+  const { guest, environment, target } = params;
+
+  return environment !== undefined && target.isTargeted
+    ? Boolean(
+        (
+          await networkDriver(
+            dependencies.registry,
+            target.profile.network,
+          ).status(guest)
+        ).deviceId,
+      )
+    : false;
 }
 
 /**

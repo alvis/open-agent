@@ -252,11 +252,14 @@ describe('fn:emitResult', () => {
         data: {
           machine: MACHINE,
           workstation: {
-            get status(): 'deleted' {
-              throw new Error('unreadable workstation status');
-            },
+            status: 'deleted',
             id: 'machine-1',
             name: 'dev box',
+          },
+          network: {
+            get status(): 'cleanup required' {
+              throw new Error('unreadable network status');
+            },
           },
         },
       } satisfies CommandResult,
@@ -265,7 +268,9 @@ describe('fn:emitResult', () => {
         machineId: 'machine-1',
         setupIncomplete: true,
         outcome: 'unknown',
-        details: ['Workstation deleted; do not retry the deletion.'],
+        details: [
+          'Workstation deleted; verify network cleanup before retrying.',
+        ],
       },
     },
     {
@@ -284,6 +289,22 @@ describe('fn:emitResult', () => {
             },
           ],
           unavailable: [],
+        },
+      } satisfies CommandResult,
+      recovery: {},
+    },
+    {
+      label: 'setup local credential',
+      result: {
+        command: 'setup',
+        ok: true,
+        data: {
+          localCredential: {
+            get status(): 'replaced' {
+              throw new Error('unreadable credential status');
+            },
+            scope: 'this computer; all workstations',
+          },
         },
       } satisfies CommandResult,
       recovery: {},

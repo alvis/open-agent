@@ -9,12 +9,14 @@ import type {
 import type { OsFamilyId } from '#domain/guest';
 import type {
   EnvironmentHarness,
+  EnvironmentNetwork,
   EnvironmentProvider,
   EnvironmentSetupState,
   EnvironmentTool,
   GuestEnvironment,
   SkippedTool,
 } from '#domain/observations/environment';
+import type { GuestNetworkIdentity } from '#domain/observations/network';
 import type { WorkstationProfile } from '#domain/profile';
 import type { ServiceDefinition, PeriodicJob } from '#domain/services';
 import type {
@@ -58,10 +60,14 @@ interface EnvironmentParams {
     /** the ACP adapter the harness provides */
     acpAdapter?: AcpAdapterSpec;
   }>;
+  /** the selected network's launch facts; null when it runs no daemon */
+  network: EnvironmentNetwork | null;
   /** the services the backend runs */
   services: readonly ServiceDefinition[];
   /** the commands the backend runs on a schedule */
   jobs: readonly PeriodicJob[];
+  /** the retained network device identity */
+  networkIdentity?: GuestNetworkIdentity;
 }
 
 /**
@@ -78,7 +84,7 @@ export function buildEnvironment(
   declarations: ProductDeclarations,
   params: EnvironmentParams,
 ): GuestEnvironment {
-  const { profile, agent } = params;
+  const { profile, agent, networkIdentity } = params;
   const { httpPort } = agent.service;
   if (httpPort === undefined) {
     throw new Error(`Agent ${agent.id} publishes no port`);
@@ -100,8 +106,10 @@ export function buildEnvironment(
       port: httpPort,
       harnesses: params.harnesses.map(harnessEntry),
     },
+    network: params.network,
     services: params.services,
     jobs: params.jobs,
+    ...(networkIdentity && { networkIdentity }),
   };
   const problem = environmentProblem(declarations, environment);
   if (problem) {
@@ -170,6 +178,7 @@ function providerFacts(
     wakeMode: capabilities.wakeMode,
     supportsCliWakeSleep: capabilities.supportsCliWakeSleep,
     maxAwakeDeadlineMinutes: cap,
+    transportNetworks: [...capabilities.transportNetworks],
     idleTimeoutMinutes: capped(profile.options.idleTimeoutMinutes),
     holdMaxMinutes: capped(profile.options.holdMaxMinutes),
     awakeAdapter: provider.awakeAsset?.installAs ?? null,

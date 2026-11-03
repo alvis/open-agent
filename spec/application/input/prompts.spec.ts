@@ -68,7 +68,7 @@ describe('fn:retainManagementCredential', () => {
         },
       }),
       {
-        name: 'sprites',
+        name: 'tailscale',
         value: 'management-key',
         interaction,
         options: {},
@@ -98,7 +98,7 @@ describe('fn:retainManagementCredential', () => {
         },
       }),
       {
-        name: 'sprites',
+        name: 'tailscale',
         value: 'management-key',
         interaction,
         options: { yes: true },
@@ -111,7 +111,7 @@ describe('fn:retainManagementCredential', () => {
       fallbackReason: 'Keychain is unavailable on this platform',
     });
     expect(confirm).not.toHaveBeenCalled();
-    expect(save).toHaveBeenCalledWith('sprites', 'management-key', {
+    expect(save).toHaveBeenCalledWith('tailscale', 'management-key', {
       consent: true,
       allowProtectedFileFallback: true,
       location,
@@ -214,9 +214,12 @@ describe('fn:resolveInteractiveInputs', () => {
 
     expect(input.name).toBeUndefined();
   });
-  it('should collect the selected gateway and secret inputs in dependency order', async () => {
+  it('should collect the selected network, gateway, and secret inputs in dependency order', async () => {
     const input = emptyInput();
-    input.profile = profileWith({ cliproxyapi: true });
+    input.profile = profileWith({
+      network: true,
+      cliproxyapi: true,
+    });
     const asked: string[] = [];
     const nameChecks: Array<string | undefined> = [];
     const interaction: Interaction = {
@@ -226,6 +229,9 @@ describe('fn:resolveInteractiveInputs', () => {
           nameChecks.push(validate?.('Bad_Name'), validate?.('valid-name'));
 
           return 'valid-name';
+        }
+        if (message.includes('tailnet')) {
+          return 'example-tailnet';
         }
 
         return 'https://proxy.example.test';
@@ -238,7 +244,7 @@ describe('fn:resolveInteractiveInputs', () => {
           return 'provider-token';
         }
 
-        return 'proxy-key';
+        return message.includes('Tailscale') ? 'network-key' : 'proxy-key';
       },
       select: async () => {
         throw new Error('Unexpected choice prompt');
@@ -254,18 +260,27 @@ describe('fn:resolveInteractiveInputs', () => {
     await resolveInteractiveInputs(dependencies, input, {
       options: { localCredentials: false },
       interaction,
-      required: ['name', 'proxyUrl', 'providerToken', 'proxyApiKey'],
+      required: [
+        'name',
+        'networkAccount',
+        'proxyUrl',
+        'providerToken',
+        'networkEnrollment',
+        'proxyApiKey',
+      ],
     });
 
     expect(nameChecks).toEqual([
       expect.stringContaining('lowercase DNS label'),
       undefined,
     ]);
-    expect(asked).toHaveLength(4);
+    expect(asked).toHaveLength(6);
     expect(input).toMatchObject({
       name: 'valid-name',
+      networkAccount: 'example-tailnet',
       proxyUrl: 'https://proxy.example.test',
       providerToken: 'provider-token',
+      networkKey: 'network-key',
       proxyApiKey: 'proxy-key',
       isProviderTokenEntered: true,
     });

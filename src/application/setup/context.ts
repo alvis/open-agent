@@ -28,5 +28,7 @@ export interface SetupContext {
   persistsProfile: boolean;
   /** whether this run moves the agent's installed release: to another channel, or back to its channel's current release when the guest drifted from it */
   isReleaseChanged: boolean;
+  /** whether the guest already holds a device identity on the selected network */
+  networkEnrolled: boolean;
   mutation: SetupProgress;
 }

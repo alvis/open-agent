@@ -1,8 +1,8 @@
-import type { NetworkDriver } from '#application/ports/drivers';
+import type { NetworkCleanup, NetworkDriver } from '#application/ports/drivers';
 import type { NetworkStatus } from '#domain/observations/network';
 import type { ReadinessFinding } from '#domain/readiness';
 
-/** why the workstation reports no network */
+/** why the workstation reports no network, and why it cannot use one */
 const NOT_SELECTED = 'No private network is selected';
 
 /**
@@ -26,10 +26,16 @@ export const none: NetworkDriver<'none'> = {
   tools: [],
   preflight: async () => Promise.resolve({ problems: [] }),
 
+  issueCredential: async () => Promise.reject(new Error(NOT_SELECTED)),
   enroll: async () => Promise.resolve(),
+  release: async () => Promise.resolve(),
   status: async () => Promise.resolve(notConnected()),
 
   readiness: (): ReadinessFinding[] => [
     { name: 'private network', status: 'skipped' },
   ],
+  identify: async () => Promise.resolve(notConnected()),
+
+  cleanup: async (): Promise<NetworkCleanup> =>
+    Promise.resolve({ ok: true, status: 'no device identity recorded' }),
 };

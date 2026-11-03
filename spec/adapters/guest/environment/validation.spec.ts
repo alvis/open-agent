@@ -5,6 +5,7 @@ import {
   environmentProblem,
   isGuestEnvironment,
 } from '#adapters/guest/environment/validation';
+import { GUEST_ROOT } from '#adapters/guest/platform/layout';
 import { registry } from '#composition/registry';
 
 import { environmentOf } from '../../../fixtures/environment';
@@ -32,6 +33,25 @@ describe('fn:parseEnvironment', () => {
 
     expect(() => parseEnvironment(registry, JSON.stringify(candidate))).toThrow(
       /needs missing-service, which is not defined/u,
+    );
+  });
+
+  it('should reject a network whose daemon has no matching service', () => {
+    const candidate = {
+      ...RECORDED,
+      network: {
+        id: 'tailscale',
+        daemon: 'missing-daemon',
+        launcher: {
+          stateDirectory: `${GUEST_ROOT}/tailscale`,
+          socket: '/run/tailscale.sock',
+          tun: 'tailscale0',
+        },
+      },
+    };
+
+    expect(() => parseEnvironment(registry, JSON.stringify(candidate))).toThrow(
+      /network's daemon missing-daemon is not defined/u,
     );
   });
 

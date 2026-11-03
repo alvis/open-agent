@@ -60,6 +60,12 @@ export interface DriverDescriptor<
 export interface ProviderCapabilities {
   /** how core reaches the guest */
   guestChannel: GuestChannelMode;
+  /**
+   * guest networks, as CIDR prefixes, that carry the provider's own transport
+   * and so must never be routed through a network driver's tunnel; empty when
+   * the provider's transport never shares a route a tunnel can capture
+   */
+  transportNetworks: readonly string[];
   /** who decides when the workstation sleeps */
   keepAwakeMode: KeepAwakeMode;
   /** idle forms in preference order */
@@ -193,15 +199,41 @@ export interface AgentDeclaration<
   supportsPairing: boolean;
   /** release channels the agent installs from; absent when it has one */
   releaseChannels?: ReleaseChannels;
-  /** command, account, public port and dependencies on nothing */
+  /** command, account, public port and dependencies on nothing; core adds the network daemon */
   service: ServiceDefinition;
 }
 
-/** network identity, declared as data */
-export type NetworkDeclaration<Name extends string = string> = DriverDescriptor<
-  'networks',
-  Name
->;
+/** the program that prepares the guest for the network daemon and runs it, and where the daemon keeps its state */
+export interface NetworkLauncher {
+  /** the launcher, run as root */
+  asset: GuestAsset;
+  /** root-only directory on the persistent guest root holding the node identity and the managed resolver */
+  stateDirectory: string;
+  /** the daemon's control socket */
+  socket: string;
+  /** the tunnel interface */
+  tun: string;
+}
+
+/** caller-side inputs a network needs, declared as data */
+export interface NetworkInputs {
+  /** account or network that the management credential manages */
+  account: InputPrerequisite;
+  /** management credential and its local credential store entry */
+  management: InputPrerequisite & { store: string };
+  /** single-use enrollment credential that can replace the management credential */
+  enrollment: Pick<InputPrerequisite, 'environment' | 'flag'>;
+}
+
+/** network identity and capabilities, declared as data */
+export interface NetworkDeclaration<
+  Name extends string = string,
+> extends DriverDescriptor<'networks', Name> {
+  /** caller-side inputs, read and prompted for by core; absent when the network takes none */
+  inputs?: NetworkInputs;
+  /** daemon service; the agent service depends on it when the network is selected; absent when the network runs no daemon */
+  daemon?: ServiceDefinition;
+}
 
 /** caller-side inputs a model gateway needs, declared as data */
 export interface GatewayInputs {

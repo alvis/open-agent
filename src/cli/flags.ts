@@ -67,6 +67,28 @@ export const consentFlags = {
   },
 } as const;
 
+/** network identity inputs also used for deletion cleanup */
+export const networkSelectionFlags = {
+  networkAccount: {
+    kind: 'parsed',
+    parse: String,
+    optional: true,
+    placeholder: 'ACCOUNT',
+    brief: 'ACCOUNT · account or network the network key manages',
+  },
+} as const;
+
+/** selected network management credential source */
+export const networkCredentialFlags = {
+  networkKeySource: {
+    kind: 'parsed',
+    parse: String,
+    optional: true,
+    placeholder: 'SOURCE',
+    brief: 'SOURCE · network management key source reference',
+  },
+} as const;
+
 /** explicit pairing action, separate from ordinary integration choices */
 export const pairingFlags = {
   withPairCode: {
@@ -208,10 +230,18 @@ export const integrationFlags = {
     placeholder: 'HOST',
     brief: 'HOST · GitHub host',
   },
+  ...networkSelectionFlags,
 } as const;
 
 /** credential source references for selected integrations */
 export const integrationCredentialFlags = {
+  networkAuthKeySource: {
+    kind: 'parsed',
+    parse: String,
+    optional: true,
+    placeholder: 'SOURCE',
+    brief: 'SOURCE · single-use network enrollment key source reference',
+  },
   proxyApiKeySource: {
     kind: 'parsed',
     parse: String,

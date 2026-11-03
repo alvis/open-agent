@@ -1,7 +1,13 @@
 import {
+  networksWithDaemon,
+  networkDriver,
+} from '#application/catalog/networks';
+
+import {
   agentChoices,
   defaultHarnesses,
   harnessChoices,
+  inferNetwork,
   inferredOptions,
   networkChoices,
   providerChoices,
@@ -16,6 +22,7 @@ import { readSelection } from './selection/supplied';
 
 import type { SetupSection } from '#application/contracts';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { NetworkId } from '#domain/ids';
 import type { ProfileCandidate, WorkstationProfile } from '#domain/profile';
 import type { SelectionField } from '#domain/selection-inputs';
 
@@ -101,26 +108,32 @@ export function sectionFields(
 interface CreateNetworkParams {
   /** network named by a flag or the environment */
   supplied: string | undefined;
+  /** network the supplied inputs select */
+  inferred: NetworkId | undefined;
   /** active prompts, absent when none may be asked */
   prompts: Prompts | undefined;
 }
 
 /**
- * resolves the network of a new workstation: the supplied value, a prompt,
- * then the default
+ * resolves the network of a new workstation: the supplied value, a prompt, the
+ * network the supplied inputs select, then the default
  * @param dependencies the registered drivers, the profile defaults
- * @param params the call's inputs: supplied, prompts
+ * @param params the call's inputs: supplied, inferred, prompts
  * @returns the selected network
  */
 async function resolveCreateNetwork(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
   params: CreateNetworkParams,
 ): Promise<string> {
-  const { supplied, prompts } = params;
+  const { supplied, inferred, prompts } = params;
 
   return (
     supplied ??
-    (await prompts?.choose('Network', networkChoices(dependencies))) ??
+    (await prompts?.choose(
+      'Network',
+      networkChoices(dependencies, inferred),
+    )) ??
+    inferred ??
     dependencies.defaults.selection.network
   );
 }
@@ -185,6 +198,7 @@ export async function resolveCreateSelection(
     defaultHarnesses(dependencies, agent);
   const network = await resolveCreateNetwork(dependencies, {
     supplied: supplied.network,
+    inferred: inferNetwork(dependencies, options, sources),
     prompts,
   });
 
@@ -283,22 +297,30 @@ export interface SelectionRequirementsParams {
   profile: WorkstationProfile;
   /** requirements independent of the selection */
   base?: readonly RequiredInput[];
+  /** whether an existing network identity can be reused */
+  isEnrolled?: boolean;
 }
 
 /**
- * lists the inputs the selected options need before provisioning
+ * lists the inputs the selected network and options need before provisioning
  * @param dependencies the registered drivers
- * @param params the call's inputs: profile, base
+ * @param params the call's inputs: profile, base, isEnrolled
  * @returns ordered requirements for aggregate preflight validation
  */
 export function selectionRequirements(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   params: SelectionRequirementsParams,
 ): RequiredInput[] {
-  const { profile, base = [] } = params;
+  const { profile, base = [], isEnrolled = false } = params;
 
   return [
     ...base,
+    ...(networkDriver(dependencies.registry, profile.network).inputs
+      ? [
+          ...(isEnrolled ? [] : (['networkEnrollment'] as const)),
+          'networkAccount' as const,
+        ]
+      : []),
     ...(profile.options.isProxyEnabled
       ? (['proxyUrl', 'proxyApiKey'] as const)
       : []),
@@ -306,22 +328,32 @@ export function selectionRequirements(
 }
 
 /**
- * resolves the network a setup run applies
- * @param dependencies the registered drivers
+ * resolves the network a setup run applies; targeting the network section of a
+ * workstation without one selects the first network that runs a daemon
+ * @param dependencies the registered drivers, the profile defaults
  * @param context recorded profile, targeted section and supplied values
  * @param prompts prompts when the run targets every section
  * @returns the network id, validated later against the catalog
  */
 async function resolveSetupNetwork(
-  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
   context: SetupSelectionContext,
   prompts: Prompts | undefined,
 ): Promise<string> {
-  const { recorded, supplied } = context;
+  const { recorded, section, supplied } = context;
+  const enabledNetwork =
+    section === 'network' &&
+    !networkDriver(dependencies.registry, recorded.network).daemon
+      ? networksWithDaemon(dependencies.registry)[0]?.id
+      : undefined;
 
   return (
     supplied.network ??
-    (await prompts?.choose('Network', networkChoices(dependencies))) ??
+    (await prompts?.choose(
+      'Network',
+      networkChoices(dependencies, recorded.network),
+    )) ??
+    enabledNetwork ??
     recorded.network
   );
 }

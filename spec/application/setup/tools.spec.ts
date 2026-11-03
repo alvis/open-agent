@@ -103,6 +103,7 @@ function toolsContext(
     profile: DISABLED_NETWORK_PROFILE,
     persistsProfile: run.persists,
     isReleaseChanged: false,
+    networkEnrolled: false,
     mutation: { started: false },
   };
 }
@@ -233,6 +234,7 @@ describe('fn:setupTools --update', () => {
       profile: DISABLED_NETWORK_PROFILE,
       persistsProfile: false,
       isReleaseChanged: false,
+      networkEnrolled: false,
       mutation: { started: false },
     };
 
@@ -334,6 +336,7 @@ describe('fn:persistSetupProfile tools section', () => {
       context: {
         mutation,
         expected: DISABLED_NETWORK_PROFILE,
+        section: 'tools',
       },
     });
 

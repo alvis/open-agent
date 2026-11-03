@@ -1,6 +1,7 @@
 // the shape of environment.json, as checks composed field by field; a
 // malformed record is reported by the first top-level field that is wrong
 
+import { GUEST_ROOT } from '#adapters/guest/platform/layout';
 import { parseProfile } from '#domain/profile';
 import { isRecord } from '#kernel/guards';
 
@@ -157,6 +158,7 @@ const TRAILING_FIELDS: Readonly<Record<string, Check>> = {
     wakeMode: oneOf('url-traffic', 'cli-restore', 'always-on'),
     supportsCliWakeSleep: flag,
     maxAwakeDeadlineMinutes: (value) => value === null || atLeast(1)(value),
+    transportNetworks: listOf(text),
     idleTimeoutMinutes: atLeast(0),
     holdMaxMinutes: atLeast(1),
     awakeAdapter: (value) => value === null || path(value),
@@ -184,6 +186,19 @@ const TRAILING_FIELDS: Readonly<Record<string, Check>> = {
       }),
     ),
   }),
+  network: (value) =>
+    value === null ||
+    shape({
+      id: text,
+      daemon: name,
+      launcher: shape({
+        stateDirectory: (directory) =>
+          typeof directory === 'string' &&
+          directory.startsWith(`${GUEST_ROOT}/`),
+        socket: path,
+        tun: name,
+      }),
+    })(value),
   services: listOf(
     shape({
       name,
@@ -194,6 +209,9 @@ const TRAILING_FIELDS: Readonly<Record<string, Check>> = {
     }),
   ),
   jobs: listOf(shape({ name, everyMinutes: atLeast(1), run: shape(run) })),
+  networkIdentity: optional(
+    shape({ network: text, deviceId: optional(word), ip: optional(word) }),
+  ),
 };
 
 /**
@@ -281,9 +299,12 @@ function malformedField(
  * @returns what is inconsistent, or nothing
  */
 function consistencyProblem(
-  environment: Pick<GuestEnvironment, 'services' | 'agent' | 'tools'>,
+  environment: Pick<
+    GuestEnvironment,
+    'services' | 'agent' | 'network' | 'tools'
+  >,
 ): string | undefined {
-  const { services, agent, tools } = environment;
+  const { services, agent, network, tools } = environment;
   const names = new Set(services.map((service) => service.name));
   if (names.size !== services.length) {
     return 'a service is defined twice';
@@ -299,6 +320,9 @@ function consistencyProblem(
   );
   if (agentService?.account !== agent.account) {
     return `the agent's service ${agent.service} is not defined, or runs as another account`;
+  }
+  if (network && !names.has(network.daemon)) {
+    return `the network's daemon ${network.daemon} is not defined`;
   }
   const installed = new Set(tools.map((tool) => tool.name));
   const unadapted = agent.harnesses.find(

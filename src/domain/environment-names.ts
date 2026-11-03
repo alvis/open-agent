@@ -2,16 +2,23 @@ import type { ProductDeclarations } from '#domain/declarations';
 import type { HarnessId } from '#domain/ids';
 
 /**
- * lists the management credentials every registered provider reads
+ * lists the management credentials every registered provider and network reads
  * @param declarations the data every registered driver declares
  * @returns environment variable names that hold caller-side secrets
  */
 export function driverCredentialNames(
   declarations: ProductDeclarations,
 ): string[] {
-  return Object.values(declarations.providers).map(
-    ({ prerequisites }) => prerequisites.credential.environment,
-  );
+  return [
+    ...Object.values(declarations.providers).map(
+      ({ prerequisites }) => prerequisites.credential.environment,
+    ),
+    ...Object.values(declarations.networks).flatMap(({ inputs }) =>
+      inputs
+        ? [inputs.management.environment, inputs.enrollment.environment]
+        : [],
+    ),
+  ];
 }
 
 /**

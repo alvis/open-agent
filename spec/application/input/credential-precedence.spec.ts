@@ -13,6 +13,8 @@ import { resolveProviderCredential } from '#application/input/provider-credentia
 
 import { redactResolved } from '#kernel/redaction';
 
+import { TAILSCALE_PROFILE } from '../../fixtures/profile';
+
 import { dependencies } from '../../mocks/dependencies';
 
 import type { CredentialStoreLocation } from '#domain/credentials';
@@ -158,6 +160,60 @@ describe('fn:management credential precedence', () => {
     });
   });
 
+  it('should read the Tailscale store only for selected enrollment and honors a direct key first', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-tailnet-store-'),
+    );
+    const path = join(directory.path, 'credentials.json');
+    const location = {
+      backend: 'protected-file',
+      path,
+    } satisfies CredentialStoreLocation;
+    await writeFile(path, '{', { mode: 0o600 });
+
+    const unused = await resolveBaseInputs(dependencies, {
+      options: { github: false },
+      sources: {
+        ...emptySources,
+        processEnv: { SPRITES_TOKEN: 'provider-token' },
+      },
+      selection: { networkEnrollment: false, credentialStore: location },
+    });
+    expect(unused.input.networkKey).toBeUndefined();
+
+    const direct = await resolveBaseInputs(dependencies, {
+      options: { github: false },
+      sources: {
+        ...emptySources,
+        processEnv: {
+          SPRITES_TOKEN: 'provider-token',
+          TAILSCALE_API_KEY: 'selected-key',
+        },
+      },
+      selection: {
+        profile: TAILSCALE_PROFILE,
+        networkEnrollment: true,
+        credentialStore: location,
+      },
+    });
+    expect(direct.input.networkKey).toBe('selected-key');
+
+    await expect(
+      resolveBaseInputs(dependencies, {
+        options: { github: false },
+        sources: {
+          ...emptySources,
+          processEnv: { SPRITES_TOKEN: 'provider-token' },
+        },
+        selection: {
+          profile: TAILSCALE_PROFILE,
+          networkEnrollment: true,
+          credentialStore: location,
+        },
+      }),
+    ).rejects.toEqual(expect.objectContaining({ code: 'INPUT' }));
+  });
+
   it('should use a generated absent Keychain location without touching the default Keychain', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-absent-keychain-'),
@@ -233,7 +289,7 @@ describe('fn:management credential precedence', () => {
       fallbackFilePath: path,
     } satisfies CredentialStoreLocation;
 
-    const saved = await saveLocalCredential('sprites', secret, {
+    const saved = await saveLocalCredential('tailscale', secret, {
       consent: true,
       allowProtectedFileFallback: true,
       location,
@@ -249,7 +305,7 @@ describe('fn:management credential precedence', () => {
     expect((await stat(vault)).mode & 0o777).toBe(0o700);
     expect((await stat(path)).mode & 0o777).toBe(0o600);
     expect(
-      await readLocalCredential('sprites', {
+      await readLocalCredential('tailscale', {
         backend: 'protected-file',
         path,
       }),

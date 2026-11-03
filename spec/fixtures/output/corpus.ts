@@ -1,7 +1,11 @@
 import { PairingSecret } from '#kernel/pairing-secret';
 
 import { environmentOf } from '../environment';
-import { DISABLED_NETWORK_PROFILE, profileWith } from '../profile';
+import {
+  DISABLED_NETWORK_PROFILE,
+  profileWith,
+  TAILSCALE_PROFILE,
+} from '../profile';
 
 import type { CommandOptions } from '#application/contracts';
 import type { CreatePreflight } from '#application/create/context';
@@ -63,7 +67,7 @@ const DETAILED_MACHINE: MachineSummary = {
     provider: 'sprite',
     agent: 't3',
     harnesses: ['claude', 'codex'],
-    network: 'none',
+    network: 'tailscale',
   },
   readiness: 'not inspected',
 };
@@ -78,7 +82,7 @@ const PREFLIGHT: CreatePreflight = {
 const PASSING_READINESS: ReadinessAssessment = {
   ready: true,
   failures: [],
-  skipped: ['private network'],
+  skipped: ['Tailscale connectivity'],
   probeFailures: [],
 };
 
@@ -86,7 +90,7 @@ const FAILING_READINESS: ReadinessAssessment = {
   ready: false,
   failures: ['T3 environment endpoint', 'network inspection unavailable'],
   skipped: [],
-  probeFailures: [{ probe: 'network', reason: 'network status timed out' }],
+  probeFailures: [{ probe: 'network', reason: 'tailscale status timed out' }],
 };
 
 const RECORDED_GOVERNOR: GovernorState = {
@@ -145,7 +149,17 @@ const INSPECTION: GuestInspection = {
   governor: { recorded: true, state: RECORDED_GOVERNOR },
 };
 
-const PROXY_PROFILE: WorkstationProfile = profileWith({ cliproxyapi: true });
+const TAILSCALE_PROFILE_WITH_PROXY: WorkstationProfile = profileWith({
+  network: true,
+  cliproxyapi: true,
+});
+
+const ONLINE_NETWORK: GuestInspection['network'] = {
+  online: true,
+  skipped: false,
+  deviceId: 'node-1234',
+  ip: '192.0.2.7',
+};
 
 const REACHABLE_HUB: GuestInspection['hub'] = {
   skipped: false,
@@ -235,22 +249,23 @@ export const CORPUS: readonly CorpusCase[] = [
     retainedCredential: { storage: 'keychain' },
   }),
   corpusCase(
-    'create-success-proxy',
+    'create-success-tailscale',
     {
       command: 'create',
       ok: true,
       data: {
         retainedCredentials: {
-          provider: {
+          provider: { storage: 'protected-file' },
+          network: {
             storage: 'protected-file',
             fallbackReason: 'Keychain is unavailable on this platform',
           },
         },
         machine: DETAILED_MACHINE,
         preflight: PREFLIGHT,
-        profile: PROXY_PROFILE,
+        profile: TAILSCALE_PROFILE_WITH_PROXY,
         readiness: PASSING_READINESS,
-        network: INSPECTION.network,
+        network: ONLINE_NETWORK,
         hub: REACHABLE_HUB,
         services: [{ name: 't3-code', state: 'running' }],
         native: INSPECTION.native,
@@ -265,7 +280,7 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       machine: MACHINE,
       preflight: { checks: [], reminders: [] },
-      profile: DISABLED_NETWORK_PROFILE,
+      profile: TAILSCALE_PROFILE,
       readiness: PASSING_READINESS,
       network: INSPECTION.network,
       hub: INSPECTION.hub,
@@ -350,7 +365,7 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       section: 'all',
       machine: MACHINE,
-      retainedCredentials: { provider: { storage: 'keychain' } },
+      retainedCredentials: { network: { storage: 'keychain' } },
       service: 'configured',
       pairing: { status: 'not requested' },
       github: 'configured',
@@ -360,7 +375,7 @@ export const CORPUS: readonly CorpusCase[] = [
         names: ['API_BASE', 'REGION'],
       },
       plugins: { claude: 'applied', codex: 'preserved' },
-      network: { status: 'disabled', readiness: 'skipped' },
+      network: { status: 'configured' },
       proxy: { status: 'configured', baseUrl: 'https://hub.example.test/' },
       components: { installed: 6, skipped: 1, failed: 1 },
       tools: 'updated',
@@ -407,6 +422,15 @@ export const CORPUS: readonly CorpusCase[] = [
     },
     { withPairCode: true },
   ),
+  corpusCase('setup-network-configured', {
+    command: 'setup',
+    ok: true,
+    data: {
+      section: 'network',
+      machine: MACHINE,
+      network: { status: 'configured' },
+    },
+  }),
   corpusCase('setup-network-disabled', {
     command: 'setup',
     ok: true,
@@ -516,6 +540,39 @@ export const CORPUS: readonly CorpusCase[] = [
         tools: INSTALLED_TOOLS,
         skipped: SKIPPED_TOOLS,
         lastUpdate: UPDATES,
+      },
+    },
+  }),
+  corpusCase('setup-local-credential-replaced-keychain', {
+    command: 'setup',
+    ok: true,
+    data: {
+      localCredential: {
+        status: 'replaced',
+        scope: 'this computer; all workstations',
+        storage: 'keychain',
+      },
+    },
+  }),
+  corpusCase('setup-local-credential-replaced-fallback', {
+    command: 'setup',
+    ok: true,
+    data: {
+      localCredential: {
+        status: 'replaced',
+        scope: 'this computer; all workstations',
+        storage: 'protected-file',
+        fallbackReason: 'Keychain write could not be verified',
+      },
+    },
+  }),
+  corpusCase('setup-local-credential-unchanged', {
+    command: 'setup',
+    ok: true,
+    data: {
+      localCredential: {
+        status: 'unchanged',
+        scope: 'this computer; all workstations',
       },
     },
   }),
@@ -658,7 +715,7 @@ export const CORPUS: readonly CorpusCase[] = [
     ok: true,
     data: { machine: MACHINE, inspection: INSPECTION },
   }),
-  corpusCase('show-inspection-detailed', {
+  corpusCase('show-inspection-online', {
     command: 'show',
     ok: true,
     data: {
@@ -666,8 +723,9 @@ export const CORPUS: readonly CorpusCase[] = [
       inspection: {
         ...INSPECTION,
         services: [{ name: 't3-code', status: 'running', needs: [] }],
+        network: ONLINE_NETWORK,
         hub: REACHABLE_HUB,
-        environment: environmentOf(PROXY_PROFILE, {
+        environment: environmentOf(TAILSCALE_PROFILE_WITH_PROXY, {
           tools: INSTALLED_TOOLS,
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
@@ -785,7 +843,7 @@ export const CORPUS: readonly CorpusCase[] = [
         ...INSPECTION,
         network: {
           ...INSPECTION.network,
-          reason: `the network rejected ${NESTED_SECRET} twice: ${NESTED_SECRET}`,
+          reason: `Tailscale rejected ${NESTED_SECRET} twice: ${NESTED_SECRET}`,
         },
         updates: {
           tools: [
@@ -867,8 +925,9 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       machine: DETAILED_MACHINE,
       currentReadiness: currentReadiness({
+        network: ONLINE_NETWORK,
         hub: REACHABLE_HUB,
-        environment: environmentOf(PROXY_PROFILE, {
+        environment: environmentOf(TAILSCALE_PROFILE_WITH_PROXY, {
           tools: INSTALLED_TOOLS,
           setup: { state: 'ready', skipped: SKIPPED_TOOLS },
         }),
@@ -891,7 +950,7 @@ export const CORPUS: readonly CorpusCase[] = [
         ready: false,
         failures: ['T3 environment endpoint'],
         skipped: [],
-        network: INSPECTION.network,
+        network: { ...INSPECTION.network, deviceId: 'node-1234' },
       }),
     },
   }),
@@ -902,16 +961,54 @@ export const CORPUS: readonly CorpusCase[] = [
   }),
 
   // terminate
-  corpusCase('terminate-success', {
+  ...(
+    [
+      'no device identity recorded',
+      'cleanup required',
+      'deleted',
+      'cleanup failed',
+    ] as const
+  ).map((status) =>
+    corpusCase(`terminate-success-${status.replaceAll(' ', '-')}`, {
+      command: 'terminate',
+      ok: true,
+      data: {
+        machine: MACHINE,
+        workstation: {
+          status: 'deleted',
+          id: 'sprite-primary',
+          name: 'primary',
+        },
+        network:
+          status === 'no device identity recorded'
+            ? { status }
+            : { status, deviceId: 'managed-node', address: '192.0.2.7' },
+      },
+    }),
+  ),
+  corpusCase('terminate-failure-retained-identity', {
     command: 'terminate',
-    ok: true,
+    ok: false,
+    error: {
+      code: 'PROVIDER',
+      message: 'Tailnet cleanup required',
+      machine: 'retained-machine',
+      machineId: 'sprite-retained',
+      setupIncomplete: true,
+      details: ['Retry setup after checking the managed device'],
+    },
     data: {
-      machine: MACHINE,
+      machine: {
+        ...MACHINE,
+        name: 'retained-machine',
+        agentUrl: 'https://retained.sprites.app/',
+      },
       workstation: {
         status: 'deleted',
-        id: 'sprite-primary',
-        name: 'primary',
+        id: 'sprite-retained',
+        name: 'retained-machine',
       },
+      network: { status: 'cleanup required', deviceId: 'managed-node' },
     },
   }),
   corpusCase('terminate-failure-cancelled', {

@@ -95,7 +95,7 @@ function recordingInteraction(): {
 }
 
 describe('fn:resolveCreateSelection', () => {
-  it('should ask harnesses and the supported options in order while skipping single-choice steps and hold-max', async () => {
+  it('should ask harnesses, network and the supported options in order while skipping single-choice steps and hold-max', async () => {
     const { interaction, asked } = recordingInteraction();
 
     const { candidate } = await resolveCreateSelection(dependencies, {
@@ -109,6 +109,7 @@ describe('fn:resolveCreateSelection', () => {
       'Minimum memory (GB)',
       'Release channel',
       'Harnesses',
+      'Network',
       'Route harnesses through CLIProxyAPI?',
       'Suspend after idle (minutes, 0 = never)',
     ]);
@@ -130,7 +131,7 @@ describe('fn:resolveCreateSelection', () => {
         mem: 8,
         release: 'stable',
         harness: ['codex'],
-        network: 'none',
+        network: 'tailscale',
         proxy: false,
         idleMinutes: 0,
       },
@@ -187,7 +188,7 @@ describe('fn:resolveCreateSelection', () => {
     };
 
     const fromSources = await resolveCreateSelection(dependencies, {
-      options: { network: 'none' },
+      options: { network: 'tailscale' },
       sources,
       interaction,
     });
@@ -265,12 +266,12 @@ describe('fn:resolveCreateSelection', () => {
 
 describe('fn:resolveSetupSelection', () => {
   it('should keep the recorded selection and take provider and agent only from flags', async () => {
-    const recorded = defaultProfile(defaults);
+    const recorded = defaultProfile(defaults, 'none');
 
     const { candidate } = await resolveSetup({
       options: { agent: 't3' },
       sources: {
-        processEnv: { OPEN_AGENT_NETWORK: 'unregistered-network' },
+        processEnv: { OPEN_AGENT_NETWORK: 'tailscale' },
         fileEnv: {},
         profile: {},
       },
@@ -286,8 +287,19 @@ describe('fn:resolveSetupSelection', () => {
     });
   });
 
+  it('should select an installable network when the network section targets a workstation without one', async () => {
+    const { candidate } = await resolveSetup({
+      options: { nonInteractive: true },
+      sources: empty,
+      recorded: defaultProfile(defaults, 'none'),
+      section: 'network',
+    });
+
+    expect(candidate.network).toBe('tailscale');
+  });
+
   it('should keep the recorded network when only the proxy section is targeted', async () => {
-    const recorded = defaultProfile(defaults);
+    const recorded = defaultProfile(defaults, 'tailscale');
 
     const { candidate } = await resolveSetup({
       options: { nonInteractive: true, proxy: false },
@@ -300,7 +312,7 @@ describe('fn:resolveSetupSelection', () => {
       section: 'proxy',
     });
 
-    expect(candidate.network).toBe('none');
+    expect(candidate.network).toBe('tailscale');
     expect(candidate.options).toEqual({
       ...recorded.options,
       isProxyEnabled: false,
@@ -308,10 +320,10 @@ describe('fn:resolveSetupSelection', () => {
   });
 
   it('should keep the recorded proxy when only the network section is targeted', async () => {
-    const profile = defaultProfile(defaults);
+    const tailscale = defaultProfile(defaults, 'tailscale');
     const recorded = {
-      ...profile,
-      options: { ...profile.options, isProxyEnabled: true },
+      ...tailscale,
+      options: { ...tailscale.options, isProxyEnabled: true },
     };
 
     const { candidate } = await resolveSetup({
@@ -346,7 +358,7 @@ describe('fn:resolveSetupSelection', () => {
 
 describe('fn:resolveSetupSelection update intervals', () => {
   it('should apply a supplied update interval to the recorded profile when the tools section is targeted', async () => {
-    const recorded = defaultProfile(defaults);
+    const recorded = defaultProfile(defaults, 'none');
 
     const { candidate } = await resolveSetup({
       options: { nonInteractive: true, updateDueDays: 3 },
@@ -503,12 +515,25 @@ describe('fn:suppliedSelectionViolations', () => {
 });
 
 describe('fn:selectionRequirements', () => {
-  it('should add no input for a selection without the proxy', () => {
+  it('should require network inputs only for an installable network and skip enrollment for an enrolled device', () => {
+    const none = defaultProfile(defaults, 'none');
+    const tailscale = defaultProfile(defaults, 'tailscale');
+
     expect(
       selectionRequirements(dependencies, {
-        profile: defaultProfile(defaults),
+        profile: none,
         base: ['providerToken'],
       }),
     ).toEqual(['providerToken']);
+    expect(selectionRequirements(dependencies, { profile: tailscale })).toEqual(
+      ['networkEnrollment', 'networkAccount'],
+    );
+    expect(
+      selectionRequirements(dependencies, {
+        profile: tailscale,
+        base: [],
+        isEnrolled: true,
+      }),
+    ).toEqual(['networkAccount']);
   });
 });

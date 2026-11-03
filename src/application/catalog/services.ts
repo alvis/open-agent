@@ -39,7 +39,7 @@ export async function pairAgent(
  * @returns display names keyed by service name
  */
 export function serviceLabels(
-  registry: Pick<DriverRegistry, 'agents'>,
+  registry: Pick<DriverRegistry, 'agents' | 'networks'>,
 ): Record<string, string> {
   return {
     ...Object.fromEntries(
@@ -47,6 +47,11 @@ export function serviceLabels(
         service.name,
         displayName,
       ]),
+    ),
+    ...Object.fromEntries(
+      Object.values(registry.networks).flatMap(({ daemon, displayName }) =>
+        daemon ? [[daemon.name, displayName]] : [],
+      ),
     ),
     [CRON_SERVICE_NAME]: MAINTENANCE_LABEL,
   };

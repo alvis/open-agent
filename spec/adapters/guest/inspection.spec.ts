@@ -12,6 +12,7 @@ import type { ProbeEvent } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
 
 const PROFILE = profileWith({
+  network: false,
   cliproxyapi: true,
 });
 
@@ -39,6 +40,7 @@ function inspectionGuest(): GuestChannel {
       }
       throw new Error(`Guest path unavailable: ${path}`);
     },
+    assertUnrestrictedNetwork: async () => undefined,
   } satisfies GuestChannel;
 }
 

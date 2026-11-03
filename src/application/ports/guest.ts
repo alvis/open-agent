@@ -1,5 +1,5 @@
 import type { GitIdentity } from '#domain/git';
-import type { AgentId } from '#domain/ids';
+import type { AgentId, NetworkId } from '#domain/ids';
 import type { AgentEnvironments } from '#domain/observations/agent';
 import type { GuestEnvironment } from '#domain/observations/environment';
 import type { GuestInspection } from '#domain/observations/inspection';
@@ -11,7 +11,11 @@ import type { WorkstationRecord } from '#domain/workstation';
 import type { CommandFault } from '#kernel/faults';
 import type { Secret } from '#kernel/secret';
 
-import type { ProviderDriver, ProxyRoute } from './drivers';
+import type {
+  NetworkIdentityRecorder,
+  ProviderDriver,
+  ProxyRoute,
+} from './drivers';
 import type { GuestChannel, GuestServiceControl } from './guest-channel';
 import type {
   AssemblyParams,
@@ -118,6 +122,17 @@ export interface GuestEnvironmentAccess {
    * @param profile the profile to record
    */
   writeProfile(guest: GuestChannel, profile: WorkstationProfile): Promise<void>;
+  /**
+   * keeps a network device identity in the recorded environment, owned by the
+   * network that enrolled it
+   * @param guest target guest
+   * @param network the network whose device the identity names
+   * @returns the recorder a network driver calls with each identity it observes
+   */
+  identityRecorder(
+    guest: GuestChannel,
+    network: NetworkId,
+  ): NetworkIdentityRecorder;
   /**
    * refuses to go on when the recorded integration choices changed while
    * inputs were being collected

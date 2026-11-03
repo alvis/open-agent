@@ -110,10 +110,11 @@ async function installationBoundary() {
 }
 
 describe('fn:installWorkstation', () => {
-  it('should hand over the earlier services and start provider services after caller configuration', async () => {
+  it('should preserve the earlier identity and start provider services after caller configuration', async () => {
     await using boundary = await installationBoundary();
     const events: string[] = [];
     const previous = environmentOf(DISABLED_NETWORK_PROFILE, {
+      networkIdentity: { network: 'tailscale', deviceId: 'old-device' },
       services: [{ ...recordedService, name: 'old-service' }, recordedService],
     });
     boundary.run.mockImplementation(
@@ -161,6 +162,7 @@ describe('fn:installWorkstation', () => {
         release: boundary.connection.release,
         version: OPEN_AGENT_VERSION,
         setupAt: expect.any(String),
+        networkIdentity: previous.networkIdentity,
       }),
     );
     expect(beforeServices.mock.calls).toEqual([[boundary.guest]]);
@@ -392,6 +394,7 @@ describe('fn:installWorkstation', () => {
       release: boundary.connection.release,
       version: OPEN_AGENT_VERSION,
       setupAt: expect.any(String),
+      networkIdentity: undefined,
     };
     expect({ result, assemblies: boundary.assemble.mock.calls }).toEqual({
       result: environment,

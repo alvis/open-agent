@@ -3,11 +3,13 @@ import { projectProfile } from './profile';
 
 import type {
   EnvironmentHarness,
+  EnvironmentNetwork,
   EnvironmentProvider,
   EnvironmentTool,
   GuestEnvironment,
   SkippedTool,
 } from '#domain/observations/environment';
+import type { GuestNetworkIdentity } from '#domain/observations/network';
 import type { PeriodicJob, ServiceDefinition } from '#domain/services';
 
 import type { ProfileOutput } from './profile';
@@ -46,6 +48,7 @@ export interface EnvironmentProviderOutput {
   wakeMode: string;
   supportsCliWakeSleep: boolean;
   maxAwakeDeadlineMinutes: number | null;
+  transportNetworks: readonly string[];
   idleTimeoutMinutes: number;
   holdMaxMinutes: number;
   awakeAdapter: string | null;
@@ -67,6 +70,13 @@ export interface EnvironmentAgentOutput {
   harnesses: EnvironmentHarnessOutput[];
 }
 
+/** the network the guest recorded */
+export interface EnvironmentNetworkOutput {
+  id: string;
+  daemon: string;
+  launcher: { stateDirectory: string; socket: string; tun: string };
+}
+
 /** a service the guest runs */
 export interface ServiceDefinitionOutput {
   name: string;
@@ -85,6 +95,13 @@ export interface PeriodicJobOutput {
   run: { command: string; arguments: readonly string[]; account: string };
 }
 
+/** the identity the network assigned to the guest */
+export interface NetworkIdentityOutput {
+  network: string;
+  deviceId?: string;
+  ip?: string;
+}
+
 /** the environment record the guest wrote at setup */
 export interface EnvironmentOutput {
   schema: number;
@@ -96,8 +113,10 @@ export interface EnvironmentOutput {
   schedule: { dueDays: number };
   provider: EnvironmentProviderOutput;
   agent: EnvironmentAgentOutput;
+  network: EnvironmentNetworkOutput | null;
   services: ServiceDefinitionOutput[];
   jobs: PeriodicJobOutput[];
+  networkIdentity?: NetworkIdentityOutput;
 }
 
 type EnvironmentAgent = GuestEnvironment['agent'];
@@ -136,8 +155,10 @@ export function projectEnvironment(
       }),
     provider: projectProvider,
     agent: projectAgent,
+    network: (network) => (network === null ? null : projectNetwork(network)),
     services: each(projectServiceDefinition),
     jobs: each(projectJob),
+    networkIdentity: projectNetworkIdentity,
   });
 }
 
@@ -188,6 +209,23 @@ function projectAgent(agent: EnvironmentAgent): EnvironmentAgentOutput {
 }
 
 /**
+ * projects the recorded network
+ * @param network internal network
+ * @returns output network
+ */
+function projectNetwork(network: EnvironmentNetwork): EnvironmentNetworkOutput {
+  return projectFields<EnvironmentNetwork, EnvironmentNetworkOutput>(network, {
+    id: same,
+    daemon: same,
+    launcher: (launcher) =>
+      projectFields<typeof launcher, EnvironmentNetworkOutput['launcher']>(
+        launcher,
+        { stateDirectory: same, socket: same, tun: same },
+      ),
+  });
+}
+
+/**
  * projects a recorded tool
  * @param tool internal tool
  * @returns output tool
@@ -232,6 +270,7 @@ function projectProvider(
       wakeMode: same,
       supportsCliWakeSleep: same,
       maxAwakeDeadlineMinutes: same,
+      transportNetworks: same,
       idleTimeoutMinutes: same,
       holdMaxMinutes: same,
       awakeAdapter: same,
@@ -273,5 +312,20 @@ function projectJob(job: PeriodicJob): PeriodicJobOutput {
         arguments: same,
         account: same,
       }),
+  });
+}
+
+/**
+ * projects the network identity
+ * @param identity internal identity
+ * @returns output identity
+ */
+function projectNetworkIdentity(
+  identity: GuestNetworkIdentity,
+): NetworkIdentityOutput {
+  return projectFields<GuestNetworkIdentity, NetworkIdentityOutput>(identity, {
+    network: same,
+    deviceId: same,
+    ip: same,
   });
 }

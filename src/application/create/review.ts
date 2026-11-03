@@ -1,3 +1,4 @@
+import { networkDriver } from '#application/catalog/networks';
 import { hasActions } from '#application/plugins';
 import { harnessIds, harnessLabel } from '#domain/harnesses';
 import { pickMachine } from '#domain/machine-sizes';
@@ -58,13 +59,14 @@ export function reviewCreatePlan(
         machineSummary(dependencies, profile),
         ...releaseSummary(dependencies, profile),
         `Harnesses: ${profile.harnesses.map((id) => harnessLabel(id)).join(', ')}`,
-        'No private network',
+        networkSummary(dependencies, input),
         profile.options.isProxyEnabled
           ? `CLIProxyAPI ${input.proxyUrl}`
           : 'CLIProxyAPI disabled',
         `Suspend after idle: ${idleSummary(profile.options.idleTimeoutMinutes)}`,
         `${dependencies.registry.agents[profile.agent].displayName} exposed after readiness`,
         `${credential.label}: ${input.sources[credential.environment] ?? 'prompt/session'}`,
+        ...networkCredentialLines(dependencies, input),
         `GitHub: ${input.githubToken ? 'selected' : 'skipped'}; Git identity: ${input.gitIdentity ? 'configured' : 'skipped'}`,
         ...describePluginSelections(plugins, profile.harnesses),
       ].join('\n'),
@@ -157,10 +159,49 @@ function releaseSummary(
 }
 
 /**
+ * summarizes the selected network for the creation review
+ * @param dependencies the registered drivers
+ * @param input resolved selection
+ * @returns one review line
+ */
+function networkSummary(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  input: ResolvedInputs,
+): string {
+  const network = networkDriver(dependencies.registry, input.profile.network);
+  if (!network.daemon) {
+    return 'No private network';
+  }
+
+  return `${network.displayName} enabled`;
+}
+
+/**
  * describes the idle suspension the profile records
  * @param minutes minutes before suspension, 0 for never
  * @returns review text
  */
 function idleSummary(minutes: number): string {
   return minutes ? `${minutes} minutes` : 'never';
+}
+
+/**
+ * names where the selected network's management credential comes from
+ * @param dependencies the registered drivers
+ * @param input resolved inputs and their sources
+ * @returns one review line, or none without a selected network
+ */
+function networkCredentialLines(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  input: ResolvedInputs,
+): string[] {
+  const network = networkDriver(dependencies.registry, input.profile.network);
+  if (!network.inputs) {
+    return [];
+  }
+  const source =
+    input.sources[network.inputs.management.environment] ??
+    (input.enrollmentKey ? 'auth key' : 'prompt/session');
+
+  return [`${network.displayName} credential: ${source}`];
 }

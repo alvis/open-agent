@@ -21,6 +21,8 @@ const FIELD_LABELS: Record<string, string> = {
   pairing: 'Agent pairing',
   expiresAt: 'Expires at',
   id: 'ID',
+  ip: 'IP address',
+  deviceId: 'Device ID',
   gatewayConfigured: 'Proxy configured',
   modelDiscoveryEnabled: 'Model discovery enabled',
   pluginListAvailable: 'Native plugin inventory available',

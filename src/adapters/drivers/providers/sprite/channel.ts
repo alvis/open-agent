@@ -24,6 +24,8 @@ import type { GuestCommand } from '#domain/guest-command';
 const DEFAULT_TIMEOUT_MS = 120_000;
 const KIBIBYTE_BYTES = 1024;
 const MAX_BUFFER_BYTES = KIBIBYTE_BYTES * KIBIBYTE_BYTES;
+const NETWORK_POLICY_MESSAGE =
+  'Sprite network policy is enforced; refusing to replace its DNS configuration. No network policy was changed.';
 
 /** binds a guest channel to one Sprite */
 interface SpriteGuestChannelParams {
@@ -116,6 +118,16 @@ export class SpriteGuestChannel implements GuestChannel {
     return callSprites(async () =>
       this.#sprite.filesystem().readFile(path, 'utf8'),
     );
+  }
+
+  /** rejects when a Sprite network policy is enforced; never changes it */
+  public async assertUnrestrictedNetwork(): Promise<void> {
+    const policy = await runOperation(async () =>
+      callSprites(async () => this.#sprite.getNetworkPolicy()),
+    );
+    if (policy.rules.length > 0) {
+      throw new Error(NETWORK_POLICY_MESSAGE);
+    }
   }
 }
 

@@ -3,6 +3,7 @@ import type { ResolvedInputs } from '#application/input/types';
 import type { HarnessPluginActions } from '#application/plugins';
 import type { ProviderDriver } from '#application/ports/drivers';
 import type { CommandResult } from '#application/result';
+import type { Secret } from '#kernel/secret';
 
 /** verified caller-side checks and actionable guest-readiness reminders */
 export interface CreatePreflight {
@@ -16,6 +17,7 @@ export interface CreateContext {
   input: ResolvedInputs;
   name: string;
   token: string;
+  authKey?: Secret;
   plugins: HarnessPluginActions;
   preflight: CreatePreflight;
   provider: ProviderDriver;

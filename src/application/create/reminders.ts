@@ -1,3 +1,4 @@
+import { networkDriver } from '#application/catalog/networks';
 import { harnessLabel } from '#domain/harnesses';
 
 import type { ResolvedInputs } from '#application/input/types';
@@ -16,6 +17,7 @@ export function createPreflightSummary(
   input: ResolvedInputs,
 ): CreatePreflight {
   const { profile } = input;
+  const network = networkDriver(dependencies.registry, profile.network);
   const provider =
     dependencies.registry.providers[profile.provider].displayName;
 
@@ -23,9 +25,13 @@ export function createPreflightSummary(
     checks: [
       'Required inputs and proxy URL syntax',
       `${provider} prerequisites, authentication and target-name availability`,
+      ...(network.daemon && input.networkKey
+        ? [`${network.displayName} access and hostname availability`]
+        : []),
     ],
     reminders: [
       `Managed maintenance checks hourly; once ${dueDays(profile.options.updateDueIntervalDays)} passed since the last update, it installs the latest tools in place without restarting ${dependencies.registry.agents[profile.agent].displayName} or any other service.`,
+      ...networkReminders(dependencies, input),
       ...(profile.options.isProxyEnabled
         ? [
             'CLIProxyAPI authentication, discovery and guest reachability are verified after routing setup; the hub must permit that network.',
@@ -54,4 +60,36 @@ export function createPreflightSummary(
  */
 function dueDays(days: number): string {
   return days === 1 ? 'a day has' : `${days} days have`;
+}
+
+/**
+ * describes what the selected network still verifies on the new guest
+ * @param dependencies the registered drivers
+ * @param input resolved selection and network credentials
+ * @returns reminders for the selected network, none without one
+ */
+function networkReminders(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  input: ResolvedInputs,
+): string[] {
+  const network = networkDriver(dependencies.registry, input.profile.network);
+  if (!network.inputs) {
+    return [];
+  }
+  const { displayName: name, inputs } = network;
+
+  return [
+    'Guest TUN support and a writable native DNS mount are verified before public exposure; failed readiness leaves the workstation private and incomplete.',
+    `A provider network policy that blocks managed ${name} DNS setup is reported, never removed or bypassed.`,
+    ...(input.enrollmentKey
+      ? [
+          `A supplied ${name} enrolment key must remain valid through tool installation; use the management API key to mint a bounded key automatically when needed.`,
+        ]
+      : []),
+    ...(input.networkKey
+      ? []
+      : [
+          `Without ${inputs.management.environment}, caller-side ${name} account checks are unavailable; device deletion needs separate management authorisation.`,
+        ]),
+  ];
 }

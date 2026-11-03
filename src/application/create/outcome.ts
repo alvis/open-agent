@@ -68,6 +68,7 @@ export function createResult(
       profile: observed.environment.profile,
       readiness: assessReadiness(dependencies, observed),
       network: {
+        deviceId: observed.network.deviceId,
         online: observed.network.online,
         skipped: observed.network.skipped,
         reason: observed.network.reason,

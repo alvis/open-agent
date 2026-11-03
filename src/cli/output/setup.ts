@@ -11,6 +11,7 @@ import type {
   AppliedSetupSection,
   CommandFailureData,
   ComponentCounts,
+  LocalCredentialData,
   NetworkSetupData,
   SetupData,
   ToolsSetupData,
@@ -50,7 +51,8 @@ export interface SetupDataOutput {
   retainedCredentials?: RetainedCredentialsOutput;
   service?: 'configured';
   pairing?: PairingOutput;
-  network?: { status: 'disabled'; readiness: 'skipped' };
+  network?:
+    { status: 'configured' } | { status: 'disabled'; readiness: 'skipped' };
   github?: string;
   gitIdentity?: string;
   proxy?: { status: 'configured'; baseUrl?: string } | { status: 'disabled' };
@@ -60,6 +62,12 @@ export interface SetupDataOutput {
   plugins?: Record<string, string>;
   components?: ComponentCountsOutput;
   tools?: ToolsSetupOutput;
+  localCredential?: {
+    status: string;
+    scope: string;
+    storage?: string;
+    fallbackReason?: string;
+  };
 }
 
 /** what a failed setup still observed */
@@ -69,11 +77,12 @@ export interface SetupFailureDataOutput {
 }
 
 type SetupFields = Partial<
-  AllSetupData & {
-    section: AppliedSetupSection['section'];
-    machine: MachineSummary;
-    retainedCredentials: Partial<Record<string, CredentialSaveResult>>;
-  }
+  AllSetupData &
+    LocalCredentialData & {
+      section: AppliedSetupSection['section'];
+      machine: MachineSummary;
+      retainedCredentials: Partial<Record<string, CredentialSaveResult>>;
+    }
 >;
 
 type RecordedTools = Extract<ToolsSetupData['tools'], { status: string }>;
@@ -86,10 +95,15 @@ type RecordedTools = Extract<ToolsSetupData['tools'], { status: string }>;
 function projectNetworkOutcome(
   network: NetworkSetupData['network'],
 ): NonNullable<SetupDataOutput['network']> {
-  return projectFields<typeof network, NonNullable<SetupDataOutput['network']>>(
-    network,
-    { status: same, readiness: same },
-  );
+  return network.status === 'configured'
+    ? projectFields<typeof network, NonNullable<SetupDataOutput['network']>>(
+        network,
+        { status: same },
+      )
+    : projectFields<typeof network, NonNullable<SetupDataOutput['network']>>(
+        network,
+        { status: same, readiness: same },
+      );
 }
 
 /**
@@ -160,6 +174,16 @@ export function projectSetup(data: SetupData): SetupDataOutput {
     plugins: mapValues(same),
     components: projectComponents,
     tools: projectToolsOutcome,
+    localCredential: (credential) =>
+      projectFields<
+        typeof credential,
+        NonNullable<SetupDataOutput['localCredential']>
+      >(credential, {
+        status: same,
+        scope: same,
+        storage: same,
+        fallbackReason: same,
+      }),
   });
 }
 

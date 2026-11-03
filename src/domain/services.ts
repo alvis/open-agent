@@ -2,7 +2,7 @@ import { CommandFault } from '#kernel/faults';
 
 import type { ProductDeclarations } from '#domain/declarations';
 import type { GuestAccount } from '#domain/guest-command';
-import type { AgentId } from '#domain/ids';
+import type { AgentId, NetworkId } from '#domain/ids';
 
 /** provider-neutral definition of one long-running guest service */
 export interface ServiceDefinition {
@@ -48,17 +48,50 @@ export interface PeriodicJob {
 export const CRON_SERVICE_NAME = 'open-agent-cron';
 
 /**
- * reads the service core registers for the selected agent
+ * lists the daemon the agent service depends on for a network
  * @param declarations the data every registered driver declares
- * @param selection selected agent identifier
+ * @param network selected network identifier
+ * @returns the daemon, or undefined when the network runs none
+ */
+export function networkDaemon(
+  declarations: ProductDeclarations,
+  network: NetworkId,
+): ServiceDefinition | undefined {
+  return declarations.networks[network].daemon;
+}
+
+/**
+ * builds the agent service, depending on the daemon of the selected network
+ * @param declarations the data every registered driver declares
+ * @param selection selected agent and network identifiers
  * @param selection.agent selected ACP agent
+ * @param selection.network selected network
  * @returns the service definition core registers
  */
 export function agentService(
   declarations: ProductDeclarations,
-  selection: { agent: AgentId },
+  selection: { agent: AgentId; network: NetworkId },
 ): ServiceDefinition {
-  return declarations.agents[selection.agent].service;
+  return dependOnDaemon(
+    declarations.agents[selection.agent].service,
+    networkDaemon(declarations, selection.network),
+  );
+}
+
+/**
+ * adds a network daemon to what a service already waits for, once
+ * @param service service with its own dependencies
+ * @param daemon daemon the selected network runs, if any
+ * @returns the service waiting for its own dependencies and the daemon
+ */
+export function dependOnDaemon(
+  service: ServiceDefinition,
+  daemon: ServiceDefinition | undefined,
+): ServiceDefinition {
+  return {
+    ...service,
+    needs: [...new Set([...service.needs, ...(daemon ? [daemon.name] : [])])],
+  };
 }
 
 /**

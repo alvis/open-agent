@@ -10,6 +10,7 @@ import type {
   HarnessDeclaration,
   MachineOffer,
   NetworkDeclaration,
+  NetworkLauncher,
   ProviderDeclaration,
 } from '#domain/declarations';
 import type { GuestAsset } from '#domain/guest';
@@ -27,6 +28,7 @@ import type {
   NativeHarnessInspection,
 } from '#domain/observations/harness';
 import type {
+  NetworkIdentity,
   NetworkStatus,
   NetworkStatuses,
 } from '#domain/observations/network';
@@ -42,6 +44,7 @@ import type {
   WorkstationMetadata,
   WorkstationRecord,
 } from '#domain/workstation';
+import type { Secret } from '#kernel/secret';
 
 /** what core binds a provider to before any provider call */
 export interface ProviderBinding {
@@ -364,10 +367,20 @@ export interface AgentDriver<
   readiness(evidence: AgentReadinessEvidence<Environment>): AgentReadiness;
 }
 
+/** management credential for the network provider, kept on the caller's computer */
+export interface NetworkManagement {
+  /** management API key */
+  credential: string;
+  /** account or network the key manages; checks that read its inventory need it */
+  account?: string;
+}
+
 /** inputs for checking a network before provisioning */
 export interface NetworkPreflightParams {
   /** device name the workstation will register under */
   hostname: string;
+  /** management credential, when the caller supplied one */
+  management?: NetworkManagement;
 }
 
 /** what a network preflight established */
@@ -376,15 +389,68 @@ export interface NetworkPreflightResult {
   problems: unknown[];
 }
 
+/** persists the retained identity of the enrolled device for later cleanup */
+export type NetworkIdentityRecorder = (
+  identity: NetworkIdentity,
+) => Promise<void>;
+
 /** inputs for network enrollment */
 export interface NetworkEnrollParams {
   /** device name the workstation registers under */
   hostname: string;
+  /** single-use enrolment credential when the guest is not registered, delivered as setup session input */
+  credential?: Secret;
+  /** persists the observed device identity once enrolment is confirmed */
+  recordIdentity: NetworkIdentityRecorder;
+}
+
+/** what environment.json recorded about a network before termination */
+export interface NetworkRecord {
+  /** identity retained from an earlier inspection of this network's device */
+  identity?: NetworkIdentity;
+}
+
+/** outcome of removing a terminated workstation's network device */
+export interface NetworkCleanup {
+  /** whether nothing remains to be done */
+  ok: boolean;
+  /** what happened to the device */
+  status:
+    | 'no device identity recorded'
+    | 'cleanup required'
+    | 'deleted'
+    | 'cleanup failed';
+  /** why cleanup failed or was interrupted */
+  cause?: Error;
+}
+
+/** inputs for removing a terminated workstation's network device */
+export interface NetworkCleanupParams {
+  /** identity captured before the workstation was deleted */
+  identity: NetworkIdentity;
+  /** management credential, when the caller supplied one */
+  management?: NetworkManagement;
+}
+
+/** inputs for removing a workstation's earlier device before it enrols again */
+export interface NetworkStaleDeviceParams {
+  /** identity environment.json recorded for this workstation's earlier device */
+  recorded: NetworkIdentity;
+  /** management credential, when the caller supplied one */
+  management?: NetworkManagement;
+}
+
+/** inputs for stopping the network daemon */
+export interface NetworkReleaseParams {
+  /** daemon service as currently registered, absent when none is */
+  service: GuestServiceState | undefined;
+  /** persists the observed device identity before the daemon stops */
+  recordIdentity: NetworkIdentityRecorder;
 }
 
 /**
  * an optional private-network tool; a network that is no tool, such as one
- * that selects no private network, declares no tools
+ * that selects no private network, declares no tools, `inputs` or `daemon`
  */
 export interface NetworkDriver<
   Name extends string = string,
@@ -392,19 +458,33 @@ export interface NetworkDriver<
 > extends NetworkDeclaration<Name> {
   /** the tools the network installs, installed and updated only while it is selected; empty when it installs nothing */
   tools: readonly ToolSpec[];
+  /** the launcher the daemon service runs; present exactly when `daemon` is */
+  launcher?: NetworkLauncher;
   /**
    * validates caller inputs and the device name before provisioning, running
    * every check even when one fails
-   * @param params device name
+   * @param params device name and credential
    * @returns every blocking problem
    */
   preflight(params: NetworkPreflightParams): Promise<NetworkPreflightResult>;
+  /**
+   * creates the single-use enrolment credential from the management credential
+   * @param management management credential
+   * @returns enrolment credential
+   */
+  issueCredential(management: NetworkManagement): Promise<string>;
   /**
    * starts the daemon, enrols the device and requires live evidence
    * @param guest guest channel
    * @param params enrollment inputs
    */
   enroll(guest: GuestChannel, params: NetworkEnrollParams): Promise<void>;
+  /**
+   * stops the daemon while retaining enrolment and cleanup identity
+   * @param guest guest channel
+   * @param params the daemon as currently registered
+   */
+  release(guest: GuestChannel, params: NetworkReleaseParams): Promise<void>;
   /**
    * inspects current network status without cached data
    * @param guest guest channel
@@ -417,6 +497,32 @@ export interface NetworkDriver<
    * @returns findings in reporting order
    */
   readiness(status: Status): ReadinessFinding[];
+  /**
+   * captures the device identity before a workstation is deleted
+   * @param guest ownership-checked guest channel
+   * @param record what environment.json recorded
+   * @returns captured native or persisted identity
+   */
+  identify(guest: GuestChannel, record: NetworkRecord): Promise<Status>;
+  /**
+   * removes the terminated workstation's device from the network
+   * @param params captured identity and management credential
+   * @returns what happened to the device
+   */
+  cleanup(params: NetworkCleanupParams): Promise<NetworkCleanup>;
+  /**
+   * removes this workstation's earlier device from the network when the guest
+   * has logged out, so that it enrols again under its own name instead of a
+   * suffixed one; leaves a device the guest still holds untouched; absent when
+   * the network keeps no named device; fails when the earlier device exists
+   * and cannot be removed
+   * @param guest guest channel
+   * @param params identity environment.json recorded and the management credential
+   */
+  removeStaleDevice?(
+    guest: GuestChannel,
+    params: NetworkStaleDeviceParams,
+  ): Promise<void>;
 }
 
 /** every registered driver, keyed by kind and identifier; the composition registry satisfies it */

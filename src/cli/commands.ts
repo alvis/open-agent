@@ -14,6 +14,8 @@ import {
   consentFlags,
   integrationCredentialFlags,
   integrationFlags,
+  networkCredentialFlags,
+  networkSelectionFlags,
   outputFlags,
   pairingFlags,
   pluginFlags,
@@ -65,6 +67,7 @@ type ConfigurationFlags = FlagsFor<
     typeof integrationFlags &
     typeof guestFileFlags &
     typeof providerCredentialFlags &
+    typeof networkCredentialFlags &
     typeof integrationCredentialFlags &
     typeof pluginFlags &
     typeof outputFlags
@@ -79,8 +82,10 @@ type InspectFlags = ProviderCommonFlags &
   Pick<CommandOptions, 'withPairCode'>;
 type TerminateFlags = FlagsFor<
   typeof consentFlags &
+    typeof networkSelectionFlags &
     typeof providerFlags &
     typeof providerCredentialFlags &
+    typeof networkCredentialFlags &
     typeof outputFlags
 >;
 
@@ -127,6 +132,7 @@ const createCommand = buildCommand({
       ...integrationFlags,
       ...guestFileFlags,
       ...providerCredentialFlags,
+      ...networkCredentialFlags,
       ...integrationCredentialFlags,
       ...pluginFlags,
       ...harnessPluginFlags,
@@ -166,6 +172,7 @@ const setupCommand = buildCommand({
       ...integrationFlags,
       ...guestFileFlags,
       ...providerCredentialFlags,
+      ...networkCredentialFlags,
       ...integrationCredentialFlags,
       ...pluginFlags,
       ...harnessPluginFlags,
@@ -254,8 +261,10 @@ const terminateCommand = buildCommand({
   parameters: {
     flags: {
       ...consentFlags,
+      ...networkSelectionFlags,
       ...providerFlags,
       ...providerCredentialFlags,
+      ...networkCredentialFlags,
       ...outputFlags,
     },
     positional: machinePositional,

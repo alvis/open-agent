@@ -25,6 +25,9 @@ Object.assign(sprite, {
     }),
   ),
   spawn: vi.fn<Sprite['spawn']>(() => process),
+  getNetworkPolicy: vi.fn<Sprite['getNetworkPolicy']>(async () => ({
+    rules: [],
+  })),
 } satisfies Partial<Sprite>);
 const provider = guestOf(sprite);
 const channel = sessionGuest(
@@ -34,13 +37,19 @@ const channel = sessionGuest(
 );
 
 describe('fn:sessionGuest', () => {
-  it('should keep streaming on the provider channel', async () => {
+  it('should keep streaming and network policy checks on the provider channel', async () => {
     const spawned = channel.spawn({
       program: '/bin/stream',
       arguments: [],
       environment: { MODE: 'stream' },
     });
 
+    vi.mocked(sprite.getNetworkPolicy).mockResolvedValueOnce({
+      rules: [{ domain: '*', action: 'deny' }],
+    });
+    await expect(channel.assertUnrestrictedNetwork()).rejects.toThrow(
+      /network policy/iu,
+    );
     expect(spawned.stdout).toBe(process.stdout);
     expect(sprite.spawn).toHaveBeenCalledWith(
       '/usr/bin/sudo',

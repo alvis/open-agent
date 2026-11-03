@@ -90,9 +90,9 @@ export const terminateDocumentation = {
   brief: 'permanently delete a managed workstation',
   customUsage: ['[<workstation>] [--yes] [options]'],
   fullDescription: `Deletes a managed workstation after confirmation. In
-non-interactive mode, provide an exact workstation name and --yes.
-Credentials and output controls follow the operation flag. --yes confirms
-only the already selected deletion.
+non-interactive mode, provide an exact workstation name and --yes. Network
+cleanup options follow the operation flag; credentials and output controls
+follow them. --yes confirms only the already selected deletion.
 ${PROVIDER_SELECTION}
 
 EXAMPLES

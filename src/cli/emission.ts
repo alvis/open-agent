@@ -72,7 +72,14 @@ function successRecovery(
   CommandError,
   'machine' | 'machineId' | 'setupIncomplete' | 'outcome' | 'details'
 > {
-  const machine = result.command === 'list' ? undefined : result.data.machine;
+  const machine =
+    result.command === 'list'
+      ? undefined
+      : result.command === 'setup'
+        ? 'machine' in result.data
+          ? result.data.machine
+          : undefined
+        : result.data.machine;
   if (!machine) {
     return {};
   }
@@ -84,7 +91,7 @@ function successRecovery(
     outcome: 'unknown',
     details:
       result.command === 'terminate'
-        ? ['Workstation deleted; do not retry the deletion.']
+        ? ['Workstation deleted; verify network cleanup before retrying.']
         : [
             `Inspect: open-agent show ${JSON.stringify(machine.name)} --inspect`,
           ],

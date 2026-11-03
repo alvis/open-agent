@@ -1,7 +1,9 @@
+import { withBackNavigation } from '#application/navigation';
 import {
   hasExplicitPluginActions,
   normalizePluginOptions,
 } from '#application/plugins';
+import { returnOnBack } from '#kernel/navigation';
 
 import type { CommandOptions, SetupSection } from '#application/contracts';
 import type {
@@ -19,7 +21,7 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
   {
     value: 'network',
     label: 'Network',
-    description: 'Workstation networking',
+    description: 'Workstation networking or a shared key on this computer',
   },
   {
     value: 'github',
@@ -63,6 +65,9 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
   },
 ];
 
+/** selected guest section or separately scoped caller-side credential action */
+export type SetupSelection = SetupSection | 'network-credential';
+
 /**
  * selects a setup section from flags or an inline prompt
  * @param options parsed setup options
@@ -72,7 +77,7 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
 export async function selectSetupSection(
   options: CommandOptions,
   interaction?: Interaction,
-): Promise<SetupSection> {
+): Promise<SetupSelection> {
   const explicitPlugins = hasExplicitPluginActions(
     normalizePluginOptions(options),
   );
@@ -102,8 +107,49 @@ export async function selectSetupSection(
     );
   }
 
-  return interaction.select(
-    { message: 'Choose setup section' },
-    SETUP_SECTIONS,
+  for (;;) {
+    const section = await interaction.select(
+      { message: 'Choose setup section' },
+      SETUP_SECTIONS,
+    );
+    if (section !== 'network') {
+      return section;
+    }
+    const selected = await selectNetworkAction(interaction);
+    if (selected !== undefined) {
+      return selected;
+    }
+  }
+}
+
+/**
+ * selects guest networking or caller-side credential replacement
+ * @param interaction current section menu
+ * @returns selected action or back to sections
+ */
+async function selectNetworkAction(
+  interaction: Interaction,
+): Promise<SetupSelection | undefined> {
+  return returnOnBack(async () =>
+    withBackNavigation(interaction, 'back to sections').select<SetupSelection>(
+      {
+        message: 'Network',
+        description:
+          'Guest networking and the key saved on this computer are separate.',
+      },
+      [
+        {
+          value: 'network',
+          label: 'Configure workstation networking',
+          description: 'Private network connection on the workstation',
+        },
+        {
+          value: 'network-credential',
+          label: 'Replace saved API key on this computer',
+          description:
+            'Shared local management key; does not change this workstation',
+        },
+      ],
+    ),
   );
 }

@@ -115,6 +115,7 @@ function pluginContext(options: CommandOptions): SetupContext {
     profile: DISABLED_NETWORK_PROFILE,
     persistsProfile: false,
     isReleaseChanged: false,
+    networkEnrolled: false,
     mutation: { started: false },
   };
 }

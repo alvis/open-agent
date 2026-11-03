@@ -5,10 +5,15 @@ import type { TerminateData } from '#application/data';
 
 import type { MachineOutput } from './machine';
 
-/** a deleted workstation */
+/** a deleted workstation and the separately observed network cleanup */
 export interface TerminateDataOutput {
   machine: MachineOutput;
   workstation: { status: 'deleted'; id: string; name: string };
+  network: {
+    status: string;
+    deviceId?: string;
+    address?: string;
+  };
 }
 
 /**
@@ -24,5 +29,11 @@ export function projectTerminate(data: TerminateData): TerminateDataOutput {
         workstation,
         { status: same, id: same, name: same },
       ),
+    network: (network) =>
+      projectFields<typeof network, TerminateDataOutput['network']>(network, {
+        status: same,
+        deviceId: same,
+        address: same,
+      }),
   });
 }

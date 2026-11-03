@@ -22,7 +22,8 @@ describe('fn:pairAgent', () => {
 });
 
 describe('fn:serviceLabels', () => {
-  it('should name no service for a network', () => {
+  it('should name no service for a network without a daemon', () => {
     expect(Object.values(serviceLabels(registry))).not.toContain('None');
+    expect(serviceLabels(registry)).toHaveProperty('tailscaled', 'Tailscale');
   });
 });

@@ -77,6 +77,30 @@ describe('environment access on a guest', () => {
     ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
+  it('should retain the enrolling network with its recorded device identity', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-environment-'),
+    );
+    const guest = guestOf(createFilesystemSprite({ root: directory.path }));
+    await access.write(guest, RECORDED);
+
+    await access.identityRecorder(
+      guest,
+      'tailscale',
+    )({
+      deviceId: 'device-1',
+      ip: '100.101.102.103',
+    });
+
+    await expect(access.read(guest)).resolves.toMatchObject({
+      networkIdentity: {
+        network: 'tailscale',
+        deviceId: 'device-1',
+        ip: '100.101.102.103',
+      },
+    });
+  });
+
   it('should return the updater record when it exists', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-environment-'),

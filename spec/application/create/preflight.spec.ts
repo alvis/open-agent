@@ -138,6 +138,84 @@ describe('fn:prepareCreate consent', () => {
     });
   });
 
+  it.each([{ management: true }, { management: false }])(
+    'should carry network enrollment into provisioning: %j',
+    async ({ management }) => {
+      vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+      vi.stubEnv('TAILSCALE_AUTH_KEY', 'supplied-enrollment-key');
+      vi.stubEnv(
+        'TAILSCALE_API_KEY',
+        management ? 'network-management-key' : undefined,
+      );
+      vi.stubEnv('TAILSCALE_TAILNET', 'example.ts.net');
+      vi.spyOn(SpritesClient.prototype, 'listAllSprites').mockImplementation(
+        async () => [],
+      );
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof fetch>(async () =>
+          Response.json({
+            devices: [
+              {
+                id: 'other-id',
+                name: 'other.example.ts.net',
+                hostname: 'other',
+              },
+            ],
+          }),
+        ),
+      );
+
+      const result = await prepareCreate(dependencies, {
+        ...request,
+        options: {
+          ...request.options,
+          network: 'tailscale',
+          yes: true,
+        },
+      });
+
+      expect(result).toMatchObject({
+        kind: 'ready',
+        context: { authKey: expect.anything() },
+      });
+    },
+  );
+
+  it('should report network preflight problems before provisioning', async () => {
+    vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+    vi.stubEnv('TAILSCALE_AUTH_KEY', 'supplied-enrollment-key');
+    vi.stubEnv('TAILSCALE_API_KEY', 'network-management-key');
+    vi.stubEnv('TAILSCALE_TAILNET', 'example.ts.net');
+    vi.spyOn(SpritesClient.prototype, 'listAllSprites').mockImplementation(
+      async () => [],
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => new Response('', { status: 403 })),
+    );
+
+    const result = await prepareCreate(dependencies, {
+      ...request,
+      options: {
+        ...request.options,
+        network: 'tailscale',
+        yes: true,
+      },
+    });
+
+    expect(result).toMatchObject({
+      kind: 'result',
+      result: {
+        ok: false,
+        error: {
+          code: 'AUTH',
+          details: [expect.stringContaining('returned 403')],
+        },
+      },
+    });
+  });
+
   it('should aggregate a missing name and token with every local token recovery route before provider access', async () => {
     const home = await mkdtemp(join(tmpdir(), 'open-agent-cor07-create-'));
     vi.stubEnv('HOME', home);

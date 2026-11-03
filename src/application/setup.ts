@@ -9,6 +9,7 @@ import { InteractionExit, returnOnBack } from '#kernel/navigation';
 import { traceStage } from '#kernel/operation';
 
 import { setupAll } from './setup/all';
+import { setupLocalCredential } from './setup/credentials';
 import { setupFailure } from './setup/failure';
 import { recordSetupMetadata } from './setup/metadata';
 import { setupNetwork } from './setup/network';
@@ -42,16 +43,18 @@ import type { CommandResult } from '#application/result';
 import type { WorkstationRecord } from '#domain/workstation';
 
 import type { SetupContext } from './setup/context';
+import type { SetupSelection } from './setup/selection';
 
 interface SetupSelectionParams {
   request: CommandRequest;
-  section: SetupSection;
+  section: SetupSelection;
   provider: ProviderDriver;
   interaction?: Interaction;
 }
 
 /** a guest section to apply to a selected workstation */
-interface GuestSectionParams extends SetupSelectionParams {
+interface GuestSectionParams extends Omit<SetupSelectionParams, 'section'> {
+  section: Exclude<SetupSelection, 'network-credential'>;
   /** the selected, supported workstation */
   workstation: WorkstationRecord;
   /** where interactive values are read from */
@@ -111,6 +114,12 @@ async function setupSelection(
   const nested = interaction
     ? withBackNavigation(interaction, 'back to sections')
     : interaction;
+  if (section === 'network-credential') {
+    return setupLocalCredential(dependencies, {
+      interaction: nested,
+      options: request.options,
+    });
+  }
   const { sources, supplied } = await readStaticSetupInputs(
     dependencies,
     request.options,
@@ -293,8 +302,10 @@ async function applySection(
       section: 'agent',
       ...(await setupAgent(dependencies, guest, context)),
     }),
-    network: async (): Promise<AppliedSetupSection> =>
-      Promise.resolve({ section: 'network', ...setupNetwork() }),
+    network: async (): Promise<AppliedSetupSection> => ({
+      section: 'network',
+      ...(await setupNetwork(dependencies, guest, context)),
+    }),
     github: async (): Promise<AppliedSetupSection> => ({
       section: 'github',
       ...(await setupGithub(dependencies, guest, context)),
