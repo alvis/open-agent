@@ -13,6 +13,7 @@ import { createSpritesClient } from './sprite/client';
 import { createManagedSprite } from './sprite/creation';
 import { callSprites } from './sprite/failures';
 import { mergeMetadataLabels } from './sprite/labels';
+import { SPRITE_MACHINE } from './sprite/machines';
 import { SPRITE_PREREQUISITES, preflightSprite } from './sprite/prerequisites';
 import {
   assertManaged,
@@ -33,6 +34,7 @@ import type {
 } from '#application/ports/guest-channel';
 import type {
   ExposureVisibility,
+  MachineOffer,
   ProfileIncompatibility,
 } from '#domain/declarations';
 import type { OsImage } from '#domain/guest';
@@ -65,6 +67,7 @@ export class SpriteProvider implements ProviderDriver<'sprite'> {
   public readonly kind = 'providers';
   public readonly displayName = 'Fly Sprite';
   public readonly capabilities = SPRITE_CAPABILITIES;
+  public readonly machines: readonly MachineOffer[] = [SPRITE_MACHINE];
   public readonly incompatibilities: readonly ProfileIncompatibility[] = [];
   public readonly prerequisites: ProviderPrerequisites = SPRITE_PREREQUISITES;
   // a Sprite boots one image Fly picks and names neither its release nor its
@@ -227,6 +230,17 @@ export class SpriteProvider implements ProviderDriver<'sprite'> {
         }),
       ),
     );
+  }
+
+  /**
+   * leaves the workstation as it is: a Sprite has one size and configures none
+   * @param workstation managed workstation
+   * @returns the same workstation
+   */
+  public async resize(
+    workstation: WorkstationRecord,
+  ): Promise<WorkstationRecord> {
+    return workstation;
   }
 
   /**

@@ -4,6 +4,12 @@ import { humanResultDetails } from '#cli/output/details';
 
 // The inspection payload can contain incomplete observations from the guest.
 describe('fn:humanResultDetails', () => {
+  it('should preserve an incomplete machine size instead of inventing dimensions', () => {
+    const machine = { machine: { label: 'observed', cpus: 2 } };
+
+    expect(humanResultDetails({ machine })).toEqual({ machine });
+  });
+
   it('should omit absent inspection sections and present the agent environment separately', () => {
     const result = humanResultDetails({
       inspection: {
@@ -11,7 +17,7 @@ describe('fn:humanResultDetails', () => {
           claude: { available: false },
           agentEnvironment: { ok: false },
         },
-        environment: { profile: { options: {} } },
+        environment: { profile: { options: { minCpus: 2 } } },
         updates: {},
       },
     });
@@ -19,6 +25,7 @@ describe('fn:humanResultDetails', () => {
     expect(result.inspection).toMatchObject({
       'Claude Code': { available: false },
       'Agent environment': { verified: false },
+      'Machine requirement': undefined,
       'Installed tools': undefined,
       'services': undefined,
       'Maintenance': { failedTools: undefined },

@@ -19,6 +19,8 @@ export interface ProfileOptionsOutput {
   idleTimeoutMinutes: number;
   holdMaxMinutes: number;
   updateDueIntervalDays: number;
+  minCpus: number;
+  minMemoryGb: number;
   agentRelease?: string;
 }
 
@@ -70,6 +72,8 @@ export function projectProfileOptions(
     idleTimeoutMinutes: same,
     holdMaxMinutes: same,
     updateDueIntervalDays: same,
+    minCpus: same,
+    minMemoryGb: same,
     agentRelease: same,
   });
 }

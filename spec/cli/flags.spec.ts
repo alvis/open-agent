@@ -82,12 +82,12 @@ describe('cmd:setup', () => {
     );
   });
 
-  it('should parse a signed whole-number flag and reject fractional flag text', async () => {
-    const accepted = await parseFlags(['--idle-minutes', ' -2 ']);
-    const rejected = await parseFlags(['--idle-minutes', '1.5']);
+  it('should parse a signed whole-number minimum and reject fractional flag text', async () => {
+    const accepted = await parseFlags(['--cpu', ' -2 ']);
+    const rejected = await parseFlags(['--cpu', '1.5']);
 
     expect(accepted).toMatchObject({
-      options: [expect.objectContaining({ idleMinutes: -2 })],
+      options: [expect.objectContaining({ cpu: -2 })],
       diagnostics: [],
       exitCode: 0,
     });

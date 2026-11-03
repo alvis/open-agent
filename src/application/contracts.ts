@@ -20,6 +20,10 @@ export interface CommandOptions {
   agent?: AgentId;
   /** release channel of the selected ACP agent */
   release?: string;
+  /** fewest CPUs the machine must provide, from --cpu */
+  cpu?: number;
+  /** least memory in whole gigabytes the machine must provide, from --mem */
+  mem?: number;
   /** selected harnesses, from the repeatable --harness */
   harness?: HarnessId[];
   /** selected network */

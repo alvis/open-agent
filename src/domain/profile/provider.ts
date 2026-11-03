@@ -1,3 +1,4 @@
+import { largestMachine, pickMachine } from '#domain/machine-sizes';
 import { selectionLabel } from '#domain/selection-inputs';
 
 import type { ProductDeclarations } from '#domain/declarations';
@@ -15,6 +16,13 @@ export interface ProviderViolationsParams {
   declarations: ProductDeclarations;
   selected: { provider: ProviderId; options: ProfileOptions };
   options: ProfileValidationOptions;
+}
+
+/** provider machine offers and requested minimums to validate */
+export interface MachineViolationsParams {
+  declarations: ProductDeclarations;
+  provider: ProviderId;
+  options: ProfileOptions;
 }
 
 /**
@@ -44,6 +52,11 @@ export function providerViolations({
           },
         ]
       : []),
+    ...machineViolations({
+      declarations,
+      provider,
+      options: candidateOptions,
+    }),
     ...(maxAwakeDeadlineMinutes === null
       ? []
       : (['idleTimeoutMinutes', 'holdMaxMinutes'] as const)
@@ -53,5 +66,37 @@ export function providerViolations({
             message: `${selectionLabel(key)} of ${String(candidateOptions[key])} minutes is more than provider "${provider}" can keep a workstation awake: at most ${String(maxAwakeDeadlineMinutes)} minutes`,
             fields: ['provider', key] as ProfileField[],
           }))),
+  ];
+}
+
+/**
+ * checks the minimum machine size against the machines the provider offers
+ * @param params known provider and requested options
+ * @param params.declarations the data every registered driver declares
+ * @param params.provider known provider id
+ * @param params.options requested options
+ * @returns a violation naming the provider's largest machine when none meets the minimums
+ */
+export function machineViolations({
+  declarations,
+  provider,
+  options,
+}: MachineViolationsParams): ProfileViolation[] {
+  const { displayName, machines } = declarations.providers[provider];
+  const { minCpus, minMemoryGb } = options;
+  if (!Number.isSafeInteger(minCpus) || !Number.isSafeInteger(minMemoryGb)) {
+    return [];
+  }
+  if (pickMachine(machines, { cpus: minCpus, memoryGb: minMemoryGb })) {
+    return [];
+  }
+  const largest = largestMachine(machines);
+
+  return [
+    {
+      code: 'undeclared-capability',
+      message: `${displayName} offers no machine with ${String(minCpus)} CPUs and ${String(minMemoryGb)} GB; it offers at most ${String(largest.cpus)} CPUs and ${String(largest.memoryGb)} GB`,
+      fields: ['provider', 'minCpus', 'minMemoryGb'],
+    },
   ];
 }

@@ -70,9 +70,37 @@ function machineDetails(
       )
       .map(([key, nested]) => [
         inspected && key === 'state' ? 'Provider state before inspection' : key,
-        nested,
+        key === 'machine' ? machineSize(nested) : nested,
       ]),
   );
+}
+
+/**
+ * words the machine size a provider reports
+ * @param value provider-reported machine size
+ * @returns the size name, CPUs and memory on one line, or the value as it is when malformed
+ */
+function machineSize(value: JsonValue | undefined): JsonValue | undefined {
+  const { label, cpus, memoryGb } = asRecord(value);
+
+  return typeof label === 'string' &&
+    typeof cpus === 'number' &&
+    typeof memoryGb === 'number'
+    ? `${label}, ${String(cpus)} CPUs, ${String(memoryGb)} GB`
+    : value;
+}
+
+/**
+ * words the machine minimums a workstation recorded
+ * @param options recorded profile options
+ * @returns the minimums on one line, none when the profile records none
+ */
+function machineRequirement(options: JsonObject): string | undefined {
+  const { minCpus, minMemoryGb } = options;
+
+  return typeof minCpus === 'number' && typeof minMemoryGb === 'number'
+    ? `at least ${String(minCpus)} CPUs, ${String(minMemoryGb)} GB`
+    : undefined;
 }
 
 /**
@@ -107,6 +135,9 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
         : environmentDetails(environment),
     'Agent release channel': asRecord(asRecord(recorded.profile).options)
       .agentRelease,
+    'Machine requirement': machineRequirement(
+      asRecord(asRecord(recorded.profile).options),
+    ),
     'Installed tools': installedTools(recorded.tools, updates.tools),
     'Skipped tools': skippedTools(asRecord(recorded.setup).skipped),
     'Idle governor':

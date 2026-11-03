@@ -35,6 +35,8 @@ export interface SuppliedSelection {
 /** the options a caller can select */
 const SELECTABLE_OPTIONS: readonly SelectableOption[] = [
   'agentRelease',
+  'minCpus',
+  'minMemoryGb',
   'idleTimeoutMinutes',
   'holdMaxMinutes',
   'updateDueIntervalDays',
@@ -141,8 +143,10 @@ export function readSelection(
   };
 }
 
-/** the options whose values are whole numbers of minutes or days */
+/** the options whose values are whole numbers of minutes, days, CPUs or gigabytes */
 const NUMBER_OPTIONS = [
+  'minCpus',
+  'minMemoryGb',
   'idleTimeoutMinutes',
   'holdMaxMinutes',
   'updateDueIntervalDays',
@@ -163,6 +167,8 @@ function readNumberOptions(
   owned: (field: SelectionField) => string | undefined,
 ): Resolved<Partial<Record<NumberOption, number>>> {
   const flags: Record<NumberOption, number | undefined> = {
+    minCpus: options.cpu,
+    minMemoryGb: options.mem,
     idleTimeoutMinutes: options.idleMinutes,
     holdMaxMinutes: options.holdMaxMinutes,
     updateDueIntervalDays: options.updateDueDays,

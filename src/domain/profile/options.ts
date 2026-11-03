@@ -13,7 +13,7 @@ interface OptionBound {
   /** largest valid value, when the option has one */
   maximum?: number;
   /** unit used in the violation message */
-  unit: 'minutes' | 'days';
+  unit: 'minutes' | 'days' | 'CPUs' | 'GB';
 }
 
 /** option values to validate */
@@ -44,6 +44,18 @@ export const OPTION_BOUNDS: readonly OptionBound[] = [
     minimum: 1,
     maximum: MAX_UPDATE_DUE_DAYS,
     unit: 'days',
+  },
+  {
+    key: 'minCpus',
+    label: selectionLabel('minCpus'),
+    minimum: 1,
+    unit: 'CPUs',
+  },
+  {
+    key: 'minMemoryGb',
+    label: selectionLabel('minMemoryGb'),
+    minimum: 1,
+    unit: 'GB',
   },
 ];
 

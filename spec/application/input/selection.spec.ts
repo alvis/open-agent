@@ -104,6 +104,8 @@ describe('fn:resolveCreateSelection', () => {
     });
 
     expect(asked).toEqual([
+      'Minimum CPUs',
+      'Minimum memory (GB)',
       'Release channel',
       'Suspend after idle (minutes, 0 = never)',
     ]);
@@ -121,6 +123,8 @@ describe('fn:resolveCreateSelection', () => {
     const { candidate } = await resolveCreateSelection(dependencies, {
       options: {
         provider: 'sprite',
+        cpu: 4,
+        mem: 8,
         release: 'stable',
         harness: ['claude'],
         network: 'none',
@@ -346,8 +350,8 @@ describe('fn:suppliedSelectionViolations', () => {
     ]);
   });
 
-  it('should defer a provider capability check until a provider is named', () => {
-    const supplied = { options: { holdMaxMinutes: 61 } };
+  it('should defer a machine-size capability check until one of several providers is named', () => {
+    const supplied = { options: { minCpus: 17, minMemoryGb: 129 } };
     const deferred = suppliedSelectionViolations(dependencies, supplied, {
       isPairingRequested: false,
     });
@@ -361,7 +365,7 @@ describe('fn:suppliedSelectionViolations', () => {
     expect(determined).toMatchObject([
       {
         code: 'undeclared-capability',
-        fields: ['provider', 'holdMaxMinutes'],
+        fields: ['provider', 'minCpus', 'minMemoryGb'],
       },
     ]);
   });

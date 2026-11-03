@@ -55,6 +55,7 @@ const DETAILED_MACHINE: MachineSummary = {
   organization: 'personal',
   createdAt: '2026-10-12T08:30:00.000Z',
   state: 'running',
+  machine: { label: 'sprite', cpus: 8, memoryGb: 16 },
   agentUrl: 'https://atlas.sprites.app/',
   setup: 'ready',
   profile: {
@@ -819,7 +820,7 @@ export const CORPUS: readonly CorpusCase[] = [
   corpusCase('parser-failure-input', {
     command: null,
     ok: false,
-    error: { code: 'INPUT', message: 'Invalid value for --idle-minutes' },
+    error: { code: 'INPUT', message: 'Invalid value for --cpu' },
   }),
   ...ERROR_CODES.map((code) =>
     corpusCase(`error-code-${code.toLowerCase()}`, {

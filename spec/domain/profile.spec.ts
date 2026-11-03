@@ -36,11 +36,13 @@ vi.mock('#composition/registry', async (importOriginal) => {
       persistence: 'provider-disk',
       exposure: 'provider-url',
       discovery: 'provider-metadata',
+      resizeRestarts: false,
     },
+    machines: [{ label: 'fixture', cpus: 8, memoryGb: 16 }],
     incompatibilities: [
       {
-        reason: 'Fixture provider cannot host a one-minute idle timeout',
-        appliesTo: ({ options }) => options.idleTimeoutMinutes === 1,
+        reason: 'Fixture provider cannot host a single-CPU workstation',
+        appliesTo: ({ options }) => options.minCpus === 1,
       },
     ],
     prerequisites: {
@@ -182,6 +184,8 @@ describe('fn:defaultProfile', () => {
       harnesses: ['claude'],
       network: 'none',
       options: {
+        minCpus: 2,
+        minMemoryGb: 2,
         idleTimeoutMinutes: 5,
         holdMaxMinutes: 60,
         updateDueIntervalDays: 1,
@@ -261,6 +265,47 @@ describe('fn:validateProfile', () => {
     ).toEqual([]);
   });
 
+  it('should accept the largest offered machine and explain an unavailable minimum', () => {
+    const options = {
+      ...valid.options,
+      minCpus: 8,
+      minMemoryGb: 16,
+    };
+
+    expect(violationCodes({ options })).toEqual([]);
+    expect(
+      validateProfile({
+        declarations: registry,
+        candidate: { ...valid, options: { ...options, minCpus: 9 } },
+      }),
+    ).toMatchObject({
+      isValid: false,
+      violations: [
+        {
+          code: 'undeclared-capability',
+          fields: ['provider', 'minCpus', 'minMemoryGb'],
+          message:
+            'Sprite offers no machine with 9 CPUs and 16 GB; it offers at most 8 CPUs and 16 GB',
+        },
+      ],
+    });
+  });
+
+  it('should reject a fractional CPU minimum without reporting an unavailable machine', () => {
+    const result = validateProfile({
+      declarations: registry,
+      candidate: {
+        ...valid,
+        options: { ...valid.options, minCpus: 2.5 },
+      },
+    });
+
+    expect(result).toMatchObject({
+      isValid: false,
+      violations: [{ code: 'invalid-option', fields: ['minCpus'] }],
+    });
+  });
+
   it.each([
     ['zero harnesses', { harnesses: [] }, ['no-harness']],
     ['an unknown harness', { harnesses: ['aider'] }, ['unknown-driver']],
@@ -308,7 +353,7 @@ describe('fn:validateProfile', () => {
     ],
     [
       'a profile the provider declares incompatible',
-      { options: { ...valid.options, idleTimeoutMinutes: 1 } },
+      { options: { ...valid.options, minCpus: 1 } },
       ['incompatible'],
     ],
   ])('should reject %s', (_, candidate, expected) => {
@@ -417,10 +462,7 @@ describe('fn:parseProfile', () => {
     { field: 'network', value: { ...valid, network: false } },
     {
       field: 'numeric option',
-      value: {
-        ...valid,
-        options: { ...valid.options, idleTimeoutMinutes: 'many' },
-      },
+      value: { ...valid, options: { ...valid.options, minCpus: 'many' } },
     },
     {
       field: 'optional release channel',

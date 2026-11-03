@@ -144,6 +144,7 @@ async function setupGuestSection(
     workstation,
   });
   const mutation = { started: false };
+  let current = connection;
   try {
     const { context, guest } = await prepareGuestSection(dependencies, {
       provider,
@@ -156,6 +157,7 @@ async function setupGuestSection(
       interaction: params.interaction,
       mutation,
     });
+    current = context.connection;
     if (nested && (section === 'all' || mutation.started)) {
       context.interaction = withBackNavigation(
         nested,
@@ -190,6 +192,7 @@ async function setupGuestSection(
       section,
     });
   } finally {
+    await current.close();
     await connection.close();
   }
 }

@@ -19,7 +19,7 @@ export {
   OPTION_BOUNDS,
   optionViolations,
 } from './profile/options';
-export { providerViolations } from './profile/provider';
+export { machineViolations, providerViolations } from './profile/provider';
 export {
   agentViolations,
   harnessSetViolations,
@@ -28,7 +28,10 @@ export {
   unknownDriverViolations,
 } from './profile/selection';
 export type { OptionViolationsParams } from './profile/options';
-export type { ProviderViolationsParams } from './profile/provider';
+export type {
+  MachineViolationsParams,
+  ProviderViolationsParams,
+} from './profile/provider';
 export type {
   AgentViolationsParams,
   DriverIdContext,
@@ -57,6 +60,10 @@ export interface ProfileOptions {
   holdMaxMinutes: number;
   /** days after the last successful update before another is due */
   updateDueIntervalDays: number;
+  /** fewest CPUs the machine must provide */
+  minCpus: number;
+  /** least memory, in whole gigabytes, the machine must provide */
+  minMemoryGb: number;
   /** release channel the agent follows; absent when the agent declares none */
   agentRelease?: string;
 }
