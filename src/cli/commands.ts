@@ -13,6 +13,7 @@ import {
   commonFlags,
   consentFlags,
   outputFlags,
+  pairingFlags,
   providerCredentialFlags,
   providerFlags,
   selectionFlags,
@@ -28,7 +29,7 @@ import type { InvocationContext } from './parser';
 type BooleanKeys<T> = {
   [K in keyof T]-?: NonNullable<T[K]> extends boolean ? K : never;
 }[keyof T];
-type OptionalBooleanKey = 'localCredentials' | 'color';
+type OptionalBooleanKey = 'withPairCode' | 'localCredentials' | 'color';
 type RequiredBooleanFields<T> = Omit<T, BooleanKeys<T>> &
   Required<Pick<T, Exclude<BooleanKeys<T>, OptionalBooleanKey>>> &
   Pick<T, Extract<BooleanKeys<T>, OptionalBooleanKey>>;
@@ -39,6 +40,7 @@ type CommonFlags = FlagsFor<typeof commonFlags>;
 type ProviderCommonFlags = CommonFlags & FlagsFor<typeof providerFlags>;
 type ConfigurationFlags = FlagsFor<
   typeof consentFlags &
+    typeof pairingFlags &
     typeof selectionFlags &
     typeof providerCredentialFlags &
     typeof outputFlags
@@ -46,7 +48,8 @@ type ConfigurationFlags = FlagsFor<
 type CreateFlags = ConfigurationFlags & Pick<CommandOptions, 'name'>;
 type SetupFlags = ConfigurationFlags & FlagsFor<typeof setupFlags>;
 type InspectFlags = ProviderCommonFlags &
-  Required<Pick<CommandOptions, 'inspect'>>;
+  Required<Pick<CommandOptions, 'inspect'>> &
+  Pick<CommandOptions, 'withPairCode'>;
 type TerminateFlags = FlagsFor<
   typeof consentFlags &
     typeof providerFlags &
@@ -92,6 +95,7 @@ const createCommand = buildCommand({
         brief: 'NAME · new workstation name',
       },
       ...consentFlags,
+      ...pairingFlags,
       ...selectionFlags,
       ...providerCredentialFlags,
       ...outputFlags,
@@ -125,6 +129,7 @@ const setupCommand = buildCommand({
     flags: {
       ...setupFlags,
       ...consentFlags,
+      ...pairingFlags,
       ...selectionFlags,
       ...providerCredentialFlags,
       ...outputFlags,
@@ -177,6 +182,7 @@ const showCommand = buildCommand({
         default: false,
         brief: 'check live guest services and configuration (may wake it)',
       },
+      ...pairingFlags,
       ...providerFlags,
       ...providerCredentialFlags,
       localCredentials: {

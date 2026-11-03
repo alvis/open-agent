@@ -6,12 +6,14 @@ import {
   projectNetworkStatus,
 } from './inspection';
 import { projectMachine } from './machine';
+import { projectPairing } from './pairing';
 import { projectProbeFailure, projectReadiness } from './readiness';
 
 import type { ShowData } from '#application/data';
 
 import type { InspectionOutput } from './inspection';
 import type { MachineOutput } from './machine';
+import type { PairingOutput } from './pairing';
 import type { ReadinessOutput } from './readiness';
 
 /** the guest evidence an inspection requested, with optional readiness */
@@ -23,6 +25,7 @@ export interface ShowInspectionOutput extends InspectionOutput {
 export interface ShowDataOutput {
   machine: MachineOutput;
   inspection?: ShowInspectionOutput;
+  pairing?: PairingOutput;
   action?: 'copy';
 }
 
@@ -55,6 +58,7 @@ export function projectShow(data: ShowData): ShowDataOutput {
   return projectFields<ShowData, ShowDataOutput>(data, {
     machine: projectMachine,
     inspection: projectShownInspection,
+    pairing: projectPairing,
     action: same,
   });
 }

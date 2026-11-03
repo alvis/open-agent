@@ -63,6 +63,17 @@ export const consentFlags = {
   },
 } as const;
 
+/** explicit pairing action, separate from ordinary integration choices */
+export const pairingFlags = {
+  withPairCode: {
+    kind: 'boolean',
+    optional: true,
+    withNegated: false,
+    brief:
+      'create and display a pairing code in the agent URL (5 minutes); alias --with-<agent>-pair-code',
+  },
+} as const;
+
 /** provider choice, which commands on an existing workstation also accept to skip the search across providers */
 export const providerFlags = {
   provider: {

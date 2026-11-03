@@ -1,3 +1,5 @@
+import { PairingSecret } from '#kernel/pairing-secret';
+
 import { environmentOf } from '../environment';
 import { DISABLED_NETWORK_PROFILE } from '../profile';
 
@@ -30,6 +32,8 @@ type ListedMachine = MachineSummary & {
 export const CORPUS_SECRETS = ['v1-golden-nested-secret'] as const;
 
 const [NESTED_SECRET] = CORPUS_SECRETS;
+
+const PAIRING = new PairingSecret({ token: 'v1-golden-pairing-token' });
 
 const MACHINE: MachineSummary = {
   id: 'sprite-primary',
@@ -139,7 +143,7 @@ export const CORPUS: readonly CorpusCase[] = [
     data: {
       machine: {
         ...MACHINE,
-        agentUrl: 'https://primary.sprites.app/',
+        agentUrl: PAIRING.forUrl('https://primary.sprites.app/'),
       },
       preflight: PREFLIGHT,
       profile: DISABLED_NETWORK_PROFILE,
@@ -147,26 +151,54 @@ export const CORPUS: readonly CorpusCase[] = [
       network: INSPECTION.network,
       services: [{ name: 't3-code', state: 'running' }],
       native: INSPECTION.native,
+      pairing: {
+        status: 'created',
+        token: PAIRING,
+        expiresAt: '2026-10-09T01:00:00.000Z',
+      },
     },
     retainedCredential: { storage: 'keychain' },
   }),
-  corpusCase('create-success-protected-file', {
+  corpusCase(
+    'create-success-protected-file',
+    {
+      command: 'create',
+      ok: true,
+      data: {
+        retainedCredentials: {
+          provider: {
+            storage: 'protected-file',
+            fallbackReason: 'Keychain is unavailable on this platform',
+          },
+        },
+        machine: DETAILED_MACHINE,
+        preflight: PREFLIGHT,
+        profile: DISABLED_NETWORK_PROFILE,
+        readiness: PASSING_READINESS,
+        network: INSPECTION.network,
+        services: [{ name: 't3-code', state: 'running' }],
+        native: INSPECTION.native,
+        pairing: { status: 'not requested' },
+      },
+    },
+    { withPairCode: true },
+  ),
+  corpusCase('create-success-pairing-failed', {
     command: 'create',
     ok: true,
     data: {
-      retainedCredentials: {
-        provider: {
-          storage: 'protected-file',
-          fallbackReason: 'Keychain is unavailable on this platform',
-        },
-      },
-      machine: DETAILED_MACHINE,
-      preflight: PREFLIGHT,
+      machine: MACHINE,
+      preflight: { checks: [], reminders: [] },
       profile: DISABLED_NETWORK_PROFILE,
       readiness: PASSING_READINESS,
       network: INSPECTION.network,
-      services: [{ name: 't3-code', state: 'running' }],
+      services: [],
       native: INSPECTION.native,
+      pairing: {
+        status: 'failed',
+        reason: 'the agent did not answer',
+        retry: 'open-agent setup agent primary --with-pair-code',
+      },
     },
   }),
 
@@ -243,6 +275,7 @@ export const CORPUS: readonly CorpusCase[] = [
       machine: MACHINE,
       retainedCredentials: { provider: { storage: 'keychain' } },
       service: 'configured',
+      pairing: { status: 'not requested' },
       network: { status: 'disabled', readiness: 'skipped' },
     },
   }),
@@ -255,15 +288,36 @@ export const CORPUS: readonly CorpusCase[] = [
       network: { status: 'disabled', readiness: 'skipped' },
     },
   }),
-  corpusCase('setup-agent', {
+  corpusCase('setup-agent-pairing', {
     command: 'setup',
     ok: true,
     data: {
       section: 'agent',
       machine: MACHINE,
       service: 'configured',
+      pairing: {
+        status: 'created',
+        token: PAIRING,
+        expiresAt: '2026-10-09T01:00:00.000Z',
+      },
     },
   }),
+  corpusCase(
+    'setup-agent-pairing-disclosed',
+    {
+      command: 'setup',
+      ok: true,
+      data: {
+        section: 'agent',
+        machine: {
+          ...MACHINE,
+          agentUrl: PAIRING.forUrl('https://primary.sprites.app/'),
+        },
+        pairing: { status: 'created', token: PAIRING },
+      },
+    },
+    { withPairCode: true },
+  ),
   corpusCase('setup-network-disabled', {
     command: 'setup',
     ok: true,
@@ -442,6 +496,22 @@ export const CORPUS: readonly CorpusCase[] = [
       },
     },
   }),
+  corpusCase(
+    'show-pairing-and-redaction',
+    {
+      command: 'show',
+      ok: true,
+      data: {
+        machine: {
+          ...MACHINE,
+          agentUrl: PAIRING.forUrl('https://primary.sprites.app/'),
+        },
+        inspection: INSPECTION,
+        pairing: { status: 'created', token: PAIRING },
+      },
+    },
+    { withPairCode: true },
+  ),
   corpusCase('show-nested-secrets', {
     command: 'show',
     ok: true,

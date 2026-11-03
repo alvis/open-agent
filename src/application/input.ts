@@ -97,7 +97,7 @@ export async function resolveCreateInputs(
     sources,
     interaction,
   });
-  const profile = requireValidProfile(dependencies, resolution);
+  const profile = requireValidProfile(dependencies, resolution, options);
 
   return resolveInputs(dependencies, {
     options,
@@ -114,16 +114,19 @@ export async function resolveCreateInputs(
  * validates a resolved selection against the catalog and driver capabilities
  * @param dependencies the registered drivers
  * @param resolution selection resolved from every source
+ * @param options parsed flags, for the pairing request
  * @returns the profile, once every catalog and capability rule holds
  * @throws {CommandFault} listing every violation at once
  */
 export function requireValidProfile(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   resolution: SelectionResolution,
+  options: CommandOptions,
 ): WorkstationProfile {
   const validation = validateProfile({
     declarations: dependencies.registry,
     candidate: resolution.candidate,
+    options: { isPairingRequested: options.withPairCode === true },
   });
   if (!validation.isValid) {
     throw selectionFault(validation.violations.map(({ message }) => message));
@@ -137,15 +140,17 @@ export function requireValidProfile(
  * environment supply on their own
  * @param dependencies the registered drivers, the profile defaults
  * @param supplied values the run supplies
+ * @param options parsed flags, for the pairing request
  * @throws {CommandFault} listing every violation at once
  */
 export function requireValidSuppliedSelection(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
   supplied: SuppliedSelection,
+  options: CommandOptions,
 ): void {
-  const details = suppliedSelectionViolations(dependencies, supplied).map(
-    ({ message }) => message,
-  );
+  const details = suppliedSelectionViolations(dependencies, supplied, {
+    isPairingRequested: options.withPairCode === true,
+  }).map(({ message }) => message);
   if (details.length > 0) {
     throw selectionFault(details);
   }

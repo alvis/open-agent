@@ -25,11 +25,29 @@ export function humanResultDetails(data: JsonObject): JsonObject {
                 data.inspection !== undefined ||
                   data.currentReadiness !== undefined,
               )
-            : key === 'action' && value === 'copy'
-              ? 'Agent URL copied to clipboard'
-              : value,
+            : key === 'pairing'
+              ? pairingDetails(value)
+              : key === 'action' && value === 'copy'
+                ? 'Agent URL copied to clipboard'
+                : value,
       ]),
   );
+}
+
+/**
+ * keeps pairing metadata in grouped output while copyable values are printed separately
+ * @param value redacted pairing result
+ * @returns non-secret pairing status and expiry
+ */
+function pairingDetails(value: JsonValue | undefined): JsonObject {
+  const pairing = asRecord(value);
+
+  return {
+    status: pairing.status,
+    expiresAt: pairing.expiresAt,
+    reason: pairing.reason,
+    retry: pairing.retry,
+  };
 }
 
 /**

@@ -238,6 +238,7 @@ async function resolveSetup(
       section,
       supplied: params.supplied,
     }),
+    options,
   );
   const persistsProfile = profileUpdateSelected(section);
   const input = await resolveSetupInputs(dependencies, {

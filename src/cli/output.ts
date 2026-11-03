@@ -138,7 +138,7 @@ function humanResult(result: SerializedResult, columns: number): string {
 }
 
 /**
- * prints the single agent URL without wrapping so copying preserves it
+ * prints the single agent URL and optional code without wrapping so copying preserves them
  * @param data already redacted command data
  * @returns unwrapped connection lines
  */
@@ -148,6 +148,10 @@ function humanConnection(data: JsonObject): string {
   const agentUrl = machine?.agentUrl ?? data.agentUrl;
   if (typeof agentUrl === 'string') {
     lines.push(`    Agent URL: ${agentUrl}\n`);
+  }
+  const pairing = isJsonObject(data.pairing) ? data.pairing : undefined;
+  if (typeof pairing?.token === 'string') {
+    lines.push(`    Pairing code: ${pairing.token}\n`);
   }
 
   return lines.join('');

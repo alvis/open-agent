@@ -1,4 +1,5 @@
 import { inspectT3Environment } from './evidence';
+import { pairT3 } from './pairing';
 import { t3Readiness } from './readiness';
 import { T3_LAUNCHER, t3Service } from './service';
 import { verifyT3Startup } from './startup';
@@ -34,10 +35,12 @@ export const t3: AgentDriver<'t3', HarnessId, T3Environment> = {
   displayName: 'T3 Code',
   supportedHarnesses: T3_HARNESSES,
   harnessLaunchMode: 'native-cli',
+  supportsPairing: true,
   tools: T3_TOOLS,
   service: t3Service,
   launcher: T3_LAUNCHER,
   inspectEnvironment: inspectT3Environment,
+  pair: pairT3,
   verifyStartup: verifyT3Startup,
   readiness: t3Readiness,
 };

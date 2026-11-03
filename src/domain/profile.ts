@@ -70,16 +70,24 @@ export interface ProfileCandidate {
   network: string;
 }
 
+/** requests that are validated with a profile but not stored in it */
+export interface ProfileValidationOptions {
+  /** a pairing code is requested from the ACP agent */
+  isPairingRequested?: boolean;
+}
+
 /** decoded value and catalog used for untrusted profile validation */
 export interface ParseProfileParams {
   declarations: ProductDeclarations;
   value: unknown;
+  options?: ProfileValidationOptions;
 }
 
 /** candidate selection and catalog used for profile validation */
 export interface ValidateProfileParams {
   declarations: ProductDeclarations;
   candidate: ProfileCandidate;
+  options?: ProfileValidationOptions;
 }
 
 /** a profile field a violation can be attributed to */
@@ -93,6 +101,7 @@ type ProfileViolationCode =
   | 'duplicate-harness'
   | 'unsupported-harness'
   | 'missing-acp-adapter'
+  | 'undeclared-capability'
   | 'incompatible';
 
 /** one reason a profile is rejected */
@@ -166,17 +175,19 @@ export function registeredSummary(
 
 /**
  * validates an untrusted decoded value, such as the profile environment.json stores
- * @param params declarations and decoded value
+ * @param params declarations, decoded value and validation requests
  * @param params.declarations the data every registered driver declares
  * @param params.value value to process
+ * @param params.options requests validated alongside the profile
  * @returns the validated profile, or every violation found
  */
 export function parseProfile({
   declarations,
   value,
+  options,
 }: ParseProfileParams): ProfileValidation {
   return isProfileCandidate(value)
-    ? validateProfile({ declarations, candidate: value })
+    ? validateProfile({ declarations, candidate: value, options })
     : {
         isValid: false,
         violations: [
@@ -192,14 +203,16 @@ export function parseProfile({
 /**
  * checks a resolved selection against the catalog and every selected driver's
  * declared capabilities, aggregating all violations, before any provider call
- * @param params resolved candidate and catalog
+ * @param params resolved candidate, catalog and validation requests
  * @param params.declarations the data every registered driver declares
  * @param params.candidate profile candidate to validate
+ * @param params.options requests validated alongside the profile
  * @returns the validated profile, or every violation found
  */
 export function validateProfile({
   declarations,
   candidate,
+  options = {},
 }: ValidateProfileParams): ProfileValidation {
   const { provider, agent, network } = candidate;
   const harnesses = candidate.harnesses.filter((id) =>
@@ -212,6 +225,7 @@ export function validateProfile({
       ? agentViolations({
           declarations,
           selected: { agent, harnesses },
+          options,
         })
       : []),
   ];

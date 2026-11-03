@@ -1,3 +1,4 @@
+import { pairAgent } from '#application/catalog/services';
 import { commandError } from '#application/failures';
 import { requireWorkstationUrl } from '#application/machine';
 import {
@@ -7,6 +8,7 @@ import {
 } from '#application/readiness';
 import { inspectUntilServing } from '#application/serving';
 import { agentPort } from '#domain/services';
+import { sanitizeGuestDiagnostic } from '#kernel/diagnostics';
 import {
   cancellationReason,
   checkOperation,
@@ -15,12 +17,14 @@ import {
 import { OPEN_AGENT_VERSION } from '#kernel/version';
 
 import { configureNewWorkstation } from './configuration';
-import { createResult } from './outcome';
+import { createResult, pairingRetry } from './outcome';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
+import type { GuestChannel } from '#application/ports/guest-channel';
 import type { Interaction } from '#application/ports/interaction';
 import type { SetupSession } from '#application/ports/session';
 import type { CommandResult } from '#application/result';
+import type { AgentPairing } from '#domain/declarations';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { WorkstationRecord } from '#domain/workstation';
 
@@ -28,10 +32,13 @@ import type { CreateContext } from './context';
 
 interface CreateFinalizationContext {
   workstation: WorkstationRecord;
+  guest: GuestChannel;
   observed: GuestInspection;
   context: CreateContext;
   interaction?: Interaction;
 }
+
+const PAIRING_REASON_LIMIT = 512;
 
 /** the named inputs of finish create */
 export interface FinishCreateParams {
@@ -44,7 +51,7 @@ export interface FinishCreateParams {
 }
 
 /**
- * configure, verify and expose one newly created private workstation
+ * configure, verify, expose, and pair one newly created private workstation
  * @param dependencies the registered drivers, the guest mechanics
  * @param params the call's inputs: workstation, context, interaction
  * @returns ready machine and current non-secret guest evidence
@@ -85,7 +92,7 @@ interface ConfigureAndFinalizeParams {
 
 /**
  * installs and configures the workstation over its setup session, waits for
- * the agent to serve, then verifies and exposes it
+ * the agent to serve, then verifies, exposes and pairs it
  * @param dependencies the registered drivers, the guest mechanics
  * @param params the call's inputs: workstation, context, connection, interaction
  * @returns ready machine and current non-secret guest evidence
@@ -115,6 +122,7 @@ async function configureAndFinalize(
 
   return finalizeCreate(dependencies, {
     workstation,
+    guest,
     observed,
     context,
     interaction,
@@ -122,10 +130,10 @@ async function configureAndFinalize(
 }
 
 /**
- * verifies and exposes a configured workstation
+ * verifies and exposes a configured workstation, then handles optional pairing
  * @param dependencies the registered drivers
  * @param finalization real workstation, fresh guest inspection, and create inputs
- * @returns ready machine or a retained ready failure
+ * @returns ready machine or a retained ready pairing failure
  */
 export async function finalizeCreate(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
@@ -151,7 +159,7 @@ export async function finalizeCreate(
 }
 
 /**
- * keeps cancellation after the confirmed READY boundary
+ * keeps optional pairing and cancellation after the confirmed READY boundary
  * @param dependencies the registered drivers
  * @param ready workstation returned by the fulfilled READY metadata update and inputs
  * @returns ready result or a retained ready cancellation/failure
@@ -160,7 +168,33 @@ async function finishReadyCreate(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   ready: CreateFinalizationContext,
 ): Promise<CommandResult> {
-  const { workstation, observed, context, interaction } = ready;
+  const { workstation, guest, observed, context, interaction } = ready;
+  let pairing: AgentPairing | undefined;
+  let pairingFailure: string | undefined;
+  if (context.options.withPairCode) {
+    try {
+      pairing = await pairAgent(
+        dependencies.registry,
+        guest,
+        context.input.profile.agent,
+      );
+    } catch (error) {
+      const failure = readyError(error);
+      if (
+        commandError(failure).code === 'CANCELLED' ||
+        failure instanceof TypeError ||
+        failure instanceof SyntaxError ||
+        failure instanceof ReferenceError ||
+        failure instanceof RangeError
+      ) {
+        return readyCreateFailure(dependencies, ready, failure);
+      }
+      pairingFailure =
+        sanitizeGuestDiagnostic(commandError(failure).message).slice(
+          -PAIRING_REASON_LIMIT,
+        ) || 'Agent pairing could not be completed';
+    }
+  }
   try {
     checkOperation();
     interaction?.progress({
@@ -170,6 +204,8 @@ async function finishReadyCreate(
     const result = createResult(dependencies, {
       workstation,
       observed,
+      pairing,
+      pairingFailure,
       preflight: context.preflight,
       retainedCredentials: context.input.retainedCredentials,
     });
@@ -185,7 +221,7 @@ async function finishReadyCreate(
  * records an error after READY without demoting the retained machine
  * @param dependencies the registered drivers
  * @param ready confirmed READY workstation and inputs
- * @param error cancellation or result failure
+ * @param error pairing, cancellation or result failure
  * @returns typed retained ready failure with machine identity
  */
 function readyCreateFailure(
@@ -212,14 +248,15 @@ function readyCreateFailure(
       details: [
         ...(failure.details ?? []),
         'The workstation is ready; setup was not demoted.',
+        `Pair later: ${pairingRetry(workstation.name)}`,
       ],
     },
   };
 }
 
 /**
- * uses the invocation signal when a concurrent abort raced a result failure
- * @param error result failure
+ * uses the invocation signal when a concurrent abort raced a pairing failure
+ * @param error pairing or result failure
  * @returns cancellation when the invocation has aborted, otherwise the failure
  */
 function readyError(error: unknown): unknown {

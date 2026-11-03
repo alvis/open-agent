@@ -1,3 +1,5 @@
+import type { ProductDeclarations } from '#domain/declarations';
+
 /** every registered provider driver, in catalog order */
 export const PROVIDER_IDS = ['sprite'] as const;
 
@@ -38,3 +40,14 @@ export type DriverId<Kind extends DriverKind = DriverKind> = DriverIds[Kind];
 
 /** the network a workstation selects when it joins no private network */
 export const NO_NETWORK = 'none' satisfies NetworkId;
+
+/**
+ * lists the ACP agents that can issue pairing codes
+ * @param declarations the data every registered driver declares
+ * @returns pairing-capable agent ids
+ */
+export function pairingAgentIds(declarations: ProductDeclarations): AgentId[] {
+  return Object.values(declarations.agents)
+    .filter(({ supportsPairing }) => supportsPairing)
+    .map(({ id }) => id);
+}

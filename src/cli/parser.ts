@@ -8,6 +8,8 @@ import {
 } from '@stricli/core';
 
 import { commandError } from '#application/failures';
+import { registry } from '#composition/registry';
+import { pairingAgentIds } from '#domain/ids';
 import { ensureError } from '#kernel/faults';
 import { redactResolved } from '#kernel/redaction';
 
@@ -86,7 +88,7 @@ export async function parseApplication({
     },
   };
   try {
-    await run(application, argv, {
+    await run(application, withPairingAliases(argv, application), {
       process: contextProcess,
       state,
       dependencies,
@@ -99,6 +101,64 @@ export async function parseApplication({
 const PAIRED_BOOLEAN_FLAGS = ['color', 'local-credentials'];
 
 /**
+ * names the per-agent spellings of --with-pair-code
+ * @returns alias flags, one per pairing-capable ACP agent
+ */
+function pairingAliases(): string[] {
+  return pairingAgentIds(registry).map((id) => `--with-${id}-pair-code`);
+}
+
+/**
+ * rewrites the per-agent pairing aliases to --with-pair-code before parsing
+ * @param argv original command-line arguments
+ * @param application command routes whose value-taking flags consume the next argument
+ * @returns arguments with aliases replaced up to any `--` separator, leaving flag values intact
+ */
+function withPairingAliases(
+  argv: string[],
+  application: Application<InvocationContext>,
+): string[] {
+  const aliases = new Set(pairingAliases());
+  const valueFlags = valueFlagsOf(application, argv[0]);
+  const end = argv.includes('--') ? argv.indexOf('--') : argv.length;
+  let isFlagValue = false;
+
+  return argv.map((argument, index) => {
+    const isValue = isFlagValue;
+    isFlagValue = index < end && !isValue && valueFlags.has(argument);
+
+    return index < end && !isValue && aliases.has(argument)
+      ? '--with-pair-code'
+      : argument;
+  });
+}
+
+/**
+ * lists the spellings of a command's flags that take the following argument as their value
+ * @param application command routes
+ * @param command requested top-level command input
+ * @returns camel and kebab spellings of every parsed or enum flag
+ */
+function valueFlagsOf(
+  application: Application<InvocationContext>,
+  command: string | undefined,
+): Set<string> {
+  const { root } = application;
+  const target =
+    command !== undefined && 'getRoutingTargetForInput' in root
+      ? root.getRoutingTargetForInput(command)
+      : root;
+  const flags =
+    target && 'parameters' in target ? (target.parameters.flags ?? {}) : {};
+
+  return new Set(
+    Object.entries(flags)
+      .filter(([, flag]) => flag.kind === 'parsed' || flag.kind === 'enum')
+      .flatMap(([name]) => [`--${name}`, kebabFlag(name)]),
+  );
+}
+
+/**
  * spells a camel-case flag name the way users type it
  * @param name internal camel-case flag name
  * @returns kebab-case flag with its leading dashes
@@ -108,7 +168,7 @@ function kebabFlag(name: string): string {
 }
 
 /**
- * rejects contradictory boolean syntax before provider authentication
+ * rejects removed and contradictory boolean syntax before provider authentication
  * @param argv original command arguments
  * @returns actionable parser failure, when supplied flags cannot be combined
  */
@@ -116,6 +176,27 @@ function validateBooleanFlagSyntax(argv: string[]): CommandError | undefined {
   const flags = new Set(
     argv.includes('--') ? argv.slice(1, argv.indexOf('--')) : argv.slice(1),
   );
+  for (const removed of [
+    '--no-pair',
+    '--include-pairing',
+    '--no-include-pairing',
+  ]) {
+    if (flags.has(removed)) {
+      return {
+        code: 'USAGE',
+        message: `${removed} was removed; use --with-pair-code to request a pairing code.`,
+      };
+    }
+  }
+  const negatedPairing = ['--with-pair-code', ...pairingAliases()].find(
+    (flag) => flags.has(`--no-${flag.slice(2)}`),
+  );
+  if (negatedPairing) {
+    return {
+      code: 'USAGE',
+      message: `--no-${negatedPairing.slice(2)} is not supported; omit ${negatedPairing} to skip pairing.`,
+    };
+  }
   const doubleNegation = [...flags].find((flag) => flag.startsWith('--no-no-'));
   if (doubleNegation) {
     const name = doubleNegation.slice('--no-no-'.length);

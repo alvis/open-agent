@@ -88,8 +88,18 @@ function validateNonSetupOptions(options: CommandOptions): void {
  * @param options parsed setup flags
  */
 function validateSetupOptions(options: CommandOptions): void {
+  if (
+    options.withPairCode &&
+    options.section !== undefined &&
+    options.section !== 'agent' &&
+    options.section !== 'all'
+  ) {
+    throw new CommandValidationError({
+      message: '--with-pair-code requires --section agent or --section all',
+    });
+  }
   validateSetupIntegrationOptions(options, options.section);
-  if (!options.section && options.nonInteractive) {
+  if (!options.section && !options.withPairCode && options.nonInteractive) {
     throw new CommandValidationError({
       message: [
         'Non-interactive setup requires --section',

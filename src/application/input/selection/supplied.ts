@@ -5,7 +5,11 @@ import { selectionInputs } from '#domain/selection-inputs';
 import { environmentReader } from './sources';
 
 import type { ApplicationDependencies } from '#application/ports/dependencies';
-import type { ProfileField, ProfileViolation } from '#domain/profile';
+import type {
+  ProfileField,
+  ProfileValidationOptions,
+  ProfileViolation,
+} from '#domain/profile';
 import type { SelectionField } from '#domain/selection-inputs';
 
 import type { SelectionContext } from './sources';
@@ -28,11 +32,13 @@ export interface SuppliedSelection {
  * determined, because they were supplied or the catalog registers only one
  * @param dependencies the registered drivers, the profile defaults
  * @param supplied values a setup run supplies
+ * @param requests requests validated alongside the selection
  * @returns every violation the supplied values alone raise
  */
 export function suppliedSelectionViolations(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults'>,
   supplied: SuppliedSelection,
+  requests: Pick<ProfileValidationOptions, 'isPairingRequested'>,
 ): ProfileViolation[] {
   const provider = supplied.provider;
   const agent = supplied.agent ?? AGENT_IDS[0];
@@ -51,6 +57,7 @@ export function suppliedSelectionViolations(
         supplied.harnesses ?? dependencies.defaults.selection.harnesses,
       network: supplied.network ?? dependencies.defaults.selection.network,
     },
+    options: requests,
   });
 
   return validation.isValid

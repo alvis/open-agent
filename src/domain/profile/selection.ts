@@ -3,7 +3,11 @@ import { selectionLabel } from '#domain/selection-inputs';
 import type { ProductDeclarations } from '#domain/declarations';
 import type { AgentId, DriverId, DriverKind, HarnessId } from '#domain/ids';
 
-import type { ProfileCandidate, ProfileViolation } from '../profile';
+import type {
+  ProfileCandidate,
+  ProfileValidationOptions,
+  ProfileViolation,
+} from '../profile';
 
 /** catalog section used to narrow a requested driver id */
 export interface DriverIdContext<Kind extends DriverKind> {
@@ -11,10 +15,11 @@ export interface DriverIdContext<Kind extends DriverKind> {
   kind: Kind;
 }
 
-/** known agent selection */
+/** known agent selection and validation requests */
 export interface AgentViolationsParams {
   declarations: ProductDeclarations;
   selected: { agent: AgentId; harnesses: readonly HarnessId[] };
+  options: ProfileValidationOptions;
 }
 
 /** one driver id a selection requests */
@@ -121,15 +126,17 @@ export function harnessSetViolations(
 }
 
 /**
- * checks harness support and ACP adapter availability for the agent
- * @param params known ACP agent and harness ids
+ * checks harness support, ACP adapter availability and pairing for the agent
+ * @param params known ACP agent, harness ids and validation requests
  * @param params.declarations the data every registered driver declares
  * @param params.selected agent is the known ACP agent id; harnesses are known requested ids
+ * @param params.options requests validated alongside the profile
  * @returns violations the selected ACP agent's declarations raise
  */
 export function agentViolations({
   declarations,
   selected,
+  options,
 }: AgentViolationsParams): ProfileViolation[] {
   const { agent, harnesses } = selected;
   const declaration = declarations.agents[agent];
@@ -150,6 +157,15 @@ export function agentViolations({
             message: `ACP agent "${agent}" launches ACP adapters, but harness "${id}" provides none`,
             fields: ['agent' as const, 'harnesses' as const],
           }))
+      : []),
+    ...(options.isPairingRequested && !declaration.supportsPairing
+      ? [
+          {
+            code: 'undeclared-capability' as const,
+            message: `ACP agent "${agent}" does not support pairing (--with-pair-code)`,
+            fields: ['agent' as const],
+          },
+        ]
       : []),
   ];
 }

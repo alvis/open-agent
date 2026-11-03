@@ -33,100 +33,107 @@ vi.mock(
   async () => import('../../mocks/session'),
 );
 describe('fn:setupAll', () => {
-  it('should complete the full setup and record readiness after configuring the guest', async () => {
-    await using directory = await mkdtempDisposable(
-      join(tmpdir(), 'open-agent-setup-all-'),
-    );
-    const sprite = createFilesystemSprite({
-      root: directory.path,
-      execute: async () => ({
-        stdout: '',
-        stderr: '',
-        exitCode: 0,
-      }),
-    });
-    const services = holdServiceDefinitions(sprite);
-    vi.spyOn(sprite, 'updateURLSettings').mockResolvedValue(undefined);
-    const profile = DISABLED_NETWORK_PROFILE;
-    Object.assign(sprite, {
-      labels: mergeMetadataLabels([MANAGED_LABEL, SCHEMA_LABEL], {
-        setup: 'ready',
-        profile: summarizeProfile(profile),
-        version: OPEN_AGENT_VERSION,
-      }),
-    });
-    const context: SetupContext = {
-      ...workstationOf(sprite),
-      options: {
-        localCredentials: false,
-        nonInteractive: true,
-      },
-      input: {
+  it.each([{ withPairCode: false }, { withPairCode: true }])(
+    'should complete the full setup and record readiness after configuring the guest (%o)',
+    async ({ withPairCode }) => {
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-setup-all-'),
+      );
+      const sprite = createFilesystemSprite({
+        root: directory.path,
+        execute: async (_file, args = []) => ({
+          stdout: args.includes('pair')
+            ? 'Token: all-setup-pairing\nExpires: 2099-01-01T00:00:00Z\n'
+            : '',
+          stderr: '',
+          exitCode: 0,
+        }),
+      });
+      const services = holdServiceDefinitions(sprite);
+      vi.spyOn(sprite, 'updateURLSettings').mockResolvedValue(undefined);
+      const profile = DISABLED_NETWORK_PROFILE;
+      Object.assign(sprite, {
+        labels: mergeMetadataLabels([MANAGED_LABEL, SCHEMA_LABEL], {
+          setup: 'ready',
+          profile: summarizeProfile(profile),
+          version: OPEN_AGENT_VERSION,
+        }),
+      });
+      const context: SetupContext = {
+        ...workstationOf(sprite),
+        options: {
+          localCredentials: false,
+          nonInteractive: true,
+          withPairCode,
+        },
+        input: {
+          profile,
+          sources: {},
+          missing: [],
+        },
         profile,
-        sources: {},
-        missing: [],
-      },
-      profile,
-      persistsProfile: false,
-      mutation: { started: false },
-    };
-    const agentName = registry.agents[profile.agent].service.name;
-    const guest = {
-      ...dependencies.guest,
-      native: {
-        ...dependencies.guest.native,
-        inspectAgentEnvironment: async () => ({
-          ok: true as const,
-          serverVersion: '',
-        }),
-      },
-      inspection: {
-        inspect: async () => ({
-          services: [registry.agents[profile.agent].service.name].map(
-            (name) => ({ name, needs: [], status: 'running' as const }),
-          ),
-          network: {
-            online: false,
-            skipped: true,
-            reason: 'No private network is selected',
-          },
-          native: {
-            claude: {
-              authentication: 'not-configured' as const,
+        persistsProfile: false,
+        mutation: { started: false },
+      };
+      const agentName = registry.agents[profile.agent].service.name;
+      const guest = {
+        ...dependencies.guest,
+        native: {
+          ...dependencies.guest.native,
+          inspectAgentEnvironment: async () => ({
+            ok: true as const,
+            serverVersion: '',
+          }),
+        },
+        inspection: {
+          inspect: async () => ({
+            services: [registry.agents[profile.agent].service.name].map(
+              (name) => ({ name, needs: [], status: 'running' as const }),
+            ),
+            network: {
+              online: false,
+              skipped: true,
+              reason: 'No private network is selected',
             },
-            agentEnvironment: { ok: true as const, serverVersion: '' },
-            harnesses: {},
-          },
-          environment: await dependencies.guest.environment.read(
-            await context.connection.guest(),
-          ),
-          probeFailures: [],
-        }),
-      },
-    };
+            native: {
+              claude: {
+                authentication: 'not-configured' as const,
+              },
+              agentEnvironment: { ok: true as const, serverVersion: '' },
+              harnesses: {},
+            },
+            environment: await dependencies.guest.environment.read(
+              await context.connection.guest(),
+            ),
+            probeFailures: [],
+          }),
+        },
+      };
 
-    await expect(
-      setupAll(
-        dependenciesWith({ guest }),
-        await context.connection.guest(),
-        context,
-      ),
-    ).resolves.toMatchObject({
-      network: { status: 'disabled', readiness: 'skipped' },
-    });
+      await expect(
+        setupAll(
+          dependenciesWith({ guest }),
+          await context.connection.guest(),
+          context,
+        ),
+      ).resolves.toMatchObject({
+        network: { status: 'disabled', readiness: 'skipped' },
+        ...(withPairCode ? { pairing: { status: 'created' } } : {}),
+      });
 
-    expect(
-      await sprite.filesystem().exists('/opt/open-agent/workstation-name'),
-    ).toBe(true);
-    expect(await sprite.filesystem().exists(CLAUDE_SETTINGS)).toBe(true);
-    expect(
-      JSON.parse(
-        await readFile(join(directory.path, ENVIRONMENT_PATH), 'utf8'),
-      ),
-    ).toMatchObject({ setup: { state: 'ready' } });
-    expect(sprite.updateURLSettings).toHaveBeenCalledOnce();
-    expect(services.get(agentName)?.state?.status).toBe('running');
-  });
+      expect(
+        await sprite.filesystem().exists('/opt/open-agent/workstation-name'),
+      ).toBe(true);
+      expect(await sprite.filesystem().exists(CLAUDE_SETTINGS)).toBe(true);
+      expect(
+        JSON.parse(
+          await readFile(join(directory.path, ENVIRONMENT_PATH), 'utf8'),
+        ),
+      ).toMatchObject({ setup: { state: 'ready' } });
+      expect(sprite.updateURLSettings).toHaveBeenCalledOnce();
+      expect(services.get(agentName)?.state?.status).toBe('running');
+    },
+  );
 
   it('should leave the agent serving and the setup incomplete when the final setup section fails', async () => {
     await using directory = await mkdtempDisposable(

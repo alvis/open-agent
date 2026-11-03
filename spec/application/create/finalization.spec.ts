@@ -39,7 +39,7 @@ import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
 
 import { dependencies, dependenciesWith } from '../../mocks/dependencies';
 
-import { providerOf } from '../../mocks/sprites';
+import { guestOf, providerOf } from '../../mocks/sprites';
 
 import type { CommandOptions } from '#application/contracts';
 
@@ -211,11 +211,15 @@ function createSprite() {
 /**
  * supplies verified create inputs without invoking preflight or an installer
  * @param sprite SDK Sprite selected for finalization
+ * @param options optional pairing and disclosure controls
  * @returns complete create context consumed by the real helper
  */
-function createContext(sprite: Sprite): CreateContext {
+function createContext(
+  sprite: Sprite,
+  options: CommandOptions = {},
+): CreateContext {
   return {
-    options: {},
+    options,
     input: {
       name: sprite.name,
       providerToken: 'cor04-generated-sdk-token',
@@ -268,20 +272,217 @@ function captureResult(
 }
 
 describe('fn:finalizeCreate READY boundary', () => {
-  it('should expose the agent and mark the workstation READY', async () => {
+  it('should keep READY and returns success when optional native pairing fails', async () => {
     const { sprite, mutations } = createSprite();
+    const secret = 'cor04-generated-pairing-secret';
+    rememberSecret(secret);
+    vi.spyOn(sprite, 'execFile').mockRejectedValue(
+      new Error(`pairing rejected ${secret}`),
+    );
 
     const result = await finalizeCreate(dependencies, {
       workstation: toRecord(sprite),
+      guest: guestOf(sprite),
+      observed,
+      context: createContext(sprite, { withPairCode: true }),
+    });
+
+    expect(result).toMatchObject({
+      command: 'create',
+      ok: true,
+      data: {
+        machine: {
+          id: 'sprite-ready-42',
+          setup: 'ready',
+          agentUrl: 'https://ready-workstation.sprites.app/',
+        },
+        readiness: { ready: true },
+        pairing: {
+          status: 'failed',
+          retry: 'open-agent show "ready-workstation" --with-pair-code',
+        },
+      },
+    });
+    expect(resultExitCode(result)).toBe(0);
+    expect(mutations).toEqual(['visibility:public', 'labels:ready']);
+    expect(sprite.labels).toContain(SETUP_READY_LABEL);
+    expect(sprite.labels).not.toContain(SETUP_INCOMPLETE_LABEL);
+    const human = captureResult(result, {});
+    const json = captureResult(result, { json: true });
+    expect(human.stderr).toBe('');
+    expect(human.stdout).toContain('https://ready-workstation.sprites.app/');
+    expect(human.stdout).toContain('--with-pair-code');
+    expect(human.stdout).toContain('[REDACTED]');
+    expect(json.stderr).toBe('');
+    expect(json.stdout.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      schemaVersion: 1,
+      command: 'create',
+      ok: true,
+      data: { pairing: { status: 'failed' } },
+    });
+    expect(`${human.stdout}${json.stdout}`).not.toContain(secret);
+  });
+
+  it('should keep cancellation and retained READY identity when pairing is interrupted', async () => {
+    const { sprite, mutations } = createSprite();
+    const controller = new AbortController();
+    const operation = new OperationContext({ signal: controller.signal });
+    operation.identify({ name: sprite.name, id: sprite.id });
+    const exec = vi.spyOn(sprite, 'execFile').mockImplementation(
+      async () =>
+        new Promise<never>(() => {
+          // Cancellation is observed by runOperation around this SDK call.
+        }),
+    );
+    const pending = withOperation(operation, async () =>
+      finalizeCreate(dependencies, {
+        workstation: toRecord(sprite),
+        guest: guestOf(sprite),
+        observed,
+        context: createContext(sprite, { withPairCode: true }),
+      }),
+    );
+    await vi.waitFor(() => expect(exec).toHaveBeenCalledOnce());
+    controller.abort();
+
+    const result = await pending;
+    expect(result).toMatchObject({
+      command: 'create',
+      ok: false,
+      error: {
+        code: 'CANCELLED',
+        outcome: 'retained',
+        machine: sprite.name,
+        machineId: sprite.id,
+      },
+      data: { setup: 'ready', readiness: { ready: true } },
+    });
+    expect(resultExitCode(result)).toBe(130);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.setupIncomplete).toBeUndefined();
+    }
+    expect(mutations).toEqual(['visibility:public', 'labels:ready']);
+    expect(sprite.labels).not.toContain(SETUP_INCOMPLETE_LABEL);
+    const human = captureResult(result, {});
+    const json = captureResult(result, { json: true });
+    expect(human.stdout).toBe('');
+    expect(human.stderr).toContain('Workstation ID: sprite-ready-42');
+    expect(json.stderr).toBe('');
+    expect(json.stdout.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      schemaVersion: 1,
+      ok: false,
+      error: { code: 'CANCELLED', machineId: 'sprite-ready-42' },
+      data: { setup: 'ready' },
+    });
+  });
+
+  it('should keep native pairing disclosure behind structural consent', async () => {
+    const token = 'cor04-generated-native-pair-code';
+    const ordinary = createSprite();
+    const ordinaryPair = vi
+      .spyOn(ordinary.sprite, 'execFile')
+      .mockResolvedValue({
+        stdout: `Token: ${token}\nExpires: in five minutes\n`,
+        stderr: '',
+        exitCode: 0,
+      });
+    const ordinaryResult = await finalizeCreate(dependencies, {
+      workstation: toRecord(ordinary.sprite),
+      guest: guestOf(ordinary.sprite),
+      observed,
+      context: createContext(ordinary.sprite),
+    });
+    const ordinaryOutput = captureResult(ordinaryResult, { json: true });
+    expect(ordinaryPair).not.toHaveBeenCalled();
+    expect(ordinaryResult).toMatchObject({
+      data: { pairing: { status: 'not requested' } },
+    });
+    expect(ordinaryOutput.stdout).not.toContain(token);
+    expect(JSON.parse(ordinaryOutput.stdout).data.machine.agentUrl).toBe(
+      'https://ready-workstation.sprites.app/',
+    );
+
+    const permitted = createSprite();
+    const requestedPair = vi
+      .spyOn(permitted.sprite, 'execFile')
+      .mockResolvedValue({
+        stdout: `Token: ${token}\nExpires: in five minutes\n`,
+        stderr: '',
+        exitCode: 0,
+      });
+    const permittedResult = await finalizeCreate(dependencies, {
+      workstation: toRecord(permitted.sprite),
+      guest: guestOf(permitted.sprite),
+      observed,
+      context: createContext(permitted.sprite, { withPairCode: true }),
+    });
+    const permittedOutput = captureResult(permittedResult, {
+      json: true,
+      withPairCode: true,
+    });
+    expect(requestedPair).toHaveBeenCalledOnce();
+    expect(JSON.parse(permittedOutput.stdout).data).toMatchObject({
+      machine: {
+        agentUrl: `https://ready-workstation.sprites.app/#token=${token}`,
+      },
+      pairing: { status: 'created', token },
+    });
+    expect(permittedOutput.stdout.trim().split('\n')).toHaveLength(1);
+    expect(permittedOutput.stderr).toBe('');
+  });
+
+  it('should not mint pairing by default after READY', async () => {
+    const { sprite, mutations } = createSprite();
+    const pair = vi
+      .spyOn(sprite, 'execFile')
+      .mockRejectedValue(new Error('unexpected native pairing'));
+
+    const result = await finalizeCreate(dependencies, {
+      workstation: toRecord(sprite),
+      guest: guestOf(sprite),
       observed,
       context: createContext(sprite),
     });
 
     expect(result).toMatchObject({
       ok: true,
-      data: { machine: { setup: 'ready' } },
+      data: {
+        machine: { setup: 'ready' },
+        pairing: { status: 'not requested' },
+      },
     });
+    expect(pair).not.toHaveBeenCalled();
     expect(mutations).toEqual(['visibility:public', 'labels:ready']);
+  });
+
+  it('should explain empty pairing diagnostics without demoting READY', async () => {
+    const { sprite, mutations } = createSprite();
+    vi.spyOn(sprite, 'execFile').mockRejectedValue(new Error(''));
+
+    const result = await finalizeCreate(dependencies, {
+      workstation: toRecord(sprite),
+      guest: guestOf(sprite),
+      observed,
+      context: createContext(sprite, { withPairCode: true }),
+    });
+
+    expect({ result, mutations }).toMatchObject({
+      result: {
+        command: 'create',
+        ok: true,
+        data: {
+          machine: { id: sprite.id, setup: 'ready' },
+          pairing: {
+            status: 'failed',
+            reason: expect.stringContaining('pairing'),
+          },
+        },
+      },
+      mutations: ['visibility:public', 'labels:ready'],
+    });
   });
 
   it('should retain READY when completion progress is cancelled', async () => {
@@ -308,6 +509,7 @@ describe('fn:finalizeCreate READY boundary', () => {
     const result = await withOperation(operation, async () =>
       finalizeCreate(dependencies, {
         workstation: toRecord(sprite),
+        guest: guestOf(sprite),
         observed,
         context: createContext(sprite),
         interaction,
@@ -357,6 +559,7 @@ describe('fn:finalizeCreate READY boundary', () => {
 
     const failure: unknown = await finalizeCreate(dependencies, {
       workstation: toRecord(sprite),
+      guest: guestOf(sprite),
       observed: inspection,
       context: createContext(sprite),
     }).then(
@@ -400,9 +603,12 @@ describe('fn:finalizeCreate READY boundary', () => {
       beforeRecovery: ['visibility:public', 'labels:ready'],
     },
   ] as const)(
-    'should recover $stage',
+    'should recover $stage before optional pairing starts',
     async ({ prepare, message, code, beforeRecovery }) => {
       const { sprite, mutations, visibility, labels } = createSprite();
+      const pair = vi
+        .spyOn(sprite, 'execFile')
+        .mockRejectedValue(new Error('unexpected native pairing'));
       if (prepare === 'url') {
         sprite.url = '';
       }
@@ -430,6 +636,7 @@ describe('fn:finalizeCreate READY boundary', () => {
       const context = createContext(sprite);
       const failure: unknown = await finalizeCreate(dependencies, {
         workstation: toRecord(sprite),
+        guest: guestOf(sprite),
         observed,
         context,
       }).then(
@@ -453,6 +660,7 @@ describe('fn:finalizeCreate READY boundary', () => {
         error: failure,
       });
 
+      expect(pair).not.toHaveBeenCalled();
       expect(mutations).toEqual([
         ...beforeRecovery,
         'visibility:sprite',

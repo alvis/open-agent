@@ -9,7 +9,7 @@ import { dependencies } from '../../mocks/dependencies';
 import type { CommandRequest } from '#application/contracts';
 
 // fixture catalog: the shipped agent replaced by a stand-in that drives only
-// Claude, a rule no shipped driver can trigger
+// Claude and offers no pairing, the two rules no shipped driver can trigger
 vi.mock('#composition/registry', async (importOriginal) => {
   const original =
     await importOriginal<typeof import('#composition/registry')>();
@@ -22,6 +22,7 @@ vi.mock('#composition/registry', async (importOriginal) => {
         t3: {
           ...original.registry.agents.t3,
           supportedHarnesses: ['claude'] as const,
+          supportsPairing: false,
         },
       },
     },
@@ -97,6 +98,40 @@ describe('fn:prepareCreate selection rules', () => {
       code: 'INPUT',
       message: 'The workstation selection is invalid',
       details: ['ACP agent "t3" does not support harness "claude"'],
+    });
+    unsupported.mockRestore();
+    expect(providerCalls).not.toHaveBeenCalled();
+  });
+
+  it('should reject pairing from an agent that does not declare it before any provider call', async () => {
+    guardProviderBoundary();
+    await expect(
+      prepareCreate(dependencies, {
+        ...request,
+        options: { ...request.options, withPairCode: true },
+      }),
+    ).rejects.toMatchObject({
+      code: 'INPUT',
+      message: 'The workstation selection is invalid',
+      details: ['ACP agent "t3" does not support pairing (--with-pair-code)'],
+    });
+    expect(providerCalls).not.toHaveBeenCalled();
+  });
+
+  it('should aggregate both unreachable rules into one error before any provider call', async () => {
+    guardProviderBoundary();
+    const unsupported = dropClaudeSupport();
+    await expect(
+      prepareCreate(dependencies, {
+        ...request,
+        options: { ...request.options, withPairCode: true },
+      }),
+    ).rejects.toMatchObject({
+      code: 'INPUT',
+      details: [
+        'ACP agent "t3" does not support harness "claude"',
+        'ACP agent "t3" does not support pairing (--with-pair-code)',
+      ],
     });
     unsupported.mockRestore();
     expect(providerCalls).not.toHaveBeenCalled();

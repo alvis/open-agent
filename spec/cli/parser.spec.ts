@@ -8,6 +8,7 @@ import {
 } from '@stricli/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { pairingFlags } from '#cli/flags';
 import {
   applicationText,
   parseApplication,
@@ -22,6 +23,7 @@ import type { ExecutionState, InvocationContext } from '#cli/parser';
 
 interface ParsedCreate {
   name?: string;
+  withPairCode?: boolean;
 }
 
 vi.mock('@stricli/core', async (importOriginal) => {
@@ -49,7 +51,7 @@ const runnerControl = vi.hoisted(() =>
  * builds a create route through the production parser hooks
  * @param state invocation-local parser diagnostics
  * @param parsed receives the flags the command handler observed
- * @returns application with one value-taking flag
+ * @returns application with one value-taking flag and the pairing flag
  */
 function createApplication(
   state: ExecutionState,
@@ -61,6 +63,7 @@ function createApplication(
         create: buildCommand({
           parameters: {
             flags: {
+              ...pairingFlags,
               name: {
                 kind: 'parsed',
                 parse: String,
@@ -90,7 +93,7 @@ function createApplication(
 }
 
 /**
- * parses one invocation through the production parser
+ * parses one invocation through the production alias rewrite
  * @param argv command-line arguments after the executable name
  * @returns observed flags and parser diagnostics
  */
@@ -109,7 +112,69 @@ async function parse(
 }
 
 describe('fn:parseApplication', () => {
+  it('should rewrite a per-agent pairing alias that stands as its own flag', async () => {
+    const { parsed, state } = await parse([
+      'create',
+      '--name',
+      'devbox',
+      '--with-t3-pair-code',
+    ]);
+
+    expect(state.errors).toEqual([]);
+    expect(parsed).toEqual([{ name: 'devbox', withPairCode: true }]);
+  });
+
+  it('should leave a pairing alias that follows a value-taking flag as typed', async () => {
+    const { parsed, state } = await parse([
+      'create',
+      '--name',
+      '--with-t3-pair-code',
+    ]);
+    const messages = state.errors.map(({ message }) => message).join('\n');
+
+    expect(parsed).toEqual([]);
+    expect(state.errors).toEqual([expect.objectContaining({ code: 'USAGE' })]);
+    expect(messages).toContain('--with-t3-pair-code');
+    expect(messages).not.toContain('--with-pair-code');
+  });
+
+  it('should rewrite an alias that follows an inline flag value', async () => {
+    const { parsed, state } = await parse([
+      'create',
+      '--name=devbox',
+      '--with-t3-pair-code',
+    ]);
+
+    expect(state.errors).toEqual([]);
+    expect(parsed).toEqual([{ name: 'devbox', withPairCode: true }]);
+  });
+
   it.each([
+    {
+      label: 'removed no-pair',
+      argv: ['--no-pair'],
+      message: '--no-pair was removed',
+    },
+    {
+      label: 'removed include-pairing',
+      argv: ['--include-pairing'],
+      message: '--include-pairing was removed',
+    },
+    {
+      label: 'removed no-include-pairing',
+      argv: ['--no-include-pairing'],
+      message: '--no-include-pairing was removed',
+    },
+    {
+      label: 'negated pair code',
+      argv: ['--no-with-pair-code'],
+      message: '--no-with-pair-code is not supported',
+    },
+    {
+      label: 'negated agent pair code',
+      argv: ['--no-with-t3-pair-code'],
+      message: '--no-with-t3-pair-code is not supported',
+    },
     {
       label: 'double negation',
       argv: ['--no-no-color'],
@@ -130,11 +195,11 @@ describe('fn:parseApplication', () => {
   });
 
   it('should report an unknown flag as a usage error', async () => {
-    const { parsed, state } = await parse(['create', '--nme']);
+    const { parsed, state } = await parse(['create', '--with-pair-cod']);
 
     expect(parsed).toEqual([]);
     expect(state.errors).toEqual([expect.objectContaining({ code: 'USAGE' })]);
-    expect(state.errors[0]?.message).toContain('--nme');
+    expect(state.errors[0]?.message).toContain('--with-pair-cod');
   });
 
   it('should show root help for an empty invocation', async () => {
@@ -150,11 +215,11 @@ describe('fn:parseApplication', () => {
     expect(output).toContain('create');
   });
 
-  it('should stop flag validation at the argument separator', async () => {
-    const { state } = await parse(['create', '--', '--no-no-color']);
+  it('should stop flag validation and alias conversion at the argument separator', async () => {
+    const { state } = await parse(['create', '--', '--no-pair']);
 
     expect(state.errors).toEqual([expect.objectContaining({ code: 'USAGE' })]);
-    expect(state.errors[0]?.message).not.toContain('is invalid');
+    expect(state.errors[0]?.message).not.toContain('was removed');
   });
 
   it('should suppress incidental command writes to the parser stdout stream', async () => {
@@ -226,8 +291,8 @@ describe('fn:applicationText', () => {
 
     expect(
       text.exceptionWhileParsingArguments(
-        new FlagNotFoundError('nonInteractiv', [
-          'nonInteractive',
+        new FlagNotFoundError('withPairCod', [
+          'withPairCode',
           'localCredentials',
         ]),
         false,
@@ -237,7 +302,7 @@ describe('fn:applicationText', () => {
       {
         code: 'USAGE',
         message: expect.stringContaining(
-          '--non-interactive or --local-credentials',
+          '--with-pair-code or --local-credentials',
         ),
       },
     ]);
@@ -245,7 +310,7 @@ describe('fn:applicationText', () => {
 
   it('should preserve an alias configuration error without suggesting user flags', () => {
     const state: ExecutionState = { emitted: false, command: null, errors: [] };
-    const error = new FlagNotFoundError('x', ['nonInteractive'], 'x');
+    const error = new FlagNotFoundError('x', ['withPairCode'], 'x');
 
     expect(
       applicationText(state).exceptionWhileParsingArguments(error, false),

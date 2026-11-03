@@ -1,3 +1,4 @@
+import { PairingSecret } from '#kernel/pairing-secret';
 import { redactResolved } from '#kernel/redaction';
 
 import type { CommandName } from '#kernel/commands';
@@ -5,7 +6,7 @@ import type { CommandName } from '#kernel/commands';
 import type { ResultOutput } from './output/envelope';
 import type { ErrorOutput } from './output/failure';
 
-/** JSON values after registered credential redaction */
+/** JSON values after structural disclosure and registered credential redaction */
 export type JsonValue =
   string | number | boolean | null | JsonValue[] | JsonObject;
 
@@ -14,7 +15,7 @@ export interface JsonObject {
   [key: string]: JsonValue | undefined;
 }
 
-/** versioned printable result */
+/** versioned printable result, separated from internal pairing markers */
 export type SerializedResult =
   | {
       schemaVersion: 1;
@@ -34,7 +35,7 @@ export type SerializedResult =
 /**
  * projects one typed outcome into the public versioned output contract
  * @param result completed domain or parser result
- * @returns printable payload with no internal output controls
+ * @returns printable payload with no internal output controls or secret markers
  */
 export function serializeResult(result: ResultOutput): SerializedResult {
   if (result.ok) {
@@ -103,6 +104,9 @@ function serializeObject(value: object): JsonObject {
  * @returns safe JSON value, omitting unsupported values as JSON does
  */
 function serializeValue(value: unknown): JsonValue | undefined {
+  if (value instanceof PairingSecret) {
+    return value.disclose(true);
+  }
   if (typeof value === 'string') {
     return redactResolved(value);
   }

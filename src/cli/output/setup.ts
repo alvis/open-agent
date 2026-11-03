@@ -1,6 +1,7 @@
 import { projectRetainedCredentials } from './credentials';
 import { projectFields, same } from './fields';
 import { projectMachine } from './machine';
+import { projectPairing } from './pairing';
 import { projectReadiness } from './readiness';
 
 import type {
@@ -16,6 +17,7 @@ import type { CredentialSaveResult } from '#domain/credentials';
 
 import type { RetainedCredentialsOutput } from './credentials';
 import type { MachineOutput } from './machine';
+import type { PairingOutput } from './pairing';
 import type { ReadinessOutput } from './readiness';
 
 /** the outcome of a setup section, or of replacing the local credential */
@@ -24,6 +26,7 @@ export interface SetupDataOutput {
   machine?: MachineOutput;
   retainedCredentials?: RetainedCredentialsOutput;
   service?: 'configured';
+  pairing?: PairingOutput;
   network?: { status: 'disabled'; readiness: 'skipped' };
 }
 
@@ -66,6 +69,7 @@ export function projectSetup(data: SetupData): SetupDataOutput {
     machine: projectMachine,
     retainedCredentials: projectRetainedCredentials,
     service: same,
+    pairing: projectPairing,
     network: projectNetworkOutcome,
   });
 }
