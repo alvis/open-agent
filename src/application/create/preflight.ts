@@ -3,16 +3,22 @@ import { bindProvider } from '#application/catalog/providers';
 import { commandError } from '#application/failures';
 import { resolveCreateInputs } from '#application/input';
 import { retainEnteredProviderToken } from '#application/input/prompts';
+import {
+  resolvePluginActions,
+  validateMarketplaceSources,
+} from '#application/plugins';
 import { runOperation, checkOperation } from '#kernel/operation';
 
 import { blockedPreparation, inputFailure } from './blockers';
 import { authorizationFailure } from './failure';
+import { promptCreatePluginOptions } from './plugins';
 import { createPreflightSummary } from './reminders';
 import { confirmCreation, reviewCreatePlan } from './review';
 
 import type { CommandRequest } from '#application/contracts';
 import type { CommandError } from '#application/failures';
 import type { ResolvedInputs } from '#application/input/types';
+import type { HarnessPluginActions } from '#application/plugins';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { ProviderDriver } from '#application/ports/drivers';
 import type { Interaction } from '#application/ports/interaction';
@@ -57,6 +63,11 @@ export async function prepareCreate(
     return blocked;
   }
   const values = { name: input.name!, token: input.providerToken! };
+  const plugins = await resolveCreatePlugins(dependencies, {
+    request,
+    input,
+    interaction,
+  });
   const provider = bindProvider(
     dependencies.registry,
     input.profile.provider,
@@ -84,6 +95,7 @@ export async function prepareCreate(
   return authorizeCreate(dependencies, {
     values,
     input,
+    plugins,
     interaction,
     preflight,
     request,
@@ -140,21 +152,76 @@ async function providerCheckFailure(
     : undefined;
 }
 
+/** what the plugin selection of a create depends on */
+interface CreatePluginsParams {
+  /** parsed create command */
+  request: CommandRequest;
+  /** resolved create inputs */
+  input: ResolvedInputs;
+  /** optional inline plugin prompts */
+  interaction?: Interaction;
+}
+
+/**
+ * selects the harness plugin actions and validates their marketplace sources before any provider call
+ * @param dependencies the registered drivers, what this computer provides
+ * @param params parsed command, resolved inputs and optional prompts
+ * @returns the plugin actions to install
+ */
+async function resolveCreatePlugins(
+  dependencies: Pick<ApplicationDependencies, 'registry' | 'host'>,
+  params: CreatePluginsParams,
+): Promise<HarnessPluginActions> {
+  const { request, input, interaction } = params;
+  const { harnesses } = input.profile;
+  const options = await promptCreatePluginOptions(
+    request.options,
+    harnesses,
+    interaction,
+  );
+  const actions = resolvePluginActions(options, harnesses);
+  await validateMarketplaceSources(dependencies, {
+    actions,
+    accessToken: marketplaceToken(request, input),
+    requireSelectedPluginCoverage: true,
+  });
+
+  return actions;
+}
+
+/**
+ * selects the GitHub token marketplace sources may use; only github.com receives it
+ * @param request parsed create command
+ * @param input resolved GitHub token
+ * @returns the token for github.com marketplace sources, if any
+ */
+function marketplaceToken(
+  request: CommandRequest,
+  input: ResolvedInputs,
+): string | undefined {
+  const host = request.options.githubHost;
+
+  return host && host.toLowerCase() !== 'github.com'
+    ? undefined
+    : input.githubToken;
+}
+
 /**
  * presents verified inputs and confirms the operation
  * @param dependencies the registered drivers
- * @param context caller-side preflight evidence and operation
+ * @param context caller-side preflight evidence, selected native code, and operation
  * @returns authorised provisioning context or cancellation result
  */
 async function authorizeCreate(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: CreateAuthorizationContext,
 ): Promise<CreatePreparation> {
-  const { values, input, interaction, preflight, request, provider } = context;
+  const { values, input, plugins, interaction, preflight, request, provider } =
+    context;
   reviewCreatePlan(dependencies, context);
   const declined = await confirmCreation(
     dependencies,
-    { name: values.name, request, profile: input.profile },
+    { name: values.name, request, plugins, profile: input.profile },
     interaction,
   );
   if (declined) {
@@ -168,6 +235,7 @@ async function authorizeCreate(
       input,
       name: values.name,
       token: values.token,
+      plugins,
       preflight,
       provider,
     },

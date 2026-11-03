@@ -208,6 +208,16 @@ export const integrationCredentialFlags = {
   },
 } as const;
 
+/** optional native plugin and marketplace selections; per-harness flags come from flags/harness */
+export const pluginFlags = {
+  plugins: {
+    kind: 'boolean',
+    optional: true,
+    withNegated: true,
+    brief: 'enable or disable plugins',
+  },
+} as const;
+
 /** setup-only action selectors */
 export const setupFlags = {
   section: {
@@ -220,11 +230,20 @@ export const setupFlags = {
       'git',
       'env',
       'system',
+      'plugins',
       'tools',
     ] as const),
     optional: true,
     placeholder: 'SECTION',
-    brief: 'SECTION · all, agent, network, github, git, env, system, or tools',
+    brief:
+      'SECTION · all, agent, network, github, git, env, system, plugins, or tools',
+  },
+  pluginHarness: {
+    kind: 'parsed',
+    parse: buildChoiceParser(harnessIds()),
+    optional: true,
+    placeholder: 'HARNESS',
+    brief: `HARNESS · plugin harness: ${harnessIds().join(', ')}`,
   },
   update: { kind: 'boolean', default: false, brief: 'update managed tools' },
 } as const;

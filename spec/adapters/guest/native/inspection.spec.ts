@@ -15,9 +15,12 @@ import type { HarnessInspection } from '#domain/observations/harness';
 
 const OBSERVATION = {
   configuration: {
+    pluginListAvailable: true,
     awakeHooksInstalled: false,
     authentication: 'native',
   },
+  selectedPlugins: ['selected-plugin'],
+  pluginsEnabled: true,
   evidence: undefined,
 } satisfies HarnessInspection;
 const DRIVERS = {
@@ -46,7 +49,7 @@ describe('fn:createNativeInspection', () => {
     const inspection = await INSPECTION.inspect(guest);
 
     expect(inspection.harnesses).toEqual({
-      claude: { evidence: undefined },
+      claude: { selectedPlugins: ['selected-plugin'], evidence: undefined },
     });
   });
 });

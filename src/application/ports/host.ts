@@ -4,6 +4,7 @@ import type {
   CredentialStoreLocation,
   ManagementCredentialName,
 } from '#domain/credentials';
+import type { HarnessId } from '#domain/ids';
 import type { OperationContext } from '#kernel/operation';
 
 /** local executable invocation with a bounded timeout */
@@ -21,6 +22,33 @@ export interface LocalInputParams extends Omit<
 > {
   input: string;
   verifyResultExternally?: boolean;
+}
+
+/** supported recognition outcomes before changing native marketplace state */
+export type MarketplaceCompatibility =
+  'supported' | 'unsupported' | 'inaccessible' | 'unknown';
+
+/** bounded source compatibility evidence for one native harness */
+export interface MarketplaceClassification {
+  source: string;
+  harness: HarnessId;
+  compatibility: MarketplaceCompatibility;
+  manifestPath?: string;
+  marketplaceName?: string;
+  pluginNames?: string[];
+  reason: string;
+}
+
+/** what a marketplace lookup needs to know about one native harness */
+export interface MarketplaceLookup {
+  /** marketplace source reference */
+  source: string;
+  /** native coding harness whose manifests are looked for */
+  harness: HarnessId;
+  /** manifest paths the harness documents, in lookup order */
+  manifests: readonly string[];
+  /** optional GitHub credential for private sources */
+  accessToken?: string;
 }
 
 /** what the application asks of this computer: processes, files, credentials and the network */
@@ -49,6 +77,10 @@ export interface HostPorts {
       value: string,
       options: CredentialSaveOptions,
     ): Promise<CredentialSaveResult>;
+  };
+  marketplaces: {
+    /** inspects documented marketplace manifests without registering a source */
+    classify(lookup: MarketplaceLookup): Promise<MarketplaceClassification>;
   };
   tools: {
     /** locates an executable on PATH without running it */

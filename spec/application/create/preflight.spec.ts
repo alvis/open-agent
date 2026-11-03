@@ -23,6 +23,7 @@ const request = {
     release: 'stable',
     localCredentials: false,
     github: false,
+    plugins: false,
     gitIdentity: false,
     harness: ['claude'],
     network: 'none',

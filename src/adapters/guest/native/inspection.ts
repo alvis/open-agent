@@ -13,7 +13,7 @@ import type { ProfileDefaults } from '#domain/profile';
 /** the native inspection's two reads */
 export interface NativeInspection {
   /**
-   * reads native user settings without a model turn
+   * reads native user settings and validates native plugin-list commands without a model turn
    * @param guest target guest
    * @param selection selected agent and harness identifiers to inspect
    * @param selection.agent selected ACP agent
@@ -79,6 +79,7 @@ export function createNativeInspection(context: {
           drivers.map(({ id }) => {
             const inspection = inspections[id]!;
             const state: HarnessAgentState = {
+              selectedPlugins: inspection.selectedPlugins,
               evidence: inspection.evidence,
             };
 

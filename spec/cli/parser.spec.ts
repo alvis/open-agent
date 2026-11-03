@@ -185,6 +185,12 @@ describe('fn:parseApplication', () => {
       argv: ['--color', '--no-color'],
       message: '--color and --no-color are mutually exclusive',
     },
+    {
+      label: 'opposing harness flags',
+      argv: ['--claude-plugins', '--no-claude-plugins'],
+      message:
+        '--claude-plugins and --no-claude-plugins are mutually exclusive',
+    },
   ])('should reject $label before scanning', async ({ argv, message }) => {
     const { parsed, state } = await parse(['create', ...argv]);
 

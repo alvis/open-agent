@@ -54,12 +54,14 @@ const inspection: GuestInspection = {
   },
   native: {
     claude: {
+      pluginListAvailable: false,
       awakeHooksInstalled: false,
       authentication: 'not-configured',
     },
     harnesses: {
       claude: {
-        evidence: undefined,
+        selectedPlugins: [],
+        evidence: { sdkPluginLoading: 'not-verified' },
       },
     },
   },
@@ -453,6 +455,7 @@ describe('fn:prepareResult', () => {
 
     expect(output.stdout).not.toContain('Failed tools:');
     expect(output.stdout).not.toContain('Unsuccessful steps:');
+    expect(output.stdout).not.toContain('Native plugin inventory available:');
   });
 
   it('should name the tools the last update failed in the maintenance details', () => {

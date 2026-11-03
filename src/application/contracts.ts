@@ -5,7 +5,31 @@ import type { CommandName } from '#kernel/commands';
 
 /** targetable setup areas */
 export type SetupSection =
-  'all' | 'agent' | 'network' | 'github' | 'git' | 'env' | 'system' | 'tools';
+  | 'all'
+  | 'agent'
+  | 'network'
+  | 'github'
+  | 'git'
+  | 'env'
+  | 'system'
+  | 'plugins'
+  | 'tools';
+
+/** one harness's native plugin and marketplace selections */
+export interface HarnessPluginOptions {
+  /** enables or disables the harness's plugins */
+  isEnabled?: boolean;
+  /** marketplace sources to add */
+  marketplaces?: string[];
+  /** plugins to install */
+  plugins?: string[];
+  /** marketplace sources to remove (setup only) */
+  removeMarketplaces?: string[];
+  /** plugins to disable (setup only) */
+  disablePlugins?: string[];
+  /** plugins to uninstall (setup only) */
+  uninstallPlugins?: string[];
+}
 
 /** values parsed from CLI flags; secret-bearing fields contain references, never raw credentials */
 export interface CommandOptions {
@@ -19,6 +43,8 @@ export interface CommandOptions {
   setupFile?: string;
   /** setup section to configure */
   section?: SetupSection;
+  /** harness whose plugins the setup plugins section changes */
+  pluginHarness?: HarnessId;
   /** selected provider */
   provider?: ProviderId;
   /** selected ACP agent */
@@ -55,6 +81,10 @@ export interface CommandOptions {
   github?: boolean;
   /** configures or skips the Git and Jujutsu identity */
   gitIdentity?: boolean;
+  /** configures or skips native plugins for every harness */
+  plugins?: boolean;
+  /** per-harness plugin selections, keyed by harness id */
+  harnessPlugins?: Partial<Record<HarnessId, HarnessPluginOptions>>;
   /** reads and saves credentials on this computer when enabled */
   localCredentials?: boolean;
   /** requests a pairing code from an agent that supports pairing */

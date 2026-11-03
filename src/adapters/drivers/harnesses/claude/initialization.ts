@@ -23,24 +23,28 @@ export interface ClaudeInitialization extends HarnessCommandEvidence {
   modelCount: number;
   /** agents the SDK registered */
   agents: string[];
+  /** plugins the SDK loaded */
+  loadedPlugins: string[];
 }
 
 /** the Claude CLI, kept in the agent's npm prefix */
 const CLAUDE = `${AGENT_BIN}/claude`;
-/** longest initialization may take */
+/** longest initialization and the plugin reload may take together */
 const INITIALIZATION_LIMIT_MS = 45_000;
 /** most output Claude may print while initializing */
 const OUTPUT_LIMIT_CHARS = 1_048_576;
 
 /**
- * asks Claude to initialize through its control protocol, never sending a
- * conversation frame: one Claude process on the guest, whose replies the
- * host parses
+ * asks Claude to initialize, and to reload the selected plugins, through its
+ * control protocol, never sending a conversation frame: one Claude process
+ * on the guest, whose replies the host parses
  * @param guest target guest
+ * @param selected plugin identities open-agent selected
  * @returns native initialization evidence, absent when Claude did not initialize
  */
 export async function inspectClaudeInitialization(
   guest: GuestChannel,
+  selected: readonly string[],
 ): Promise<ClaudeInitialization | undefined> {
   const claude = new GuestLineProcess(
     guest,
@@ -69,12 +73,18 @@ export async function inspectClaudeInitialization(
       if (!Array.isArray(initialized.models)) {
         return undefined;
       }
+      const loadedPlugins =
+        selected.length > 0 ? await reloadPlugins(claude) : [];
 
       return {
         kind: 'commands',
         modelCount: initialized.models.length,
         commands: names(initialized.commands),
         agents: names(initialized.agents),
+        loadedPlugins,
+        selectedPluginsLoaded: selected.every((identity) =>
+          loadedPlugins.includes(identity),
+        ),
       };
     });
   } catch {
@@ -85,16 +95,44 @@ export async function inspectClaudeInitialization(
 }
 
 /**
+ * reloads the plugins and lists the source of each one loaded
+ * @param claude the running Claude
+ * @returns the loaded plugins' sources
+ * @throws {Error} when the reload failed or omitted a source
+ */
+async function reloadPlugins(claude: GuestLineProcess): Promise<string[]> {
+  const reloaded = await request(claude, 'reload_plugins');
+  if (
+    !Array.isArray(reloaded.plugins) ||
+    (reloaded.error_count !== undefined && reloaded.error_count !== 0)
+  ) {
+    throw new Error('Claude plugin reload failed');
+  }
+
+  return reloaded.plugins.map((plugin: unknown) => {
+    if (
+      !isRecord(plugin) ||
+      typeof plugin.source !== 'string' ||
+      !plugin.source
+    ) {
+      throw new Error('Claude plugin reload omitted source evidence');
+    }
+
+    return plugin.source;
+  });
+}
+
+/**
  * sends one control request and takes its reply, skipping hook notifications;
  * any other frame, or a reply asking for a permission or dialog, fails it
  * @param claude the running Claude
- * @param subtype native initialization operation
+ * @param subtype native initialization or plugin-discovery operation
  * @returns the correlated native payload
  * @throws {Error} when Claude answered anything else
  */
 async function request(
   claude: GuestLineProcess,
-  subtype: 'initialize',
+  subtype: 'initialize' | 'reload_plugins',
 ): Promise<Record<string, unknown>> {
   const id = randomUUID();
   claude.send({

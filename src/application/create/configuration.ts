@@ -6,9 +6,11 @@ import {
 import { networkDriver } from '#application/catalog/networks';
 import { installWorkstation } from '#application/installation';
 import { markInstallationReady } from '#application/installation/readiness';
+import { hasActions } from '#application/plugins';
 import { traceStage } from '#kernel/operation';
 import { Secret } from '#kernel/secret';
 
+import type { HarnessPluginActions } from '#application/plugins';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { ProviderDriver } from '#application/ports/drivers';
 import type { GuestChannel } from '#application/ports/guest-channel';
@@ -28,6 +30,7 @@ interface NewWorkstationConfiguration {
   runtimeEnv: Record<string, string>;
   /** executable run once as root after the native configuration */
   setupFile?: Buffer;
+  plugins: HarnessPluginActions;
 }
 
 /** the named inputs of configure new workstation */
@@ -136,7 +139,7 @@ async function enrolAndConfigure(
 }
 
 /**
- * applies selected native account configuration
+ * applies selected native account and plugin configuration
  * @param dependencies the registered drivers, the guest mechanics
  * @param guest guest channel of the managed workstation
  * @param configuration selected non-secret and transient secret inputs
@@ -174,4 +177,9 @@ async function configureNative(
     drivers,
     awakeHook: awakeHookCommand(dependencies.guest.facts),
   });
+  for (const driver of drivers) {
+    if (hasActions(configuration.plugins[driver.id])) {
+      await driver.plugins.apply(guest, configuration.plugins[driver.id]);
+    }
+  }
 }

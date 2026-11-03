@@ -8,6 +8,7 @@ import { traceStage } from '#kernel/operation';
 
 import { installSetupPlan } from './installation';
 import { setupNetwork } from './network';
+import { setupPlugins } from './plugins';
 import {
   setupEnvironment,
   setupGit,
@@ -27,7 +28,7 @@ import type { SetupContext } from './context';
 /**
  * reconciles every managed guest section: the setup plan installs the tools,
  * then the guest is named after its workstation and the network, accounts,
- * harnesses and runtime environment are configured and the setup
+ * harnesses, runtime environment and plugins are configured and the setup
  * file is run before the plan
  * installs and starts the services and jobs, the
  * agent is verified to serve and exposed, and only then is the installation
@@ -110,6 +111,10 @@ async function configureSections(
   const environment = options.envFile
     ? await setupEnvironment(dependencies, guest, context)
     : undefined;
+  const plugins =
+    options.plugins === false
+      ? undefined
+      : await setupPlugins(dependencies, guest, context);
   const system = options.setupFile
     ? await setupSystem(dependencies, guest, context)
     : undefined;
@@ -119,6 +124,7 @@ async function configureSections(
     ...github,
     ...git,
     ...environment,
+    ...plugins,
     ...system,
   };
 }

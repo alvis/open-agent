@@ -1,9 +1,13 @@
-import { harnessLabel } from '#domain/harnesses';
+import { hasActions } from '#application/plugins';
+import { harnessIds, harnessLabel } from '#domain/harnesses';
 import { pickMachine } from '#domain/machine-sizes';
 import { publishStatus } from '#kernel/operation';
 
+import { describePluginSelections } from './plugins';
+
 import type { CommandRequest } from '#application/contracts';
 import type { ResolvedInputs } from '#application/input/types';
+import type { HarnessPluginActions } from '#application/plugins';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { Interaction } from '#application/ports/interaction';
 import type { WorkstationProfile } from '#domain/profile';
@@ -20,6 +24,7 @@ export interface RequiredCreateValues {
 export interface ReviewContext {
   values: RequiredCreateValues;
   input: ResolvedInputs;
+  plugins: HarnessPluginActions;
   interaction?: Interaction;
   preflight: CreatePreflight;
 }
@@ -28,11 +33,12 @@ export interface ReviewContext {
 interface ConfirmationContext {
   name: string;
   request: CommandRequest;
+  plugins: HarnessPluginActions;
   profile: WorkstationProfile;
 }
 
 /**
- * presents non-secret values for review
+ * presents non-secret values and native code selections for review
  * @param dependencies the registered drivers
  * @param context required create values and optional status reporter
  */
@@ -40,7 +46,7 @@ export function reviewCreatePlan(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: ReviewContext,
 ): void {
-  const { values, input, interaction, preflight } = context;
+  const { values, input, plugins, interaction, preflight } = context;
   const { profile } = input;
   const provider = dependencies.registry.providers[profile.provider];
   const { credential } = provider.prerequisites;
@@ -57,6 +63,7 @@ export function reviewCreatePlan(
         `${dependencies.registry.agents[profile.agent].displayName} exposed after readiness`,
         `${credential.label}: ${input.sources[credential.environment] ?? 'prompt/session'}`,
         `GitHub: ${input.githubToken ? 'selected' : 'skipped'}; Git identity: ${input.gitIdentity ? 'configured' : 'skipped'}`,
+        ...describePluginSelections(plugins, profile.harnesses),
       ].join('\n'),
     },
     interaction,
@@ -67,9 +74,9 @@ export function reviewCreatePlan(
 }
 
 /**
- * confirms provider provisioning
+ * confirms selected native code and provider provisioning separately
  * @param dependencies the registered drivers
- * @param context exact name and parsed consent flags
+ * @param context exact name, parsed consent flags, and selected code
  * @param interaction optional confirmation prompts
  * @returns cancellation reason when a confirmation was declined
  */
@@ -78,7 +85,20 @@ export async function confirmCreation(
   context: ConfirmationContext,
   interaction?: Interaction,
 ): Promise<string | undefined> {
-  const { name, request, profile } = context;
+  const { name, request, plugins, profile } = context;
+  if (
+    interaction &&
+    !request.options.yes &&
+    harnessIds().some((id) => hasActions(plugins[id]))
+  ) {
+    const trusted = await interaction.confirm({
+      message:
+        'Install the selected native marketplace/plugin code, including executable hooks?',
+    });
+    if (!trusted) {
+      return 'Plugin selection was not accepted; no workstation was created';
+    }
+  }
   if (interaction && !request.options.nonInteractive && !request.options.yes) {
     const accepted = await interaction.confirm({
       message: `Create ${name} on ${dependencies.registry.providers[profile.provider].displayName} and expose authenticated ${dependencies.registry.agents[profile.agent].displayName} at its provider URL?`,

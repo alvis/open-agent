@@ -124,6 +124,7 @@ async function configureAndFinalize(
       gitIdentity: context.input.gitIdentity,
       runtimeEnv: context.input.runtimeEnv,
       setupFile: context.input.setupFile,
+      plugins: context.plugins,
     },
   });
   const observed = await inspectUntilServing(

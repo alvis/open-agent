@@ -79,6 +79,7 @@ const NATIVE: NativeConfigurationInspection = {
     (['claude'] as const).map((harness) => [
       harness,
       {
+        pluginListAvailable: false,
         awakeHooksInstalled: true,
         authentication: 'not-configured' as const,
       },

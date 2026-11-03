@@ -1,6 +1,6 @@
 import { projectRetainedCredentials } from './credentials';
 import { projectSkippedTool, projectTool } from './environment';
-import { each, projectFields, same } from './fields';
+import { each, mapValues, projectFields, same } from './fields';
 import { projectUpdates } from './inspection';
 import { projectMachine } from './machine';
 import { projectPairing } from './pairing';
@@ -56,6 +56,7 @@ export interface SetupDataOutput {
   runtimeEnvironment?:
     { status: 'configured'; names: readonly string[] } | { status: 'skipped' };
   setupFile?: 'ran' | 'skipped';
+  plugins?: Record<string, string>;
   components?: ComponentCountsOutput;
   tools?: ToolsSetupOutput;
 }
@@ -145,6 +146,7 @@ export function projectSetup(data: SetupData): SetupDataOutput {
             typeof environment,
             NonNullable<SetupDataOutput['runtimeEnvironment']>
           >(environment, { status: same }),
+    plugins: mapValues(same),
     components: projectComponents,
     tools: projectToolsOutcome,
   });

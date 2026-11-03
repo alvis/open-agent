@@ -17,12 +17,14 @@ const FULL_INSPECTION = {
   },
   native: {
     claude: {
+      pluginListAvailable: false,
       awakeHooksInstalled: false,
       authentication: 'not-configured',
     },
     harnesses: {
       claude: {
-        evidence: undefined,
+        selectedPlugins: [],
+        evidence: { sdkPluginLoading: 'not-verified' },
       },
     },
   },

@@ -10,7 +10,7 @@ describe('rc:MultiSelect', () => {
     const view = render(
       <MultiSelect
         choices={[{ label: 'Alpha', value: 'alpha' }]}
-        label="Harnesses"
+        label="Plugins"
         onCancel={vi.fn()}
         onSubmit={onSubmit}
       />,
@@ -44,7 +44,7 @@ describe('rc:MultiSelect', () => {
     const view = render(
       <MultiSelect
         choices={[]}
-        label="Harnesses"
+        label="Plugins"
         onCancel={onCancel}
         onSubmit={onSubmit}
       />,
@@ -60,7 +60,7 @@ describe('rc:MultiSelect', () => {
         cancellations: [],
       });
       act(() => view.stdin.write('\x1b'));
-      await vi.waitFor(() => expect(view.lastFrame()).toContain('Harnesses'));
+      await vi.waitFor(() => expect(view.lastFrame()).toContain('Plugins'));
       act(() => view.stdin.write('\x1b'));
 
       await vi.waitFor(() => expect(onCancel.mock.calls).toEqual([[true]]));
@@ -79,13 +79,13 @@ describe('rc:MultiSelect', () => {
           {
             label: 'Beta',
             value: 'beta',
-            description: 'Restricted harness',
+            description: 'Restricted plugin',
             disabledReason: 'unsupported-platform',
           },
           { label: 'Gamma', value: 'gamma' },
         ]}
-        description="Choose compatible harnesses"
-        label="Harnesses"
+        description="Choose compatible plugins"
+        label="Plugins"
         onCancel={vi.fn()}
         onSubmit={onSubmit}
       />,
@@ -113,14 +113,14 @@ describe('rc:MultiSelect', () => {
 
   it('should select beyond the initial viewport and stop upward movement at the first choice', () => {
     const choices = Array.from({ length: 12 }, (_, index) => ({
-      label: `Harness ${index}`,
-      value: `harness-${index}`,
+      label: `Plugin ${index}`,
+      value: `plugin-${index}`,
     }));
     const onSubmit = vi.fn<(values: string[]) => void>();
     const view = render(
       <MultiSelect
         choices={choices}
-        label="Harnesses"
+        label="Plugins"
         onCancel={vi.fn()}
         onSubmit={onSubmit}
       />,
@@ -136,7 +136,7 @@ describe('rc:MultiSelect', () => {
       act(() => view.stdin.write(' '));
       act(() => view.stdin.write('\r'));
 
-      expect(onSubmit.mock.calls).toEqual([[['harness-10', 'harness-0']]]);
+      expect(onSubmit.mock.calls).toEqual([[['plugin-10', 'plugin-0']]]);
     } finally {
       view.unmount();
     }
@@ -148,7 +148,7 @@ describe('rc:MultiSelect', () => {
     const view = render(
       <MultiSelect
         choices={[{ label: 'Alpha', value: 'alpha' }]}
-        label="Choose harnesses"
+        label="Choose plugins"
         onCancel={onCancel}
         onSubmit={onSubmit}
       />,
@@ -159,14 +159,14 @@ describe('rc:MultiSelect', () => {
       expect(onSubmit).not.toHaveBeenCalled();
 
       act(() => view.stdin.write('n'));
-      expect(view.lastFrame()).toContain('Choose harnesses');
+      expect(view.lastFrame()).toContain('Choose plugins');
       act(() => view.stdin.write('\r'));
       act(() => view.stdin.write('\r'));
-      expect(view.lastFrame()).toContain('Choose harnesses');
+      expect(view.lastFrame()).toContain('Choose plugins');
       act(() => view.stdin.write('\r'));
       act(() => view.stdin.write('\x1b'));
       await vi.waitFor(() =>
-        expect(view.lastFrame()).toContain('Choose harnesses'),
+        expect(view.lastFrame()).toContain('Choose plugins'),
       );
       expect(onCancel).not.toHaveBeenCalled();
 
@@ -187,7 +187,7 @@ describe('rc:MultiSelect', () => {
           { label: 'Alpha Beta', value: 'alpha' },
           { label: 'Other', value: 'other' },
         ]}
-        label="Choose harnesses"
+        label="Choose plugins"
         onCancel={vi.fn()}
         onSubmit={onSubmit}
       />,

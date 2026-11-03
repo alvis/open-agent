@@ -52,13 +52,15 @@ const OBSERVED = {
   },
   native: {
     claude: {
+      pluginListAvailable: false,
       awakeHooksInstalled: true,
       authentication: 'not-configured',
     },
     agentEnvironment: SERVED,
     harnesses: {
       claude: {
-        evidence: undefined,
+        selectedPlugins: [],
+        evidence: { sdkPluginLoading: 'not-verified' },
       },
     },
   },
@@ -76,6 +78,7 @@ const REQUEST = {
     yes: true,
     localCredentials: false,
     github: false,
+    plugins: false,
     gitIdentity: false,
     harness: ['claude'],
     network: 'none',

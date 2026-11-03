@@ -2,27 +2,41 @@ import { buildApplication, buildCommand, run } from '@stricli/core';
 import { describe, expect, it } from 'vitest';
 
 import {
+  normalizePluginOptions,
+  resolvePluginActions,
+} from '#application/plugins';
+import {
   commonFlags,
   consentFlags,
   integrationCredentialFlags,
   integrationFlags,
   pairingFlags,
+  pluginFlags,
   selectionFlags,
   setupFlags,
 } from '#cli/flags';
+import {
+  harnessPluginChangeFlags,
+  harnessPluginFlags,
+  harnessPluginOptions,
+} from '#cli/flags/harness';
 
 import type { StricliProcess } from '@stricli/core';
 
 import type { CommandOptions } from '#application/contracts';
+import type { HarnessPluginActions } from '#application/plugins';
+import type { HarnessPluginFlagValues } from '#cli/flags/harness';
+
+type ParsedValues = CommandOptions & HarnessPluginFlagValues;
 
 type ParserOptions = {
   [
-    Key in keyof typeof parserFlags & keyof CommandOptions
+    Key in keyof typeof parserFlags & keyof ParsedValues
   ]: (typeof parserFlags)[Key] extends {
     optional: true;
   }
-    ? CommandOptions[Key]
-    : NonNullable<CommandOptions[Key]>;
+    ? ParsedValues[Key]
+    : NonNullable<ParsedValues[Key]>;
 };
 
 const parserFlags = {
@@ -32,6 +46,9 @@ const parserFlags = {
   ...selectionFlags,
   ...integrationFlags,
   ...integrationCredentialFlags,
+  ...pluginFlags,
+  ...harnessPluginFlags,
+  ...harnessPluginChangeFlags,
   ...setupFlags,
 };
 
@@ -41,6 +58,8 @@ describe('cmd:setup', () => {
     ['local-credentials', 'localCredentials'],
     ['github', 'github'],
     ['git-identity', 'gitIdentity'],
+    ['plugins', 'plugins'],
+    ['claude-plugins', 'claudePlugins'],
   ] as const)(
     'should preserve omitted, positive and negative values for --%s',
     async (flag, property) => {
@@ -69,6 +88,48 @@ describe('cmd:setup', () => {
     expect(omitted.options[0]).toHaveProperty('withPairCode', undefined);
     expect(requested.options[0]).toHaveProperty('withPairCode', true);
     expect(requested.exitCode).toBe(0);
+  });
+
+  it('should accumulate repeated plugin actions independently through Stricli', async () => {
+    const parsed = await parseFlags([
+      '--claude-marketplace',
+      'claude/one',
+      '--claude-marketplace',
+      'claude/two',
+      '--claude-plugin',
+      'alpha@claude',
+      '--claude-plugin',
+      'beta@claude',
+      '--remove-claude-marketplace',
+      'old-claude',
+      '--remove-claude-marketplace',
+      'older-claude',
+      '--disable-claude-plugin',
+      'off@claude',
+      '--disable-claude-plugin',
+      'off-again@claude',
+      '--uninstall-claude-plugin',
+      'gone@claude',
+      '--uninstall-claude-plugin',
+      'gone-again@claude',
+    ]);
+
+    expect(parsed).toEqual({
+      actions: [
+        {
+          claude: {
+            marketplaces: ['claude/one', 'claude/two'],
+            plugins: ['alpha@claude', 'beta@claude'],
+            removeMarketplaces: ['old-claude', 'older-claude'],
+            disablePlugins: ['off@claude', 'off-again@claude'],
+            uninstallPlugins: ['gone@claude', 'gone-again@claude'],
+          },
+        },
+      ],
+      options: [expect.objectContaining({ network: undefined })],
+      diagnostics: [],
+      exitCode: 0,
+    });
   });
 
   it('should parse a network choice with a setup section', async () => {
@@ -125,7 +186,7 @@ describe('cmd:setup', () => {
   it('should reject unknown section values before a command handler runs', async () => {
     const parsed = await parseFlags(['--section', 'unsupported']);
 
-    expect(parsed.options).toEqual([]);
+    expect(parsed.actions).toEqual([]);
     expect(parsed.exitCode).not.toBe(0);
     expect(parsed.diagnostics.length).toBeGreaterThan(0);
   });
@@ -137,10 +198,12 @@ describe('cmd:setup', () => {
  * @returns parsed behavior and scanner diagnostics
  */
 async function parseFlags(argv: string[]): Promise<{
+  actions: HarnessPluginActions[];
   options: CommandOptions[];
   diagnostics: string[];
   exitCode: StricliProcess['exitCode'];
 }> {
+  const actions: HarnessPluginActions[] = [];
   const options: CommandOptions[] = [];
   const diagnostics: string[] = [];
   const parserProcess: StricliProcess = {
@@ -163,7 +226,12 @@ async function parseFlags(argv: string[]): Promise<{
       },
       docs: { brief: 'parse workstation setup inputs' },
       func: (flags: ParserOptions): void => {
-        options.push(flags);
+        const parsed = {
+          ...flags,
+          harnessPlugins: harnessPluginOptions(flags),
+        };
+        actions.push(resolvePluginActions(normalizePluginOptions(parsed)));
+        options.push(parsed);
       },
     }),
     { name: 'open-agent', scanner: { caseStyle: 'allow-kebab-for-camel' } },
@@ -171,5 +239,5 @@ async function parseFlags(argv: string[]): Promise<{
 
   await run(application, argv, context);
 
-  return { options, diagnostics, exitCode: parserProcess.exitCode };
+  return { actions, options, diagnostics, exitCode: parserProcess.exitCode };
 }

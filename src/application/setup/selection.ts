@@ -1,3 +1,8 @@
+import {
+  hasExplicitPluginActions,
+  normalizePluginOptions,
+} from '#application/plugins';
+
 import type { CommandOptions, SetupSection } from '#application/contracts';
 import type {
   Interaction,
@@ -37,6 +42,11 @@ const SETUP_SECTIONS: Array<InteractionChoice<SetupSection>> = [
     description: 'Run an executable once as root for system-wide settings',
   },
   {
+    value: 'plugins',
+    label: 'Native plugins',
+    description: 'Manage harness marketplaces and plugins',
+  },
+  {
     value: 'tools',
     label: 'Managed tools',
     description: 'View recorded versions or explicitly update tools in place',
@@ -58,11 +68,22 @@ export async function selectSetupSection(
   options: CommandOptions,
   interaction?: Interaction,
 ): Promise<SetupSection> {
+  const explicitPlugins = hasExplicitPluginActions(
+    normalizePluginOptions(options),
+  );
+  if (explicitPlugins && options.section && options.section !== 'plugins') {
+    throw new Error(
+      'Explicit plugin actions conflict with the selected setup section',
+    );
+  }
   if (options.section) {
     return options.section;
   }
   if (options.withPairCode) {
     return 'agent';
+  }
+  if (explicitPlugins) {
+    return 'plugins';
   }
   if (options.setupFile) {
     return 'system';
@@ -71,7 +92,9 @@ export async function selectSetupSection(
     return 'env';
   }
   if (!interaction || options.nonInteractive) {
-    throw new Error('Non-interactive setup requires --section');
+    throw new Error(
+      'Non-interactive setup requires --section or explicit plugin actions',
+    );
   }
 
   return interaction.select(

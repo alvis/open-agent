@@ -1,5 +1,6 @@
 import type { CommandOptions } from '#application/contracts';
 import type { ResolvedInputs } from '#application/input/types';
+import type { HarnessPluginActions } from '#application/plugins';
 import type { ProviderDriver } from '#application/ports/drivers';
 import type { CommandResult } from '#application/result';
 
@@ -15,6 +16,7 @@ export interface CreateContext {
   input: ResolvedInputs;
   name: string;
   token: string;
+  plugins: HarnessPluginActions;
   preflight: CreatePreflight;
   provider: ProviderDriver;
 }

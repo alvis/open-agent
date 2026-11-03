@@ -12,6 +12,7 @@ import { setupAll } from './setup/all';
 import { setupFailure } from './setup/failure';
 import { recordSetupMetadata } from './setup/metadata';
 import { setupNetwork } from './setup/network';
+import { setupPlugins } from './setup/plugins';
 import { prepareGuestSection } from './setup/preparation';
 import {
   setupEnvironment,
@@ -308,6 +309,10 @@ async function applySection(
     system: async (): Promise<AppliedSetupSection> => ({
       section: 'system',
       ...(await setupSystem(dependencies, guest, context)),
+    }),
+    plugins: async (): Promise<AppliedSetupSection> => ({
+      section: 'plugins',
+      ...(await setupPlugins(dependencies, guest, context)),
     }),
     tools: async (): Promise<AppliedSetupSection> => ({
       section: 'tools',

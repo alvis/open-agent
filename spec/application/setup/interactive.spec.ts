@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -15,6 +15,7 @@ import {
   UPDATE_STATUS_PATH,
 } from '#adapters/guest/platform/layout';
 import { setupWorkstation } from '#application/setup';
+import { setupPlugins } from '#application/setup/plugins';
 import { setupTools } from '#application/setup/tools';
 import { summarizeProfile } from '#domain/recorded';
 
@@ -22,6 +23,7 @@ import { OPEN_AGENT_VERSION } from '#kernel/version';
 
 import { environmentOf } from '../../fixtures/environment';
 import { driveInk } from '../../fixtures/ink';
+import { pluginFlags } from '../../fixtures/plugin-flags';
 import { DISABLED_NETWORK_PROFILE } from '../../fixtures/profile';
 import { dependencies } from '../../mocks/dependencies';
 import {
@@ -184,6 +186,64 @@ describe('scoped setup', () => {
     }
   }, 15_000);
 
+  it('should recover plugin harness, action and value choices while retaining queued actions', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'open-agent-setup-'));
+    try {
+      const sprite = createFilesystemSprite({
+        root,
+        execute: async (_file, args = []) => ({
+          stdout: args.includes('/usr/bin/id') ? '1000' : '[]',
+          stderr: '',
+          exitCode: 0,
+        }),
+      });
+      const context: SetupContext = {
+        ...workstationOf(sprite),
+        options: { localCredentials: false },
+        input: {
+          profile: DISABLED_NETWORK_PROFILE,
+          runtimeEnv: {},
+          sources: {},
+          missing: [],
+        },
+        profile: DISABLED_NETWORK_PROFILE,
+        persistsProfile: false,
+        isReleaseChanged: false,
+        mutation: { started: false },
+      };
+      await mkdir(join(root, 'opt/open-agent'), { recursive: true });
+      const observed = await driveInk(
+        async (interaction) =>
+          setupPlugins(dependencies, guestOf(sprite), {
+            ...context,
+            interaction,
+          }),
+        [
+          { waitFor: 'Select plugin harness', input: '\r' },
+          { waitFor: 'Claude plugin action', input: '\x1b' },
+          { waitFor: 'Select plugin harness', input: '\r' },
+          { waitFor: 'Claude plugin action', input: 'Disable plugin' },
+          { waitFor: 'Search: Disable plugin', input: '\r' },
+          { waitFor: 'Native plugin identity:', input: '\x1b' },
+          { waitFor: 'Claude plugin action', input: 'Disable plugin' },
+          { waitFor: 'Search: Disable plugin', input: '\r' },
+          { waitFor: 'Native plugin identity:', input: 'coding@alvis' },
+          { waitFor: 'coding@alvis', input: '\r' },
+          { waitFor: 'Select plugin harness', input: '\r' },
+          { waitFor: 'Claude plugin action', input: 'Apply queued' },
+          { waitFor: 'Search: Apply queued', input: '\r' },
+        ],
+      );
+
+      expect(observed.matchedSteps, observed.output).toBe(13);
+      expect(observed.result).toEqual({
+        plugins: { claude: 'applied' },
+      });
+      expect(context.mutation.started).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 15_000);
   it('should preserve Git identity when explicitly skipped without guest mutation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'open-agent-setup-'));
     vi.stubEnv('HOME', root);
@@ -221,6 +281,51 @@ describe('scoped setup', () => {
         data: { section: 'git', gitIdentity: 'preserved' },
       });
       expect(writtenPaths(sprite)).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('should apply an explicit Claude plugin action through the real setup workflow', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'open-agent-setup-'));
+    try {
+      const sprite = createFilesystemSprite({
+        root,
+        execute: async (_file, args = []) => ({
+          stdout: args.includes('/usr/bin/id') ? '1000' : '[]',
+          stderr: '',
+          exitCode: 0,
+        }),
+      });
+      const context: SetupContext = {
+        ...workstationOf(sprite),
+        options: pluginFlags({
+          localCredentials: false,
+          disableClaudePlugin: ['coding@alvis'],
+        }),
+        input: {
+          profile: DISABLED_NETWORK_PROFILE,
+          runtimeEnv: {},
+          sources: {},
+          missing: [],
+        },
+        profile: DISABLED_NETWORK_PROFILE,
+        persistsProfile: false,
+        isReleaseChanged: false,
+        mutation: { started: false },
+      };
+      await mkdir(join(root, 'opt/open-agent'), { recursive: true });
+
+      const outcome = await setupPlugins(
+        dependencies,
+        guestOf(sprite),
+        context,
+      );
+
+      expect(outcome).toEqual({
+        plugins: { claude: 'applied' },
+      });
+      expect(context.mutation.started).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

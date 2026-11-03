@@ -5,7 +5,7 @@ import type {
   CredentialSaveResult,
   ManagementCredentialName,
 } from '#domain/credentials';
-import type { ProviderId } from '#domain/ids';
+import type { HarnessId, ProviderId } from '#domain/ids';
 import type { GuestEnvironment } from '#domain/observations/environment';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { UpdateStatus } from '#domain/observations/updates';
@@ -129,6 +129,11 @@ export interface SystemSetupData {
   setupFile: 'ran' | 'skipped';
 }
 
+/** selected plugin changes by native harness */
+export interface PluginsSetupData {
+  plugins: Record<HarnessId, 'applied' | 'preserved'>;
+}
+
 /** how many tools an update left current, did not run for, and failed */
 export interface ComponentCounts {
   /** tools current after the update */
@@ -166,6 +171,7 @@ export interface AllSetupData
     Partial<GitSetupData>,
     Partial<EnvironmentSetupData>,
     Partial<SystemSetupData>,
+    Partial<PluginsSetupData>,
     NetworkSetupData,
     ToolsSetupData {}
 
@@ -178,6 +184,7 @@ interface SetupSectionData {
   git: GitSetupData;
   env: EnvironmentSetupData;
   system: SystemSetupData;
+  plugins: PluginsSetupData;
   tools: ToolsSetupData;
 }
 

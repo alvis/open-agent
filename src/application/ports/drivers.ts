@@ -16,7 +16,7 @@ import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 import type { AgentEnvironments } from '#domain/observations/agent';
 import type {
   HarnessInspection,
-  HarnessEvidence,
+  HarnessPluginEvidence,
   NativeHarnessInspection,
 } from '#domain/observations/harness';
 import type {
@@ -168,6 +168,32 @@ export interface AwakeHookCommand {
   program: string;
 }
 
+/** native plugin changes for one harness; empty arrays preserve existing state */
+export interface PluginActions {
+  /** marketplace sources to add */
+  marketplaces: string[];
+  /** plugin identities to install and enable */
+  plugins: string[];
+  /** marketplace sources or names to remove */
+  removeMarketplaces: string[];
+  /** plugin identities to disable */
+  disablePlugins: string[];
+  /** plugin identities to uninstall */
+  uninstallPlugins: string[];
+}
+
+/** native marketplace plugin actions for one harness */
+export interface HarnessPluginControl {
+  /** repository paths where the harness documents its marketplace manifests */
+  marketplaceManifests: readonly string[];
+  /**
+   * applies selected marketplace and plugin changes
+   * @param guest guest channel
+   * @param actions changes to apply; empty lists preserve existing state
+   */
+  apply(guest: GuestChannel, actions: PluginActions): Promise<void>;
+}
+
 /** installs idle-governor heartbeats and turn holds into native hooks */
 export interface HarnessHookInstaller {
   /**
@@ -181,10 +207,13 @@ export interface HarnessHookInstaller {
 /** a coding CLI the user works through */
 export interface HarnessDriver<
   Name extends string = string,
-  Evidence extends HarnessEvidence | undefined = HarnessEvidence | undefined,
+  Evidence extends HarnessPluginEvidence | undefined =
+    HarnessPluginEvidence | undefined,
 > extends HarnessDeclaration<Name> {
   /** the tools the harness installs, its own CLI first */
   tools: readonly ToolSpec[];
+  /** native marketplace plugin actions */
+  plugins: HarnessPluginControl;
   /** idle-governor hook installer */
   hooks: HarnessHookInstaller;
   /**
@@ -195,7 +224,7 @@ export interface HarnessDriver<
   /**
    * observes the harness's current native state
    * @param guest guest channel
-   * @returns configuration and probe evidence
+   * @returns configuration, plugin and probe evidence
    */
   inspect(guest: GuestChannel): Promise<HarnessInspection<Evidence>>;
   /**

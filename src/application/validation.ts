@@ -1,9 +1,22 @@
-import { CommandFault } from '#kernel/faults';
+import { harnessIds } from '#domain/harnesses';
+
+import { CommandFault, ensureError } from '#kernel/faults';
 import { promptUnavailableDetail } from '#kernel/operation';
 
 import { validateMachineName } from './machine';
+import {
+  hasActions,
+  hasExplicitPluginActions,
+  normalizePluginOptions,
+  resolvePluginActions,
+} from './plugins';
 
 import type { CommandOptions, CommandRequest } from '#application/contracts';
+
+import type {
+  NormalizedPluginOptions,
+  HarnessPluginActions,
+} from '#application/plugins';
 
 import type { CommandFaultParams } from '#kernel/faults';
 
@@ -49,10 +62,20 @@ export function validateCommandRequest(
     });
   }
   validateCommonOptions(options);
+  let plugins: HarnessPluginActions;
+  const normalizedPlugins = normalizePluginOptions(options);
+  try {
+    plugins = resolvePluginActions(normalizedPlugins);
+  } catch (error) {
+    throw new CommandValidationError({
+      message: ensureError(error).message,
+      cause: error,
+    });
+  }
   if (request.command === 'setup') {
-    validateSetupOptions(options);
+    validateSetupOptions(options, plugins, normalizedPlugins);
   } else {
-    validateNonSetupOptions(options);
+    validateNonSetupOptions(options, plugins);
   }
 }
 
@@ -92,9 +115,22 @@ function validateCommonOptions(options: CommandOptions): void {
 /**
  * keeps setup mutations on the setup command
  * @param options parsed flags for a command other than setup
+ * @param plugins resolved native plugin actions
  */
-function validateNonSetupOptions(options: CommandOptions): void {
-  if (options.section) {
+function validateNonSetupOptions(
+  options: CommandOptions,
+  plugins: HarnessPluginActions,
+): void {
+  if (
+    options.section ||
+    options.pluginHarness ||
+    harnessIds().some(
+      (id) =>
+        plugins[id].removeMarketplaces.length ||
+        plugins[id].disablePlugins.length ||
+        plugins[id].uninstallPlugins.length,
+    )
+  ) {
     throw new CommandValidationError({
       message: 'Setup-only options require the setup command',
     });
@@ -102,10 +138,22 @@ function validateNonSetupOptions(options: CommandOptions): void {
 }
 
 /**
- * requires a usable setup section
+ * requires a usable setup section and consistent harness selection
  * @param options parsed setup flags
+ * @param plugins resolved native plugin actions
+ * @param normalized normalized plugin input shared with resolution
  */
-function validateSetupOptions(options: CommandOptions): void {
+function validateSetupOptions(
+  options: CommandOptions,
+  plugins: HarnessPluginActions,
+  normalized: NormalizedPluginOptions,
+): void {
+  const explicit = hasExplicitPluginActions(normalized);
+  if (options.withPairCode && explicit) {
+    throw new CommandValidationError({
+      message: '--with-pair-code conflicts with explicit plugin actions',
+    });
+  }
   if (
     options.withPairCode &&
     options.section !== undefined &&
@@ -116,9 +164,19 @@ function validateSetupOptions(options: CommandOptions): void {
       message: '--with-pair-code requires --section agent or --section all',
     });
   }
-  validateSetupIntegrationOptions(options, options.section);
+  if (explicit && options.section && options.section !== 'plugins') {
+    throw new CommandValidationError({
+      message:
+        'Explicit plugin actions conflict with the selected setup section',
+    });
+  }
+  validateSetupIntegrationOptions(
+    options,
+    explicit ? 'plugins' : options.section,
+  );
   if (
     !options.section &&
+    !explicit &&
     !options.withPairCode &&
     !options.envFile &&
     !options.setupFile &&
@@ -126,11 +184,22 @@ function validateSetupOptions(options: CommandOptions): void {
   ) {
     throw new CommandValidationError({
       message: [
-        'Non-interactive setup requires --section',
+        'Non-interactive setup requires --section or explicit plugin actions',
         promptUnavailableDetail(),
       ]
         .filter(Boolean)
         .join('. '),
+    });
+  }
+  if (
+    options.pluginHarness &&
+    harnessIds().some(
+      (id) => id !== options.pluginHarness && hasActions(plugins[id]),
+    )
+  ) {
+    throw new CommandValidationError({
+      message:
+        'Plugin actions for another harness conflict with --plugin-harness',
     });
   }
 }
