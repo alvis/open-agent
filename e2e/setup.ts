@@ -12,7 +12,6 @@ import { execa, execaSync } from 'execa';
 import { FLYCTL } from '#adapters/drivers/providers/fly-machine/flyctl';
 
 import {
-  cleanUpBestEffort,
   connectRunAccounts,
   createMachineCleanup,
   MANUAL_CHECK,
@@ -23,6 +22,7 @@ import { createRedactor } from './machines/redaction';
 
 import type { TestProject } from 'vitest/node';
 
+import type { MachineCleanup } from './machines/cleanup';
 import type { Redactor } from './machines/redaction';
 
 declare module 'vitest' {
@@ -46,12 +46,6 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url));
  */
 const HOME_PREFIX = 'oa-';
 const RUN_ID_BYTES = 4;
-/**
- * the run's cleanup, at teardown or on a signal, sends its deletions and
- * looks for their effect this long, inside vitest's default teardown window
- * of 10 seconds
- */
-const CLEANUP_LIMIT_MS = 7_000;
 /** everything an interruption does, cleanup to home removal, ends within this */
 const INTERRUPT_LIMIT_MS = 10_000;
 /** what starting the child process of an interrupted run's cleanup may take */
@@ -112,12 +106,13 @@ export async function setup(
 
     // with no provider token nothing is swept and no provider is called
     const accounts = connectRunAccounts(redact);
+    const cli = createMachineCli({ bin: packedBin, home: runHome, redact });
     if (accounts) {
       process.stderr.write(
         `[e2e] start sweep: deleting every ${E2E_NAME_PREFIX}* workstation and tailnet device these credentials reach, whichever run left it\n`,
       );
       await createMachineCleanup({
-        cli: createMachineCli({ bin: packedBin, home: runHome, redact }),
+        cli,
         ...accounts,
         scope: E2E_NAME_PREFIX,
         redact,
@@ -144,11 +139,10 @@ export async function setup(
       }
       try {
         if (accounts) {
-          await cleanUpBestEffort(accounts, {
-            scope,
-            limitMs: CLEANUP_LIMIT_MS,
+          await sweepRun(
+            createMachineCleanup({ cli, ...accounts, scope, redact }),
             redact,
-          });
+          );
         }
       } finally {
         stopFlyctlAgents(runHome, Date.now() + AGENT_STOPS_MS);
@@ -158,6 +152,29 @@ export async function setup(
   } catch (error) {
     await rm(runHome, { recursive: true, force: true });
     throw error;
+  }
+}
+
+/**
+ * deletes every workstation and tailnet device of this run, passed or failed,
+ * and proves them gone, failing the run otherwise; vitest waits for a global
+ * teardown however long it takes, but only logs an error one throws, so a
+ * failure sets the exit code itself
+ * @param cleanup the cleanup bound to this run's `<run id>-` scope
+ * @param redact removes credential values from the failure's message
+ */
+async function sweepRun(
+  cleanup: MachineCleanup,
+  redact: Redactor,
+): Promise<void> {
+  try {
+    await cleanup.sweep();
+    process.stderr.write('[e2e] cleanup successful\n');
+  } catch (error) {
+    process.stderr.write(
+      `[e2e] cleanup failed: ${redact(tail((error as Error).message))}; ${MANUAL_CHECK}\n`,
+    );
+    process.exitCode = 1;
   }
 }
 
