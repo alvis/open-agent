@@ -1,0 +1,127 @@
+name: e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or branch to check (defaults to the commit the run starts from)
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit or branch to check (defaults to the commit the run starts from)
+        required: false
+        type: string
+    secrets:
+      TEST_SPRITES_TOKEN:
+        description: Fly Sprites organization token for the Sprite machine spec
+        required: true
+      TEST_FLY_API_TOKEN:
+        description: Fly organization token for the Fly Machine spec
+        required: true
+      TEST_TAILSCALE_API_KEY:
+        description: Tailscale management API key
+        required: true
+      TEST_TAILSCALE_TAILNET:
+        description: Tailnet ID or DNS name
+        required: true
+      TEST_CLIPROXYAPI_BASE_URL:
+        description: CLIProxyAPI hub URL for the machine specs
+        required: true
+      TEST_CLIPROXYAPI_API_KEY:
+        description: CLIProxyAPI hub client credential
+        required: true
+      TEST_TAILSCALE_EXIT_NODE:
+        description: Approved exit node for the workstations
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    # every run sweeps the oa-e2e-* workstations its credentials reach, so runs
+    # sharing those credentials must never overlap, whichever workflow calls
+    # this; GitHub keeps one waiting run per group, so a newer request cancels
+    # one still waiting, never one in progress
+    concurrency:
+      group: e2e-live-providers
+      cancel-in-progress: false
+    steps:
+      - name: Authorize
+        # the run spends money on the owner's provider accounts, so it stops
+        # unless the owner started it, by dispatch, re-run or a calling
+        # workflow; anyone with write access could still edit this out
+        env:
+          OWNER: ${{ github.repository_owner }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        run: |
+          if [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::only $OWNER may start an E2E run, not $TRIGGERING_ACTOR"
+            exit 1
+          fi
+
+      - name: Check credentials
+        # every spec runs and needs every credential, and nothing makes a
+        # dispatch supply them, so a missing one stops the run here
+        env: &credentials
+          TEST_SPRITES_TOKEN: ${{ secrets.TEST_SPRITES_TOKEN }}
+          TEST_FLY_API_TOKEN: ${{ secrets.TEST_FLY_API_TOKEN }}
+          TEST_TAILSCALE_API_KEY: ${{ secrets.TEST_TAILSCALE_API_KEY }}
+          TEST_TAILSCALE_TAILNET: ${{ secrets.TEST_TAILSCALE_TAILNET }}
+          TEST_CLIPROXYAPI_BASE_URL: ${{ secrets.TEST_CLIPROXYAPI_BASE_URL }}
+          TEST_CLIPROXYAPI_API_KEY: ${{ secrets.TEST_CLIPROXYAPI_API_KEY }}
+          TEST_TAILSCALE_EXIT_NODE: ${{ secrets.TEST_TAILSCALE_EXIT_NODE }}
+        run: |
+          missing=0
+          for name in TEST_SPRITES_TOKEN TEST_FLY_API_TOKEN TEST_TAILSCALE_API_KEY \
+            TEST_TAILSCALE_TAILNET TEST_CLIPROXYAPI_BASE_URL TEST_CLIPROXYAPI_API_KEY \
+            TEST_TAILSCALE_EXIT_NODE; do
+            if [ -z "${!name}" ]; then
+              echo "::error::the $name secret is not set"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js and pnpm
+        uses: pnpm/setup@v3
+        with:
+          cache: true
+          install: false
+
+      - name: Setup flyctl
+        # the installer provides `fly`, which the Fly Machine driver runs
+        run: |
+          curl -fsSL https://fly.io/install.sh | sh
+          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        id: test
+        # ends before the job's limit, so the sweep below still has time to run
+        timeout-minutes: 330
+        # the credentials reach only the suite, never the installers above
+        env: *credentials
+        # exec hands a cancellation's signal to pnpm rather than this shell,
+        # giving the suite's own cleanup a chance; the sweep below is the guarantee
+        run: exec pnpm run test:e2e
+
+      - name: Sweep
+        # a cancelled, timed-out or failed run may leave paid workstations; the
+        # offline cli spec's start sweep deletes every oa-e2e-* one left behind
+        if: ${{ always() && steps.test.outcome != 'success' && steps.test.outcome != 'skipped' }}
+        env: *credentials
+        run: pnpm run test:e2e cli
