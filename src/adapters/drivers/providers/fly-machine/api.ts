@@ -1,7 +1,10 @@
 import { ProviderFault } from '#kernel/provider-fault';
 
+import { wireMachineConfig } from './machine-config';
+import { encode, machinePath, volumePath } from './paths';
 import { isNotFound } from './status';
 import { flyRequest } from './transport';
+import { parseVolume, parseVolumeExtension } from './volumes';
 
 import {
   parseApp,
@@ -15,11 +18,11 @@ import {
   parseTokenOrganizations,
   parseVolumeId,
   wireGuest,
-  wireMachineConfig,
 } from './wire';
 
 import type { MachineSpec } from './machine-config';
 import type { FlyRequest } from './transport';
+import type { FlyVolume, FlyVolumeExtension } from './volumes';
 import type {
   FlyApp,
   FlyExecResult,
@@ -198,6 +201,38 @@ export class FlyApi {
           size_gb: volume.sizeGb,
         },
       }),
+    );
+  }
+
+  /**
+   * fetches one volume
+   * @param app name of the workstation app
+   * @param id volume identity
+   * @returns the volume identity and size
+   */
+  public async getVolume(app: string, id: string): Promise<FlyVolume> {
+    const path = volumePath(app, id);
+
+    return parseVolume(await this.#request({ method: 'GET', path }));
+  }
+
+  /**
+   * grows a volume to a size; the API refuses a size it cannot provide
+   * @param app name of the workstation app
+   * @param id volume identity
+   * @param sizeGb size to grow the volume to, in whole GB
+   * @returns the size after the extend and whether the machine must restart to use it
+   */
+  public async extendVolume(
+    app: string,
+    id: string,
+    sizeGb: number,
+  ): Promise<FlyVolumeExtension> {
+    const path = `${volumePath(app, id)}/extend`;
+    const body = { size_gb: sizeGb };
+
+    return parseVolumeExtension(
+      await this.#request({ method: 'PUT', path, body }),
     );
   }
 
@@ -432,22 +467,4 @@ export class FlyApi {
   async #request(request: FlyRequest): Promise<unknown> {
     return flyRequest(this.#authorization, request);
   }
-}
-
-/**
- * builds the API path of one machine
- * @param target app and machine
- * @returns absolute API path below the base URL
- */
-function machinePath(target: FlyMachineTarget): string {
-  return `/apps/${encode(target.app)}/machines/${encode(target.machine)}`;
-}
-
-/**
- * escapes one path segment
- * @param segment app name, machine identity or address
- * @returns the encoded segment
- */
-function encode(segment: string): string {
-  return encodeURIComponent(segment);
 }

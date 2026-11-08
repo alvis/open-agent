@@ -10,6 +10,7 @@ import { projectMachine } from './machine';
 import { projectPairing } from './pairing';
 import { projectProfile } from './profile';
 import { projectReadiness } from './readiness';
+import { projectStorageSummary } from './storage';
 
 import type { CreatePreflight } from '#application/create/context';
 import type { CreateData, CreateFailureData } from '#application/data';
@@ -25,6 +26,7 @@ import type { MachineOutput } from './machine';
 import type { PairingOutput } from './pairing';
 import type { ProfileOutput } from './profile';
 import type { ReadinessOutput } from './readiness';
+import type { StorageSummaryOutput } from './storage';
 
 /** checks that passed and reminders raised before creation */
 export interface PreflightOutput {
@@ -38,6 +40,7 @@ export interface CreateDataOutput {
   machine: MachineOutput;
   preflight: PreflightOutput;
   profile: ProfileOutput;
+  storage: StorageSummaryOutput;
   readiness: ReadinessOutput;
   network: NetworkOutput;
   hub: HubOutput;
@@ -80,6 +83,7 @@ export function projectCreate(data: CreateData): CreateDataOutput {
     machine: projectMachine,
     preflight: projectPreflight,
     profile: projectProfile,
+    storage: projectStorageSummary,
     readiness: projectReadiness,
     network: projectNetworkStatus,
     hub: projectHub,

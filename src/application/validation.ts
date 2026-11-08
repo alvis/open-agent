@@ -1,4 +1,6 @@
+import { storagePolicyFlags } from '#application/input/selection/supplied';
 import { harnessIds } from '#domain/harnesses';
+import { selectionFlag } from '#domain/selection-inputs';
 
 import { CommandFault, ensureError } from '#kernel/faults';
 import { promptUnavailableDetail } from '#kernel/operation';
@@ -76,6 +78,7 @@ export function validateCommandRequest(
     });
   }
   if (request.command === 'setup') {
+    validateSetupStorageOptions(options);
     validateSetupOptions(options, plugins, normalizedPlugins);
   } else {
     validateNonSetupOptions(options, plugins);
@@ -222,6 +225,28 @@ function validateSetupOptions(
     throw new CommandValidationError({
       message:
         'Plugin actions for another harness conflict with --plugin-harness',
+    });
+  }
+}
+
+/**
+ * refuses the storage growth policy flags on setup, since the policy is
+ * chosen at creation; setup grows storage only with --storage
+ * @param options parsed setup flags
+ */
+function validateSetupStorageOptions(options: CommandOptions): void {
+  const autoExtend = selectionFlag('autoExtend');
+  const refused = [
+    ...(options.autoExtend === undefined
+      ? []
+      : [
+          options.autoExtend ? autoExtend : autoExtend.replace(/^--/u, '--no-'),
+        ]),
+    ...storagePolicyFlags(options).map((option) => selectionFlag(option)),
+  ];
+  if (refused.length > 0) {
+    throw new CommandValidationError({
+      message: `${refused.join(', ')} ${refused.length === 1 ? 'applies' : 'apply'} to new workstations; setup grows storage with --storage`,
     });
   }
 }

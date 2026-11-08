@@ -3,6 +3,7 @@ import type { ResolvedInputs } from '#application/input/types';
 import type {
   ProviderDriver,
   NetworkExitNode,
+  StorageExtension,
 } from '#application/ports/drivers';
 import type { Interaction } from '#application/ports/interaction';
 import type { SetupSession } from '#application/ports/session';
@@ -34,5 +35,7 @@ export interface SetupContext {
   /** whether the guest already holds a device identity on the selected network */
   networkEnrolled: boolean;
   verifiedExitNode?: NetworkExitNode;
+  /** the storage this run grew, when it supplied a size with --storage */
+  storage?: StorageExtension;
   mutation: SetupProgress;
 }

@@ -2,6 +2,7 @@ import type { OsRelease } from '#domain/guest';
 import type { GuestEnvironment } from '#domain/observations/environment';
 import type { GuestNetworkIdentity } from '#domain/observations/network';
 import type { WorkstationProfile } from '#domain/profile';
+import type { StoragePolicy } from '#domain/storage';
 import type {
   RefusedSource,
   Resolution,
@@ -126,7 +127,12 @@ export interface PlanRunParams {
 /** the provider facts a plan is assembled from */
 export type PlanProvider = Pick<
   ProviderDriver,
-  'id' | 'capabilities' | 'serviceBackend' | 'awakeAsset' | 'bootHookStep'
+  | 'id'
+  | 'capabilities'
+  | 'serviceBackend'
+  | 'awakeAsset'
+  | 'storageAsset'
+  | 'bootHookStep'
 >;
 
 /** what a plan is assembled from */
@@ -145,6 +151,8 @@ export interface AssemblyParams {
   setupAt: string;
   /** the retained network device identity of an earlier setup */
   networkIdentity?: GuestNetworkIdentity;
+  /** the storage growth policy environment.json records; absent records none */
+  storage?: StoragePolicy;
 }
 
 /** a workstation's assembled setup plan */

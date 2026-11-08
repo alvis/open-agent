@@ -1,7 +1,7 @@
 import { guestAsset } from '#adapters/guest/platform/assets';
 import { ROOT_ONLY_MODE } from '#domain/guest';
 
-import { FLY_VARIABLES } from './boot';
+import { FLY_VARIABLES, VOLUME_PATH } from './boot';
 import { PRIVATE_V6_NETWORK, PROXY_V4_NETWORK } from './private-networks';
 
 import type { ProviderCapabilities } from '#domain/declarations';
@@ -21,7 +21,16 @@ export const FLY_MACHINE_CAPABILITIES: ProviderCapabilities = {
   supportsCliWakeSleep: false,
   // the idle governor alone decides, so no provider deadline limits it
   maxAwakeDeadlineMinutes: null,
-  persistence: 'volume',
+  // Fly grows the volume itself past a threshold the mount declares, and the
+  // host can extend it on request; the guest-local API refuses volume extends
+  storage: {
+    persistence: 'volume',
+    defaultGb: 10,
+    maxGb: 500,
+    path: VOLUME_PATH,
+    growth: ['provider-auto'],
+    hostExtend: true,
+  },
   exposure: 'provider-service',
   discovery: 'provider-metadata',
   // an update of the machine's guest reboots it

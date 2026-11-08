@@ -5,6 +5,7 @@ import { pickMachine } from '#domain/machine-sizes';
 import { publishStatus } from '#kernel/operation';
 
 import { describePluginSelections } from './plugins';
+import { summarizeStorage } from './storage';
 
 import type { CommandRequest } from '#application/contracts';
 import type { ResolvedInputs } from '#application/input/types';
@@ -60,6 +61,7 @@ export function reviewCreatePlan(
       message: [
         `Create ${values.name} on ${provider.displayName}`,
         machineSummary(dependencies, profile),
+        storageSummary(dependencies, profile),
         ...releaseSummary(dependencies, profile),
         `Harnesses: ${profile.harnesses.map((id) => harnessLabel(id)).join(', ')}`,
         networkSummary(dependencies, input, verifiedExitNode),
@@ -140,6 +142,27 @@ function machineSummary(
   const picked = ` (${offer.label}, ${String(offer.cpus)} CPUs, ${String(offer.memoryGb)} GB)`;
 
   return `Machine: at least ${String(minCpus)} CPUs, ${String(minMemoryGb)} GB${picked}`;
+}
+
+/**
+ * names the storage a new workstation starts with and how it grows
+ * @param dependencies the registered drivers
+ * @param profile validated selection
+ * @returns one review line naming the starting size and the growth policy
+ */
+function storageSummary(
+  dependencies: Pick<ApplicationDependencies, 'registry'>,
+  profile: WorkstationProfile,
+): string {
+  const { sizeGb, policy } = summarizeStorage(dependencies, profile);
+  const size = `Storage: ${String(sizeGb)} GB`;
+  if (policy.state === 'on') {
+    return `${size}, grows by ${String(policy.stepGb)} GB at ${String(policy.thresholdPercent)}% up to ${String(policy.limitGb)} GB`;
+  }
+
+  return policy.state === 'off'
+    ? `${size}, automatic growth off`
+    : `${size}, fixed`;
 }
 
 /**

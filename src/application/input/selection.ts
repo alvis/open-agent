@@ -10,13 +10,9 @@ import {
   inferNetwork,
   inferredOptions,
   networkChoices,
-  providerChoices,
 } from './selection/choices';
-import {
-  resolveMachine,
-  resolveOptions,
-  resolveRelease,
-} from './selection/options';
+import { resolveOptions, resolveRelease } from './selection/options';
+import { resolveCreateProvider } from './selection/provider';
 import { activePrompts } from './selection/sources';
 import { readSelection } from './selection/supplied';
 
@@ -25,6 +21,7 @@ import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { NetworkId } from '#domain/ids';
 import type { ProfileCandidate, WorkstationProfile } from '#domain/profile';
 import type { SelectionField } from '#domain/selection-inputs';
+import type { StoragePolicyOption } from '#domain/storage';
 
 import type { Prompts, Resolved, SelectionContext } from './selection/sources';
 import type { SuppliedSelection } from './selection/supplied';
@@ -54,6 +51,10 @@ export interface SelectionResolution {
   problems: readonly string[];
   /** whether the caller supplied the idle timeout rather than taking the default */
   isIdleTimeoutRequested: boolean;
+  /** whether the caller supplied or answered a storage growth limit rather than taking the default */
+  isStorageLimitRequested: boolean;
+  /** storage policy options the caller gave as explicit flags */
+  storagePolicyFlags: readonly StoragePolicyOption[];
 }
 
 /** every field a new workstation's selection reads */
@@ -61,6 +62,11 @@ const CREATE_FIELDS: readonly SelectionField[] = [
   'provider',
   'minCpus',
   'minMemoryGb',
+  'minStorageGb',
+  'autoExtend',
+  'autoExtendThresholdPercent',
+  'autoExtendStepGb',
+  'storageLimitGb',
   'agent',
   'agentRelease',
   'harnesses',
@@ -94,6 +100,9 @@ const SECTION_FIELDS: Readonly<
 
 /** the machine minimums, which any setup section may carry because they resize rather than configure the guest */
 const MACHINE_FIELDS: readonly SelectionField[] = ['minCpus', 'minMemoryGb'];
+
+/** the storage size, which any setup section may carry from its flag alone, because it grows the storage rather than configures the guest */
+const SETUP_STORAGE_FIELDS: readonly SelectionField[] = ['minStorageGb'];
 
 /**
  * lists the profile fields a setup section reads and saves
@@ -179,12 +188,10 @@ export async function resolveCreateSelection(
     prompts,
     base: dependencies.defaults.options,
   };
-  const provider =
-    supplied.provider ??
-    (await prompts?.choose('Provider', providerChoices(dependencies))) ??
-    dependencies.defaults.selection.provider;
-  // the machine minimums are asked right after the provider they are checked against
-  const machine = await resolveMachine(dependencies, { provider, ...asked });
+  const { provider, sizes, storageRequests } = await resolveCreateProvider(
+    dependencies,
+    { ...asked, options, provider: supplied.provider },
+  );
   const agent =
     supplied.agent ??
     (await prompts?.choose('ACP agent', agentChoices(dependencies))) ??
@@ -214,7 +221,7 @@ export async function resolveCreateSelection(
         selected: { provider, agent, harnesses, network },
         supplied: {
           ...supplied.options,
-          ...machine,
+          ...sizes,
           ...(agentRelease !== undefined && { agentRelease }),
         },
         fields: CREATE_FIELDS,
@@ -225,13 +232,14 @@ export async function resolveCreateSelection(
     },
     problems,
     isIdleTimeoutRequested: supplied.options.idleTimeoutMinutes !== undefined,
+    ...storageRequests,
   };
 }
 
 /**
  * reads the values a setup run supplies, without the recorded profile: the
- * provider and agent only from flags so a mismatch can be refused, and every
- * other field only when the targeted section owns it
+ * provider and agent only from flags so a mismatch can be refused, the storage
+ * size only from its flag, and every other field only when the targeted section owns it
  * @param dependencies the registered drivers, which declare the selection inputs
  * @param context flags, sources and targeted section
  * @returns the supplied values and every unreadable environment value
@@ -240,10 +248,11 @@ export function readSetupSelection(
   dependencies: Pick<ApplicationDependencies, 'registry'>,
   context: SetupReadContext,
 ): Resolved<SuppliedSelection> {
-  return readSelection(dependencies, context, [
-    ...sectionFields(context.section),
-    ...MACHINE_FIELDS,
-  ]);
+  return readSelection(
+    dependencies,
+    { ...context, flagOnly: SETUP_STORAGE_FIELDS },
+    [...sectionFields(context.section), ...MACHINE_FIELDS],
+  );
 }
 
 /**
@@ -291,6 +300,9 @@ export async function resolveSetupSelection(
     },
     problems: [],
     isIdleTimeoutRequested: supplied.options.idleTimeoutMinutes !== undefined,
+    // setup refuses the policy flags and never changes the recorded policy
+    isStorageLimitRequested: false,
+    storagePolicyFlags: [],
   };
 }
 

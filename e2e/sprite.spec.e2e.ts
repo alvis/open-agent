@@ -25,6 +25,8 @@ import type { RunSample } from './machines/idle';
 // abandons the test body; observed baseline lifecycles finish in about 3 minutes
 const CREATE_TIMEOUT_MS = 20 * 60_000;
 const READ_TIMEOUT_MS = 2 * 60_000;
+// a refused create ends before any provider call
+const REFUSAL_TIMEOUT_MS = 2 * 60_000;
 // whole-second rounding and the delay between the governor's record and the Sprite's answer
 const TASK_EXPIRY_TOLERANCE_MS = 3000;
 const MINUTE_MS = 60_000;
@@ -83,6 +85,61 @@ const harness = await createMachineHarness('sprite');
 const { cli, provider } = harness;
 
 describeWorkstationSuite(harness);
+
+describe('Sprite storage', () => {
+  it.concurrent(
+    'should refuse automatic growth and storage above its fixed 100 GB before any provider call',
+    async ({ expect, signal }) => {
+      const attempt = async (label: string, flags: string[]) => {
+        const name = harness.workstationName(label);
+        const { exitCode, envelope } = await cli.json(
+          [
+            'create',
+            '--name',
+            name,
+            '--provider',
+            'sprite',
+            '--network',
+            'none',
+            '--no-git-identity',
+            ...flags,
+          ],
+          REFUSAL_TIMEOUT_MS,
+          signal,
+        );
+
+        return {
+          exitCode,
+          ok: envelope.ok,
+          code: envelope.error?.code,
+          message: envelope.error?.message,
+          details: envelope.error?.details,
+          created: await provider.hasWorkstation(name),
+        };
+      };
+      const refused = {
+        exitCode: 1,
+        ok: false,
+        code: 'INPUT',
+        message: 'The workstation selection is invalid',
+        created: false,
+      };
+
+      expect(await attempt('grow', ['--auto-extend'])).toEqual({
+        ...refused,
+        details: [
+          expect.stringMatching(
+            /--auto-extend.*grows automatically.*fixed storage/u,
+          ),
+        ],
+      });
+      expect(await attempt('large', ['--storage', '200'])).toEqual({
+        ...refused,
+        details: [expect.stringMatching(/--storage.*200 GB.*at most 100 GB/u)],
+      });
+    },
+  );
+});
 
 describe('Sprite awake task', () => {
   it.concurrent(

@@ -4,6 +4,7 @@ import {
 } from '#adapters/guest/platform/awake';
 import { runGuestResult } from '#adapters/guest/platform/run';
 import { isGovernorReport } from '#domain/observations/governor';
+import { runsStorageWatcher } from '#domain/storage';
 import { checkOperation } from '#kernel/operation';
 
 import type { AwakeAction } from '#adapters/guest/platform/awake';
@@ -18,6 +19,7 @@ import type {
 import type { ProviderCapabilities } from '#domain/declarations';
 import type { GovernorReport } from '#domain/observations/governor';
 import type { ServiceDefinition, PeriodicJob } from '#domain/services';
+import type { StoragePolicy } from '#domain/storage';
 
 /** id of the step that makes the governor's directories */
 export const IDLE_STEP = 'governor:directories';
@@ -66,16 +68,22 @@ export function governorServices(
 }
 
 /**
- * lists the periodic jobs the idle governor needs: a governed provider's
- * per-minute root tick, which puts the workstation into its idle form once
- * the deadline passed; any other provider needs none
- * @param capabilities whether the provider governs its keep-awake
+ * lists the periodic jobs the idle governor needs: the per-minute root tick
+ * wherever it has work, which is putting a governed provider's workstation
+ * into its idle form once the deadline passed, or running the storage
+ * watcher for a recorded policy the watcher grows; otherwise none
+ * @param capabilities whether the provider governs its keep-awake, and its storage
+ * @param storage the growth policy recorded for the workstation; absent when none is
  * @returns the tick job, or none
  */
 export function governorJobs(
-  capabilities: Pick<ProviderCapabilities, 'keepAwakeMode'>,
+  capabilities: Pick<ProviderCapabilities, 'keepAwakeMode' | 'storage'>,
+  storage?: StoragePolicy,
 ): PeriodicJob[] {
-  return capabilities.keepAwakeMode === 'governed'
+  const isWatching =
+    storage !== undefined && runsStorageWatcher(capabilities.storage, storage);
+
+  return capabilities.keepAwakeMode === 'governed' || isWatching
     ? [
         {
           name: 'governor-tick',

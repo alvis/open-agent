@@ -11,7 +11,15 @@ export const SPRITE_CAPABILITIES: ProviderCapabilities = {
   supportsCliWakeSleep: false,
   // the Sprite API keeps a task at most an hour
   maxAwakeDeadlineMinutes: 60,
-  persistence: 'provider-disk',
+  // a Sprite's own disk is a fixed 100 GB that nothing can grow
+  storage: {
+    persistence: 'provider-disk',
+    defaultGb: 100,
+    maxGb: 100,
+    path: '/',
+    growth: [],
+    hostExtend: false,
+  },
   exposure: 'provider-url',
   discovery: 'provider-metadata',
   // a Sprite has one size, so there is nothing to restart

@@ -22,6 +22,7 @@ import type { GuestServiceState } from '#domain/services';
 
 import type { EnvironmentOutput } from './environment';
 import type { ProbeFailureOutput } from './readiness';
+import type { StorageReportOutput } from './storage';
 
 /** current state of one service on the guest */
 export interface GuestServiceOutput {
@@ -135,6 +136,7 @@ export interface InspectionOutput {
   probeFailures: ProbeFailureOutput[];
   governor: GovernorOutput;
   boot?: BootOutput;
+  storage?: StorageReportOutput;
 }
 
 type RecordedHold = GovernorState['holds'][number];

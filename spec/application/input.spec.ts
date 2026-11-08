@@ -12,10 +12,13 @@ import {
   resolveInputs,
 } from '#application/input';
 import { resolveProviderCredential } from '#application/input/provider-credential';
+import { resolveCreateSelection } from '#application/input/selection';
 
 import { DISABLED_NETWORK_PROFILE, profileWith } from '../fixtures/profile';
 import { dependencies } from '../mocks/dependencies';
 
+import type { CommandOptions } from '#application/contracts';
+import type { InputSources } from '#application/input/sources';
 import type { Interaction } from '#application/ports/interaction';
 
 describe('fn:requireValidProfile', () => {
@@ -27,6 +30,8 @@ describe('fn:requireValidProfile', () => {
           candidate: DISABLED_NETWORK_PROFILE,
           problems: [],
           isIdleTimeoutRequested: false,
+          isStorageLimitRequested: false,
+          storagePolicyFlags: [],
         },
         {},
       ),
@@ -42,6 +47,8 @@ describe('fn:requireValidProfile', () => {
           candidate: { ...DISABLED_NETWORK_PROFILE, harnesses: [] },
           problems: ['OPEN_AGENT_IDLE_MINUTES must be a whole number'],
           isIdleTimeoutRequested: true,
+          isStorageLimitRequested: false,
+          storagePolicyFlags: [],
         },
         {},
       );
@@ -67,6 +74,8 @@ describe('fn:requireValidProfile', () => {
           candidate: DISABLED_NETWORK_PROFILE,
           problems: ['OPEN_AGENT_IDLE_MINUTES must be a whole number'],
           isIdleTimeoutRequested: false,
+          isStorageLimitRequested: false,
+          storagePolicyFlags: [],
         },
         {},
       );
@@ -77,6 +86,75 @@ describe('fn:requireValidProfile', () => {
     expect(commandError(failure)).toMatchObject({
       code: 'INPUT',
       details: ['OPEN_AGENT_IDLE_MINUTES must be a whole number'],
+    });
+  });
+});
+
+describe('fn:requireValidProfile storage', () => {
+  /**
+   * resolves a non-interactive create selection, then validates it
+   * @param options flags of the run
+   * @param processEnv process environment of the run
+   * @returns the validated profile, or the selection fault's details
+   */
+  async function validate(
+    options: CommandOptions,
+    processEnv: InputSources['processEnv'] = {},
+  ): Promise<unknown> {
+    const resolution = await resolveCreateSelection(dependencies, {
+      options: { nonInteractive: true, ...options },
+      sources: { processEnv, fileEnv: {}, profile: {} },
+    });
+    try {
+      return requireValidProfile(dependencies, resolution, options);
+    } catch (error) {
+      return commandError(error).details;
+    }
+  }
+
+  it.each([
+    { provider: 'fly-machine', autoExtend: false },
+    { provider: 'sprite' },
+  ] satisfies CommandOptions[])(
+    'should refuse policy flags without effect while ignoring the same environment values: %j',
+    async (choice) => {
+      const refused = await validate({
+        ...choice,
+        autoExtendAt: 85,
+        autoExtendStep: 5,
+        storageLimit: 200,
+      });
+      const ignored = await validate(choice, {
+        OPEN_AGENT_AUTO_EXTEND_AT: '85',
+        OPEN_AGENT_AUTO_EXTEND_STEP: '5',
+        OPEN_AGENT_STORAGE_LIMIT: '200',
+      });
+
+      expect(refused).toEqual([
+        expect.stringContaining('--auto-extend-at'),
+        expect.stringContaining('--auto-extend-step'),
+        expect.stringContaining('--storage-limit'),
+      ]);
+      expect(ignored).toMatchObject({
+        options: {
+          autoExtendThresholdPercent: 80,
+          autoExtendStepGb: 10,
+          storageLimitGb: 100,
+        },
+      });
+    },
+  );
+
+  it('should refuse a limit from the environment outside the provider’s range while growth is on, yet fit a default one', async () => {
+    const supplied = await validate(
+      { provider: 'fly-machine' },
+      { OPEN_AGENT_STORAGE_LIMIT: '600' },
+    );
+    const fitted = await validate({ provider: 'fly-machine', storage: 200 });
+
+    expect(supplied).toEqual([expect.stringContaining('at most 500 GB')]);
+    expect(fitted).toMatchObject({
+      options: { minStorageGb: 200, storageLimitGb: 100 },
     });
   });
 });

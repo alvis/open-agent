@@ -128,3 +128,51 @@ describe('fn:reviewCreatePlan', () => {
     },
   );
 });
+
+describe('fn:reviewCreatePlan storage', () => {
+  it.each([
+    {
+      provider: 'fly-machine',
+      options: { minStorageGb: 20, storageLimitGb: 200 },
+      line: 'Storage: 20 GB, grows by 10 GB at 80% up to 200 GB',
+    },
+    {
+      provider: 'fly-machine',
+      options: { autoExtend: false },
+      line: 'Storage: 10 GB, automatic growth off',
+    },
+    { provider: 'sprite', options: {}, line: 'Storage: 100 GB, fixed' },
+  ] as const)(
+    'should name the starting storage and how it grows: $line',
+    async ({ provider, options, line }) => {
+      const status = vi.fn<(update: StatusUpdate) => void>();
+      const operation = new OperationContext({
+        signal: new AbortController().signal,
+        onStatus: status,
+      });
+      const profile = {
+        ...DISABLED_NETWORK_PROFILE,
+        provider,
+        options: { ...DISABLED_NETWORK_PROFILE.options, ...options },
+      };
+
+      await withOperation(operation, async () =>
+        reviewCreatePlan(dependencies, {
+          values: { name: 'box', token: 'private-token' },
+          input: { ...input, profile },
+          plugins,
+          preflight: { checks: [], reminders: [] },
+        }),
+      );
+
+      expect(status.mock.calls).toEqual([
+        [
+          {
+            kind: 'info',
+            message: expect.stringContaining(`\n${line}\n`),
+          },
+        ],
+      ]);
+    },
+  );
+});

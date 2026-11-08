@@ -1,13 +1,12 @@
 import { harnessDrivers } from '#application/catalog/harnesses';
 import { serviceLabels } from '#application/catalog/services';
-import { isJsonObject } from '#cli/serialization';
 import { registry } from '#composition/registry';
 import { harnessIds } from '#domain/harnesses';
 
-import type { JsonObject, JsonValue } from '#cli/serialization';
+import { asRecord, printable } from './records';
+import { storageLine } from './storage';
 
-/** every C0 and C1 control character */
-const CONTROL_CHARACTERS = /\p{Cc}/gu;
+import type { JsonObject, JsonValue } from '#cli/serialization';
 
 /**
  * prepares concise human inspection groups without altering structured results
@@ -116,11 +115,13 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
   const environment = asRecord(native.agentEnvironment);
   const agentState = asRecord(native.harnesses);
   const readiness = asRecord(inspection.readiness);
+  const options = asRecord(asRecord(recorded.profile).options);
 
   return {
     'ready': inspection.ready ?? readiness.ready,
     'failures': inspection.failures ?? readiness.failures,
     'skipped': inspection.skipped ?? readiness.skipped,
+    'warnings': nonEmpty(inspection.warnings),
     'unavailable probes': inspection.probeFailures,
     'services': serviceDetails(inspection.services),
     'network': inspection.network,
@@ -144,11 +145,9 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
       native.agentEnvironment === undefined
         ? undefined
         : environmentDetails(environment),
-    'Agent release channel': asRecord(asRecord(recorded.profile).options)
-      .agentRelease,
-    'Machine requirement': machineRequirement(
-      asRecord(asRecord(recorded.profile).options),
-    ),
+    'Agent release channel': options.agentRelease,
+    'Machine requirement': machineRequirement(options),
+    'Storage': storageLine(inspection.storage),
     'Installed tools': installedTools(recorded.tools, updates.tools),
     'Skipped tools': skippedTools(asRecord(recorded.setup).skipped),
     'Last boot':
@@ -169,6 +168,15 @@ function inspectionDetails(value: JsonValue | undefined): JsonObject {
             failedTools: failedTools(updates.tools),
           },
   };
+}
+
+/**
+ * keeps a list only when it holds something
+ * @param value a reported list
+ * @returns the list, or nothing when it is empty or not a list
+ */
+function nonEmpty(value: JsonValue | undefined): JsonValue[] | undefined {
+  return Array.isArray(value) && value.length > 0 ? value : undefined;
 }
 
 /**
@@ -327,15 +335,6 @@ function keepAwakeParts(state: JsonObject): string[] {
 }
 
 /**
- * removes every C0 and C1 control character from guest-supplied text
- * @param text text read from the guest
- * @returns the text without control characters
- */
-function printable(text: string): string {
-  return text.replace(CONTROL_CHARACTERS, '');
-}
-
-/**
  * presents service state without execution arguments or process metadata
  * @param value current service list, when requested
  * @returns service names and observed states
@@ -378,13 +377,4 @@ function environmentDetails(environment: JsonObject): JsonObject {
     orchestrationProtocolVersion: environment.orchestrationProtocolVersion,
     reason: environment.reason,
   };
-}
-
-/**
- * identifies a result group while allowing absent inspection sections
- * @param value result section to display
- * @returns present record or an empty group
- */
-function asRecord(value: JsonValue | undefined): JsonObject {
-  return isJsonObject(value) ? value : {};
 }

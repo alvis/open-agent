@@ -20,7 +20,10 @@
 # `tick` once the deadline passed, sleep is permitted and the workstation
 # has been awake an idle timeout since it last woke, so nothing sleeps with
 # a turn or hold open: the tick checks once more, and calls the adapter,
-# under a governor lock no event holds meanwhile. An event runs within its budget, --budget-ms or 8
+# under a governor lock no event holds meanwhile. Before its idle decisions
+# the tick runs the storage watcher, root's library OA_STORAGE_WATCHER from the
+# header, under the governor lock shared, and on a provider that is not
+# governed it runs nothing else. An event runs within its budget, --budget-ms or 8
 # seconds, and exits 0 whatever happens, except for an unknown action; a
 # refused or failed event is recorded as a diagnostic, and an event that is
 # not recorded counts as idleness. Root's `report` prints the newer of the
@@ -55,6 +58,10 @@ OA_IDLE_TICK=$OA_IDLE_RUN/idle-tick.json
 # the governor lock: every event takes it shared, and the tick takes it
 # alone across its last check and the adapter's call
 OA_IDLE_LOCK=$OA_IDLE_RUN/governor.lock
+# the storage watcher the tick sources, and the lock that keeps its attempts
+# one at a time
+OA_IDLE_STORAGE=$OA_STORAGE_WATCHER
+OA_IDLE_STORAGE_LOCK=$OA_IDLE_RUN/storage.lock
 # the account harness hooks run as
 OA_IDLE_AGENT=agent
 # a holder file's name, as find matches it
@@ -662,10 +669,39 @@ oa_idle_tick_enter() {
   oa_idle_idle_form_result "$OA_IDLE_WORK/answer" "$oa_idle_tick_status"
 }
 
-# the per-minute tick, root's alone: records the state and, once due, checks
-# again and puts the workstation into its idle form through the adapter
-# under the governor lock alone, then records the outcome
+# runs the storage watcher under the governor lock, shared, so no idle form
+# is entered meanwhile, and under the storage lock without waiting, so a tick
+# never starts an attempt while an earlier tick's runs; a watcher that is
+# not installed leaves the storage as it is, and a lock that is not taken
+# leaves it with a note
+oa_idle_storage() {
+  test -f "$OA_IDLE_STORAGE" || return 0
+  oa_idle_storage_skipped="the storage was not watched: the governor lock $OA_IDLE_LOCK is missing"
+  if test -f "$OA_IDLE_LOCK"; then
+    oa_idle_storage_skipped="the storage was not watched: an idle-form call held the governor lock for $OA_IDLE_LOCK_WAIT s"
+    {
+      flock -s -w "$OA_IDLE_LOCK_WAIT" 7 &&
+        {
+          oa_idle_storage_skipped='the storage was not watched: an earlier watcher still runs'
+          flock -n 6 &&
+            oa_idle_storage_skipped= &&
+            . "$OA_IDLE_STORAGE" && oa_storage_watch "$(oa_idle_now)"
+        } 6>>"$OA_IDLE_STORAGE_LOCK"
+    } 7<"$OA_IDLE_LOCK"
+  fi
+  test -z "$oa_idle_storage_skipped" ||
+    printf '%s\n' "$oa_idle_storage_skipped" >>"$OA_IDLE_WORK/notes"
+  return 0
+}
+
+# the per-minute tick, root's alone: runs the storage watcher, then, on a
+# governed provider, records the state and, once due, checks again and puts
+# the workstation into its idle form through the adapter under the governor
+# lock alone, then records the outcome
 oa_idle_tick() {
+  oa_idle_settings
+  oa_idle_storage
+  test "$(oa_idle_setting .provider.keepAwakeMode)" = governed || return 0
   if ! oa_idle_locked oa_idle_tick_decide; then
     test -n "$oa_idle_lock_failure" &&
       printf '%s\n' "$oa_idle_lock_failure" >>"$OA_IDLE_WORK/notes"
@@ -886,8 +922,11 @@ oa_idle_refusal_reason() {
 # action, the source, the hash of the session, the outcome, the new deadline
 # and the reason, written first beside its entry and renamed into place so the
 # relay never reads half of it. It runs right after the event is recorded and
-# never changes the event's outcome or status
-# arguments: the outcome (recorded, refused or failed), the reason or -
+# never changes the event's outcome or status. The storage watcher leaves its
+# attempts the same way, with its target size, or - when the size was not
+# known, in place of the deadline
+# arguments: the outcome (recorded, refused or failed, or grown or failed for
+# a storage attempt), the reason or -, the target size of a storage attempt
 oa_idle_log_event() {
   if ! test -d "$OA_IDLE_EVENTS" || test -L "$OA_IDLE_EVENTS"; then
     return 0
@@ -901,7 +940,7 @@ oa_idle_log_event() {
   if test "$1" != refused && test -n "$oa_idle_session"; then
     oa_idle_log_session=$(oa_idle_hash "$oa_idle_session") || oa_idle_log_session=-
   fi
-  oa_idle_log_deadline=-
+  oa_idle_log_deadline=${3:--}
   if test "$1" = recorded; then
     oa_idle_log_deadline=$(/usr/bin/jq -r '.state.deadline // "-"' "$OA_IDLE_WORK/computed.json" 2>/dev/null) ||
       oa_idle_log_deadline=-
@@ -920,8 +959,10 @@ oa_idle_log_event() {
 # prints the line of the machine's log an event record stands for, or fails
 # when any field of it is not exactly of the shape an event writes. Nothing of
 # the record but fields it validated reaches the line, and none of them can
-# hold a space, control character or newline
-# arguments: the record's file
+# hold a space, control character or newline; a storage attempt's record is
+# taken only from root, its target size, or - for a failure before one was
+# known, in place of the deadline
+# arguments: the record's file, the id of the account that owns it
 oa_idle_relay_line() {
   oa_idle_relay_extra=
   IFS=' ' read -r oa_idle_relay_at oa_idle_relay_event oa_idle_relay_source oa_idle_relay_session \
@@ -931,7 +972,11 @@ oa_idle_relay_line() {
   [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;;
   *) return 1 ;;
   esac
-  case $oa_idle_relay_event in heartbeat | hold-open | hold-close) ;; *) return 1 ;; esac
+  case $oa_idle_relay_event in
+  heartbeat | hold-open | hold-close) ;;
+  extend-storage) test "$2" = 0 || return 1 ;;
+  *) return 1 ;;
+  esac
   case $oa_idle_relay_source in
   - | [a-z]*) ;;
   *) return 1 ;;
@@ -943,13 +988,22 @@ oa_idle_relay_line() {
   *[!0-9a-f]*) return 1 ;;
   *) test "${#oa_idle_relay_session}" -eq 64 || return 1 ;;
   esac
-  case $oa_idle_relay_outcome in recorded | refused | failed) ;; *) return 1 ;; esac
-  case $oa_idle_relay_deadline in
-  - | [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z) ;;
+  case $oa_idle_relay_event:$oa_idle_relay_outcome in
+  extend-storage:grown | extend-storage:failed) ;;
+  extend-storage:*) return 1 ;;
+  *:recorded | *:refused | *:failed) ;;
+  *) return 1 ;;
+  esac
+  case $oa_idle_relay_event:$oa_idle_relay_outcome:$oa_idle_relay_deadline in
+  extend-storage:failed:-) ;;
+  extend-storage:*:*[!0-9]* | extend-storage:*: | extend-storage:*:0*) return 1 ;;
+  extend-storage:*) test "${#oa_idle_relay_deadline}" -le 7 || return 1 ;;
+  *:*:- | *:*:[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z) ;;
   *) return 1 ;;
   esac
   case $oa_idle_relay_reason in
   - | bad-budget | bad-source | bad-pid | bad-session | bad-hook-input | bad-option | refused | not-recorded) ;;
+  adapter-failed | size-unknown) test "$oa_idle_relay_event" = extend-storage || return 1 ;;
   *) return 1 ;;
   esac
   oa_idle_relay_text="open-agent-awake $oa_idle_relay_at event=$oa_idle_relay_event source=$oa_idle_relay_source"
@@ -957,7 +1011,9 @@ oa_idle_relay_line() {
     oa_idle_relay_text="$oa_idle_relay_text session=$(printf '%.8s' "$oa_idle_relay_session")"
   fi
   oa_idle_relay_text="$oa_idle_relay_text outcome=$oa_idle_relay_outcome"
-  if test "$oa_idle_relay_deadline" != -; then
+  if test "$oa_idle_relay_event" = extend-storage && test "$oa_idle_relay_deadline" != -; then
+    oa_idle_relay_text="$oa_idle_relay_text target-gb=$oa_idle_relay_deadline"
+  elif test "$oa_idle_relay_deadline" != -; then
     oa_idle_relay_text="$oa_idle_relay_text deadline=$oa_idle_relay_deadline"
   fi
   if test "$oa_idle_relay_reason" != -; then
@@ -990,8 +1046,8 @@ oa_idle_relay_drain() {
   oa_idle_drain_count=0
   oa_idle_drain_dropped=0
   find "$OA_IDLE_EVENTS" -mindepth 1 -maxdepth 1 -type f -links 1 -name 'e-*' \
-    -printf '%f\n' 2>/dev/null | head -n "$OA_IDLE_RELAY_SCAN" >"$OA_IDLE_WORK/relay"
-  while IFS= read -r oa_idle_drain_name; do
+    -printf '%U %f\n' 2>/dev/null | head -n "$OA_IDLE_RELAY_SCAN" >"$OA_IDLE_WORK/relay"
+  while IFS=' ' read -r oa_idle_drain_owner oa_idle_drain_name; do
     case $oa_idle_drain_name in
     e-*[!A-Za-z0-9]* | e-) continue ;;
     e-*) ;;
@@ -1000,7 +1056,7 @@ oa_idle_relay_drain() {
     if test "$oa_idle_drain_count" -ge "$OA_IDLE_RELAY_LINES"; then
       oa_idle_drain_dropped=$((oa_idle_drain_dropped + 1))
     elif oa_idle_read "$OA_IDLE_EVENTS/$oa_idle_drain_name" "$OA_IDLE_RECORD_BYTES" "$OA_IDLE_WORK/record" &&
-      oa_idle_drain_line=$(oa_idle_relay_line "$OA_IDLE_WORK/record"); then
+      oa_idle_drain_line=$(oa_idle_relay_line "$OA_IDLE_WORK/record" "$oa_idle_drain_owner"); then
       printf '%s\n' "$oa_idle_drain_line" >&2
       oa_idle_drain_count=$((oa_idle_drain_count + 1))
     fi

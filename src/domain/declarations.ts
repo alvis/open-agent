@@ -30,7 +30,27 @@ export type IdleForm =
 export type WakeMode = 'url-traffic' | 'cli-restore' | 'always-on';
 
 /** where workstation data survives sleep */
-type PersistenceMode = 'provider-disk' | 'volume' | 'snapshot' | 'host-disk';
+export type PersistenceMode =
+  'provider-disk' | 'volume' | 'snapshot' | 'host-disk';
+
+/** a way storage grows without the user acting */
+export type StorageGrowth = 'provider-auto' | 'guest-extend';
+
+/** what a workstation's persistent storage can do */
+export interface StorageCapability {
+  /** where workstation data survives sleep */
+  persistence: PersistenceMode;
+  /** size, in whole GB, a new workstation's storage gets by default */
+  defaultGb: number;
+  /** largest size, in whole GB, the provider allows; equals defaultGb when fixed */
+  maxGb: number;
+  /** guest path whose filesystem holds the persistent data */
+  path: string;
+  /** mechanisms that grow storage automatically, in preference order; empty when none */
+  growth: readonly StorageGrowth[];
+  /** the host can grow the storage on request */
+  hostExtend: boolean;
+}
 
 /** how the ACP agent port is published */
 type ExposureMode = 'provider-url' | 'provider-service' | 'network-only';
@@ -81,8 +101,8 @@ export interface ProviderCapabilities {
    * maximum above it is refused when the profile is validated
    */
   maxAwakeDeadlineMinutes: number | null;
-  /** where workstation data survives sleep */
-  persistence: PersistenceMode;
+  /** what the workstation's persistent storage can do, including where it survives sleep */
+  storage: StorageCapability;
   /** how the ACP agent port is published */
   exposure: ExposureMode;
   /** where list finds workstations without waking them */
@@ -141,6 +161,8 @@ export interface ProviderDeclaration<
   serviceBackend: ServiceBackendId;
   /** guest program the idle governor runs to apply an awake deadline or enter an idle form; absent when nothing keeps the provider awake */
   awakeAsset?: GuestAsset;
+  /** guest program the storage watcher runs, as root, to read the provisioned storage size (`storage-size`) and grow it (`extend-storage <GB>`); required when the storage capability declares `guest-extend`, absent otherwise */
+  storageAsset?: GuestAsset;
 }
 
 /** a process that speaks ACP on a harness's behalf */

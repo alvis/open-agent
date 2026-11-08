@@ -2,6 +2,7 @@ import { readAsset } from '#adapters/guest/platform/assets';
 import { WorkstationCreationFault } from '#domain/creation';
 import { pickMachine } from '#domain/machine-sizes';
 import { summarizeProfile } from '#domain/recorded';
+import { initialStorageGb } from '#domain/storage';
 import {
   cancellationReason,
   checkOperation,
@@ -11,7 +12,8 @@ import {
 import { ProviderFault } from '#kernel/provider-fault';
 
 import { BOOT_STUB } from './boot';
-import { machineSpec, VOLUME_NAME, VOLUME_SIZE_GB } from './machine-config';
+import { FLY_MACHINE_CAPABILITIES } from './capabilities';
+import { machineSpec, VOLUME_NAME } from './machine-config';
 import { FLY_MACHINES } from './machines';
 import { creationMetadata } from './metadata';
 import { isNotFound } from './status';
@@ -88,7 +90,10 @@ export async function createManagedApp(
     const volume = await api.createVolume(name, {
       name: VOLUME_NAME,
       region,
-      sizeGb: VOLUME_SIZE_GB,
+      sizeGb: initialStorageGb(
+        FLY_MACHINE_CAPABILITIES.storage,
+        profile.options,
+      ),
     });
     const created = await api.createMachine(name, {
       name,
@@ -97,6 +102,7 @@ export async function createManagedApp(
         machine,
         volume,
         bootStub: await readAsset(BOOT_STUB),
+        options: profile.options,
         port,
         metadata: creationMetadata(summarizeProfile(profile)),
       }),

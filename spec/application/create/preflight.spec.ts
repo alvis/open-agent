@@ -20,6 +20,7 @@ const request = {
     provider: 'sprite',
     cpu: 2,
     mem: 2,
+    storage: 10,
     release: 'stable',
     localCredentials: false,
     github: false,

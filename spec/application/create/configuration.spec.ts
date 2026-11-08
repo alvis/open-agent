@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { configureNewWorkstation } from '#application/create/configuration';
+import { installWorkstation } from '#application/installation';
 import {
   normalizePluginOptions,
   resolvePluginActions,
@@ -177,6 +178,45 @@ describe('fn:configureNewWorkstation', () => {
     });
 
     expect(calls).toEqual(['configureNative']);
+  });
+
+  it('should install a new workstation, without an earlier record, on its provider with its profile, from which its growth policy is recorded', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-configure-'),
+    );
+    const sprite = createFilesystemSprite({ root: directory.path });
+    const flyProfile = {
+      ...profile,
+      provider: 'fly-machine',
+      options: { ...profile.options, storageLimitGb: 40 },
+    } satisfies WorkstationProfile;
+
+    await configureNewWorkstation(recordingDependencies([]), {
+      provider: registry.providers['fly-machine'],
+      connection: connectionOf(sprite),
+      configuration: {
+        hostname: 'box',
+        profile: flyProfile,
+        runtimeEnv: {},
+        plugins,
+      },
+    });
+
+    expect(
+      vi
+        .mocked(installWorkstation)
+        .mock.calls.map(([, { provider, profile, previous }]) => ({
+          provider,
+          profile,
+          previous,
+        })),
+    ).toEqual([
+      {
+        provider: registry.providers['fly-machine'],
+        profile: flyProfile,
+        previous: undefined,
+      },
+    ]);
   });
 
   it.each([

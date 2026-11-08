@@ -13,6 +13,7 @@ const INSPECTION_MESSAGES: Record<InspectionProbe, string> = {
   proxy: 'Checking the selected model gateway catalogue',
   governor: 'Reading the idle governor state',
   boot: 'Reading the last boot record',
+  storage: 'Measuring storage and reading its growth policy',
 };
 
 /**

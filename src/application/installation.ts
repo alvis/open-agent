@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
+import { effectiveStoragePolicy } from '#domain/storage';
 import { CommandFault } from '#kernel/faults';
 import { traceStage } from '#kernel/operation';
 import { OPEN_AGENT_VERSION } from '#kernel/version';
@@ -29,7 +30,7 @@ export interface InstallParams {
   connection: SetupSession;
   /** the profile setup applies */
   profile: WorkstationProfile;
-  /** the environment an earlier setup recorded, whose device identity and services carry over */
+  /** the environment an earlier setup recorded, whose device identity, services and storage growth policy, or its absence, carry over */
   previous?: GuestEnvironment;
   /** receives each step's progress */
   interaction?: Interaction;
@@ -75,6 +76,14 @@ export async function installWorkstation(
     version: OPEN_AGENT_VERSION,
     setupAt: new Date().toISOString(),
     networkIdentity: previous?.networkIdentity,
+    // a workstation without a record, new or a create that setup resumes,
+    // records the policy its provider and profile give
+    storage: previous
+      ? previous.storage
+      : effectiveStoragePolicy(
+          provider.capabilities.storage,
+          params.profile.options,
+        ),
   };
   const { assembly, settled } = await bottledAssembly(mechanics, params, base);
   await runSteps(mechanics, params, {

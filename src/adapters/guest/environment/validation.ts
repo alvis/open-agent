@@ -22,6 +22,7 @@ const NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 /** an environment variable name */
 const VARIABLE_PATTERN = /^[A-Z_a-z]\w*$/;
 const MAX_PORT = 65_535;
+const MAX_PERCENT = 100;
 
 /**
  * accepts one of the given strings
@@ -125,6 +126,41 @@ const source: Check = (value) => {
   return fields !== undefined && shape(fields)(value);
 };
 
+/** each storage growth policy state and the fields it carries besides `state` */
+const STORAGE_POLICY_FIELDS = new Map<string, Readonly<Record<string, Check>>>([
+  ['unsupported', {}],
+  ['off', {}],
+  [
+    'on',
+    {
+      thresholdPercent: (value) =>
+        atLeast(1)(value) && (value as number) <= MAX_PERCENT,
+      stepGb: atLeast(1),
+      limitGb: atLeast(1),
+      mechanisms: (value) =>
+        Array.isArray(value) &&
+        value.length > 0 &&
+        listOf(oneOf('provider-auto', 'guest-extend'))(value),
+    },
+  ],
+]);
+
+// a storage growth policy of a known state, with that state's fields and no others
+const storagePolicy: Check = (value) => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const fields = STORAGE_POLICY_FIELDS.get(String(value.state));
+
+  return (
+    fields !== undefined &&
+    shape(fields)(value) &&
+    Object.keys(value).every(
+      (field) => field === 'state' || Object.hasOwn(fields, field),
+    )
+  );
+};
+
 /** the program, arguments and account a service or job runs */
 const run = { command: path, arguments: listOf(word), account };
 
@@ -166,7 +202,10 @@ const TRAILING_FIELDS: Readonly<Record<string, Check>> = {
     idleTimeoutMinutes: atLeast(0),
     holdMaxMinutes: atLeast(1),
     awakeAdapter: (value) => value === null || path(value),
+    storagePath: optional(path),
+    storageAdapter: optional((value) => value === null || path(value)),
   }),
+  storage: optional(storagePolicy),
   agent: shape({
     id: text,
     service: name,

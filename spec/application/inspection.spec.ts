@@ -67,16 +67,24 @@ const PROFILE = profileWith({
   cliproxyapi: false,
 });
 
+/** what df prints for a 20 GB filesystem two thirds full */
+const MEASURE = [
+  'Filesystem     1024-blocks     Used Available Capacity Mounted on',
+  '/dev/vdb          20971520 13736345   7235175      66% /',
+].join('\n');
+
 /**
  * creates a managed SDK boundary with one installed disposable workstation
  * @param root isolated guest filesystem root
  * @param ready whether the guest serves ready service and endpoint evidence
+ * @param measure what df prints for the storage path; null when it fails
  * @returns provider client, managed Sprite and the guest's answer to every
  * command other than a file program
  */
 async function installedSprite(
   root: string,
   ready = false,
+  measure: string | null = MEASURE,
 ): Promise<{
   client: SpritesClient;
   sprite: Sprite;
@@ -88,14 +96,19 @@ async function installedSprite(
     serverVersion: '0.0.46-nightly.20261014.3118',
     orchestrationProtocolVersion: 2,
   };
-  const execute = vi.fn<GuestExecute>(async (_file, args) => ({
-    stdout:
-      ready && args?.includes('/usr/bin/curl')
-        ? `${JSON.stringify(agentEnvironment)}\n200`
-        : '[]',
-    stderr: '',
-    exitCode: 0,
-  }));
+  const execute = vi.fn<GuestExecute>(async (_file, args) => {
+    const isStorage = args?.includes('oa-storage') === true;
+
+    return {
+      stdout: isStorage
+        ? (measure ?? '')
+        : ready && args?.includes('/usr/bin/curl')
+          ? `${JSON.stringify(agentEnvironment)}\n200`
+          : '[]',
+      stderr: '',
+      exitCode: isStorage && measure === null ? 1 : 0,
+    };
+  });
   const sprite = Object.assign(createFilesystemSprite({ root, execute }), {
     id: 'sprite-temporary',
     organizationName: 'test-org',
@@ -135,6 +148,27 @@ async function installedSprite(
   await sprite
     .filesystem()
     .writeFile(ENVIRONMENT_PATH, JSON.stringify(environmentOf(PROFILE)));
+  if (ready) {
+    const hooks = (owned: WorkHooks): Record<string, unknown> =>
+      mergeWorkHooks(
+        {},
+        { owned, command: awakeHookCommand({ awakeCommand: AWAKE_COMMAND }) },
+      );
+    await sprite.filesystem().mkdir('/home/agent/.claude', { recursive: true });
+    await sprite.filesystem().mkdir('/home/agent/.codex', { recursive: true });
+    await sprite
+      .filesystem()
+      .writeFile(
+        CLAUDE_SETTINGS,
+        JSON.stringify({ hooks: hooks(CLAUDE_WORK_HOOKS) }),
+      );
+    await sprite
+      .filesystem()
+      .writeFile(
+        CODEX_HOOKS,
+        JSON.stringify({ hooks: hooks(CODEX_WORK_HOOKS) }),
+      );
+  }
 
   return { client, sprite, execute };
 }
@@ -276,26 +310,7 @@ describe('cmd:show', () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-doctor-ready-'),
     );
-    const { client, sprite } = await installedSprite(directory.path, true);
-    const hooks = (owned: WorkHooks): Record<string, unknown> =>
-      mergeWorkHooks(
-        {},
-        { owned, command: awakeHookCommand({ awakeCommand: AWAKE_COMMAND }) },
-      );
-    await sprite.filesystem().mkdir('/home/agent/.claude', { recursive: true });
-    await sprite.filesystem().mkdir('/home/agent/.codex', { recursive: true });
-    await sprite
-      .filesystem()
-      .writeFile(
-        CLAUDE_SETTINGS,
-        JSON.stringify({ hooks: hooks(CLAUDE_WORK_HOOKS) }),
-      );
-    await sprite
-      .filesystem()
-      .writeFile(
-        CODEX_HOOKS,
-        JSON.stringify({ hooks: hooks(CODEX_WORK_HOOKS) }),
-      );
+    const { client } = await installedSprite(directory.path, true);
 
     const result = await doctorWorkstation(dependencies, {
       provider: providerOf(client),
@@ -330,6 +345,56 @@ describe('cmd:show', () => {
       data: { currentReadiness: { ready: true } },
     });
   });
+
+  it.each([
+    {
+      storage: 'nearly full',
+      measure: [
+        'Filesystem     1024-blocks     Used Available Capacity Mounted on',
+        '/dev/vdb          20971520 20132659    838861      96% /',
+      ].join('\n'),
+      expected: {
+        storage: {
+          sizeGb: 20,
+          usedGb: 19.2,
+          usedPercent: 96,
+          policy: { state: 'not-recorded' },
+        },
+        warnings: [expect.stringContaining('96% full')],
+        probeFailures: [],
+      },
+    },
+    {
+      storage: 'not measurable',
+      measure: null,
+      expected: {
+        warnings: [expect.stringContaining('storage inspection unavailable')],
+        probeFailures: [{ probe: 'storage', reason: expect.any(String) }],
+      },
+    },
+  ])(
+    'should keep a doctor result ready while warning of storage that is $storage',
+    async ({ measure, expected }) => {
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-doctor-storage-'),
+      );
+      const { client } = await installedSprite(directory.path, true, measure);
+
+      const result = await doctorWorkstation(dependencies, {
+        provider: providerOf(client),
+        requestedName: 'temporary',
+      });
+
+      expect(result).toMatchObject({
+        command: 'doctor',
+        ok: true,
+        data: { currentReadiness: { ready: true, failures: [], ...expected } },
+      });
+      expect(serializeResult(projectResult(result))).toMatchObject({
+        data: { currentReadiness: { ready: true, ...expected } },
+      });
+    },
+  );
 
   it('should return typed failed doctor readiness from a real guest inspection', async () => {
     await using directory = await mkdtempDisposable(
@@ -457,7 +522,11 @@ describe('cmd:show', () => {
         throw new Error('native SDK probe unavailable');
       }
 
-      return { stdout: '[]', stderr: '', exitCode: 0 };
+      return {
+        stdout: args?.includes('oa-storage') ? MEASURE : '[]',
+        stderr: '',
+        exitCode: 0,
+      };
     });
 
     const result = await showWorkstation(dependencies, {

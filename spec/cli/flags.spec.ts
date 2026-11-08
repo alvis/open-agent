@@ -65,6 +65,7 @@ describe('cmd:setup', () => {
     ['codex-plugins', 'codexPlugins'],
     ['proxy', 'proxy'],
     ['use-exit-node', 'useExitNode'],
+    ['auto-extend', 'autoExtend'],
   ] as const)(
     'should preserve omitted, positive and negative values for --%s',
     async (flag, property) => {
@@ -213,6 +214,32 @@ describe('cmd:setup', () => {
     });
     expect(rejected.exitCode).not.toBe(0);
   });
+
+  it.each([
+    ['storage', 'storage'],
+    ['auto-extend-at', 'autoExtendAt'],
+    ['auto-extend-step', 'autoExtendStep'],
+    ['storage-limit', 'storageLimit'],
+  ] as const)(
+    'should parse --%s as a whole number and reject fractional text',
+    async (flag, property) => {
+      const accepted = await parseFlags([`--${flag}`, '40']);
+      const rejected = await parseFlags([`--${flag}`, '2.5']);
+
+      expect(accepted).toMatchObject({
+        options: [expect.objectContaining({ [property]: 40 })],
+        diagnostics: [],
+        exitCode: 0,
+      });
+      expect(rejected).toMatchObject({
+        options: [],
+        diagnostics: expect.arrayContaining([
+          expect.stringContaining('whole number'),
+        ]),
+      });
+      expect(rejected.exitCode).not.toBe(0);
+    },
+  );
 
   it('should accept stable releases and reject unknown release channels before invoking a command', async () => {
     const accepted = await parseFlags(['--release', 'stable']);

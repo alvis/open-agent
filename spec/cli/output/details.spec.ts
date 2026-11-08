@@ -84,4 +84,69 @@ describe('fn:humanResultDetails', () => {
       });
     },
   );
+
+  it('should word a storage growth attempt that recorded no detail', () => {
+    const result = humanResultDetails({
+      inspection: {
+        storage: {
+          sizeGb: 10,
+          usedGb: 9,
+          usedPercent: 90,
+          policy: { state: 'off' },
+          lastGrowth: {
+            at: '2026-11-08T10:00:00.000Z',
+            targetGb: 20,
+            outcome: 'failed',
+          },
+        },
+      },
+    });
+
+    expect(result.inspection).toMatchObject({
+      Storage:
+        '9 of 10 GB used (90%); automatic growth off; last growth to 20 GB failed at 2026-11-08T10:00:00.000Z',
+    });
+  });
+
+  it('should word a failed storage growth attempt that has no target', () => {
+    const result = humanResultDetails({
+      inspection: {
+        storage: {
+          sizeGb: 10,
+          usedGb: 9,
+          usedPercent: 90,
+          policy: { state: 'not-recorded' },
+          lastGrowth: {
+            at: '2026-11-08T10:00:00.000Z',
+            outcome: 'failed',
+            detail: 'the size query failed',
+          },
+        },
+      },
+    });
+
+    expect(result.inspection).toMatchObject({
+      Storage:
+        '9 of 10 GB used (90%); policy not recorded; last growth failed at 2026-11-08T10:00:00.000Z: the size query failed',
+    });
+  });
+
+  it('should word malformed storage figures as unknown and strip control characters from an instant', () => {
+    const result = humanResultDetails({
+      inspection: {
+        storage: {
+          sizeGb: '10',
+          usedGb: null,
+          usedPercent: 90,
+          policy: { state: 'on', stepGb: 10, thresholdPercent: 80 },
+          lastGrowth: { at: 'now\u001b[2J', targetGb: 20, outcome: 'grown' },
+        },
+      },
+    });
+
+    expect(result.inspection).toMatchObject({
+      Storage:
+        '? of 10 GB used (90%); grows by 10 GB at 80% up to ? GB; last growth to 20 GB succeeded at now[2J',
+    });
+  });
 });

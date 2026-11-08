@@ -18,6 +18,7 @@ import type {
 } from '#application/data';
 
 import type { MachineSummary } from '#application/machine';
+import type { StorageExtension } from '#application/ports/drivers';
 import type { CredentialSaveResult } from '#domain/credentials';
 
 import type { RetainedCredentialsOutput } from './credentials';
@@ -63,6 +64,7 @@ export interface SetupDataOutput {
   plugins?: Record<string, string>;
   components?: ComponentCountsOutput;
   tools?: ToolsSetupOutput;
+  storage?: { sizeGb: number; needsRestart: boolean };
   localCredential?: {
     status: string;
     scope: string;
@@ -83,6 +85,7 @@ type SetupFields = Partial<
       section: AppliedSetupSection['section'];
       machine: MachineSummary;
       retainedCredentials: Partial<Record<string, CredentialSaveResult>>;
+      storage: StorageExtension;
     }
 >;
 
@@ -177,6 +180,11 @@ export function projectSetup(data: SetupData): SetupDataOutput {
     plugins: mapValues(same),
     components: projectComponents,
     tools: projectToolsOutcome,
+    storage: (storage) =>
+      projectFields<StorageExtension, NonNullable<SetupDataOutput['storage']>>(
+        storage,
+        { sizeGb: same, needsRestart: same },
+      ),
     localCredential: (credential) =>
       projectFields<
         typeof credential,

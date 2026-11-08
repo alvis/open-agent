@@ -9,7 +9,7 @@ import { PairingSecret } from '#kernel/pairing-secret';
 import { commandError } from './failures';
 
 import { summarizeMachine } from './machine';
-import { assessReadiness } from './readiness';
+import { assessReadiness, readinessWarnings } from './readiness';
 
 import type { BoundProvider } from '#application/catalog/providers';
 import type { WorkstationCommandParams } from '#application/contracts';
@@ -316,6 +316,8 @@ export async function doctorWorkstation(
       updates: inspection.updates,
       governor: inspection.governor,
       boot: inspection.boot,
+      storage: inspection.storage,
+      warnings: readinessWarnings(inspection),
     },
   };
 

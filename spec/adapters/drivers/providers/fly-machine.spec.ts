@@ -66,6 +66,14 @@ const MANAGED_METADATA = {
   'open-agent': 'managed',
   'open-agent-schema': '1',
 };
+/** the volume mount of a machine whose volume grows by the default policy */
+const GROWING_MOUNT = {
+  volume: 'vol_1',
+  path: '/data',
+  extend_threshold_percent: 80,
+  add_size_gb: 10,
+  size_gb_limit: 100,
+};
 const AGENT_SERVICE = {
   protocol: 'tcp',
   internal_port: PORT,
@@ -151,6 +159,8 @@ async function finished(guest: GuestProcess): Promise<{
 /** a Machines API keeping apps, machines and addresses in memory */
 class FakeMachinesApi {
   public readonly apps: Record<string, FakeApp>;
+  /** bodies of the volume creates the fake received */
+  public readonly volumes: Array<Record<string, unknown>> = [];
   /** the fake as a global fetch */
   public readonly fetch = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(requestUrl(input));
@@ -227,6 +237,8 @@ class FakeMachinesApi {
       case undefined:
         return this.#appItself(app, request);
       case 'volumes':
+        this.volumes.push(request.body);
+
         return { status: 200, body: { id: 'vol_1' } };
       case 'ip_assignments':
         return addresses(app, request);
@@ -494,6 +506,7 @@ describe('cl:FlyMachineProvider', () => {
 
       expect({
         record,
+        volumes: api.volumes,
         config: api.apps.alpha?.machines[0]?.config,
         addressCalls: api.fetch.mock.calls.filter(([input]) =>
           requestUrl(input).includes('ip_assignments'),
@@ -509,9 +522,10 @@ describe('cl:FlyMachineProvider', () => {
           machine: { cpus: 2, label: 'shared-cpu-2x', memoryGb: 2 },
           metadata: { setup: 'not recorded', profile: SUMMARY },
         },
+        volumes: [{ name: 'open_agent', region: 'lhr', size_gb: 10 }],
         config: expect.objectContaining({
           image: 'debian:bookworm-slim',
-          mounts: [{ volume: 'vol_1', path: '/data' }],
+          mounts: [GROWING_MOUNT],
           services: [expect.objectContaining(AGENT_SERVICE)],
           metadata: expect.objectContaining(MANAGED_METADATA),
         }),
@@ -1139,6 +1153,78 @@ describe('cl:FlyMachineProvider', () => {
           guest: { cpu_kind: 'performance', cpus: 4, memory_mb: 32768 },
         },
       });
+    });
+
+    it('should keep the volume growth policy on the mount when it changes the guest size', async () => {
+      const api = new FakeMachinesApi();
+      const provider = bound(api);
+      const created = await provider.create('alpha', PROFILE, PORT);
+
+      await provider.resize(created, {
+        label: 'performance-4x',
+        cpus: 4,
+        memoryGb: 32,
+      });
+
+      expect(api.apps.alpha?.machines[0]).toMatchObject({
+        instance_id: 'resized-run',
+        config: {
+          guest: { cpu_kind: 'performance', cpus: 4, memory_mb: 32768 },
+          mounts: [GROWING_MOUNT],
+        },
+      });
+    });
+  });
+
+  describe('mt:extendStorage', () => {
+    it('should grow the volume the verified machine mounts', async () => {
+      const app = heldApp({
+        metadata: MANAGED_METADATA,
+        services: [AGENT_SERVICE],
+      });
+      const machine = app.machines[0]!;
+      machine.config = {
+        ...(machine.config as Record<string, unknown>),
+        mounts: [GROWING_MOUNT],
+      };
+      const api = interposed(new FakeMachinesApi({ alpha: app }), (path) =>
+        path === '/v1/apps/alpha/volumes/vol_1'
+          ? new Response(JSON.stringify({ id: 'vol_1', size_gb: 10 }))
+          : path === '/v1/apps/alpha/volumes/vol_1/extend'
+            ? new Response(
+                JSON.stringify({
+                  needs_restart: false,
+                  volume: { id: 'vol_1', size_gb: 60 },
+                }),
+              )
+            : undefined,
+      );
+      const provider = bound(api);
+      const workstation = await provider.get('alpha');
+
+      const grown = await provider.extendStorage(workstation, 60);
+
+      expect(grown).toEqual({ sizeGb: 60, needsRestart: false });
+      expect(
+        api.fetch.mock.calls
+          .filter(([input]) => requestUrl(input).includes('/volumes/'))
+          .map(([input, init]) => ({
+            path: new URL(requestUrl(input)).pathname,
+            method: init?.method ?? 'GET',
+            body: init?.body,
+          })),
+      ).toEqual([
+        {
+          path: '/v1/apps/alpha/volumes/vol_1',
+          method: 'GET',
+          body: undefined,
+        },
+        {
+          path: '/v1/apps/alpha/volumes/vol_1/extend',
+          method: 'PUT',
+          body: JSON.stringify({ size_gb: 60 }),
+        },
+      ]);
     });
   });
 

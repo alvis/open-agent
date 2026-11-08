@@ -463,6 +463,96 @@ describe('cl:FlyApi', () => {
     ]);
   });
 
+  it('should read the volume a machine mounts first and ignore unreadable mounts', async () => {
+    useReplies([
+      reply([
+        {
+          id: 'machine-1',
+          state: 'started',
+          config: {
+            mounts: [
+              { volume: 'vol_1', path: '/data' },
+              { volume: 'vol_2', path: '/other' },
+            ],
+          },
+        },
+        { id: 'machine-2', state: 'started', config: { mounts: [null] } },
+        {
+          id: 'machine-3',
+          state: 'started',
+          config: { mounts: [{ volume: 3, path: '/data' }] },
+        },
+      ]),
+    ]);
+
+    const machines = await new FlyApi('token').listMachines('team-app');
+
+    expect(machines.map(({ id, volume }) => ({ id, volume }))).toEqual([
+      { id: 'machine-1', volume: 'vol_1' },
+      { id: 'machine-2', volume: undefined },
+      { id: 'machine-3', volume: undefined },
+    ]);
+  });
+
+  it('should read a volume size and extend it, mapping whether the machine must restart', async () => {
+    const seen = useReplies([
+      reply({ id: 'vol_1', name: 'open_agent', size_gb: 10 }),
+      reply({ needs_restart: true, volume: { id: 'vol_1', size_gb: 60 } }),
+      reply({ volume: { id: 'vol_1', size_gb: 70 } }),
+    ]);
+    const api = new FlyApi('token');
+
+    const volume = await api.getVolume('team-app', 'vol_1');
+    const restarting = await api.extendVolume('team-app', 'vol_1', 60);
+    const online = await api.extendVolume('team-app', 'vol_1', 70);
+
+    expect({ volume, restarting, online, seen }).toEqual({
+      volume: { id: 'vol_1', sizeGb: 10 },
+      restarting: { sizeGb: 60, needsRestart: true },
+      online: { sizeGb: 70, needsRestart: false },
+      seen: [
+        {
+          method: 'GET',
+          path: '/v1/apps/team-app/volumes/vol_1',
+          authorization: 'FlyV1 token',
+          body: undefined,
+        },
+        ...[60, 70].map((size) => ({
+          method: 'PUT',
+          path: '/v1/apps/team-app/volumes/vol_1/extend',
+          authorization: 'FlyV1 token',
+          body: { size_gb: size },
+        })),
+      ],
+    });
+  });
+
+  it('should reject a volume or an extension without a whole size', async () => {
+    useReplies([
+      reply({ id: 'vol_1', size_gb: 1.5 }),
+      reply(null),
+      reply({ needs_restart: false }),
+    ]);
+    const api = new FlyApi('token');
+
+    await expect(api.getVolume('team-app', 'vol_1')).rejects.toMatchObject({
+      code: 'failed',
+      message: expect.stringContaining('malformed volume'),
+    });
+    await expect(
+      api.extendVolume('team-app', 'vol_1', 60),
+    ).rejects.toMatchObject({
+      code: 'failed',
+      message: expect.stringContaining('malformed volume extension'),
+    });
+    await expect(
+      api.extendVolume('team-app', 'vol_1', 70),
+    ).rejects.toMatchObject({
+      code: 'failed',
+      message: expect.stringContaining('malformed volume extension'),
+    });
+  });
+
   it('should reject an incomplete organization listing', async () => {
     useReplies([reply({ machines: [], error_regions: ['lhr'] })]);
 

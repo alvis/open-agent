@@ -39,6 +39,13 @@ const foundation = step('foundation');
 const tool = step('tool');
 const service = step('service');
 const environment = environmentOf(DISABLED_NETWORK_PROFILE);
+const POLICY = {
+  state: 'on',
+  thresholdPercent: 80,
+  stepGb: 10,
+  limitGb: 100,
+  mechanisms: ['provider-auto'],
+} as const;
 const recordedService =
   dependencies.registry.agents[DISABLED_NETWORK_PROFILE.agent].service;
 const assembly: SetupAssembly = {
@@ -396,6 +403,7 @@ describe('fn:installWorkstation', () => {
       version: OPEN_AGENT_VERSION,
       setupAt: expect.any(String),
       networkIdentity: undefined,
+      storage: { state: 'unsupported' },
     };
     expect({ result, assemblies: boundary.assemble.mock.calls }).toEqual({
       result: environment,
@@ -460,6 +468,68 @@ describe('fn:installWorkstation', () => {
       });
       expect(boundary.installProvider).not.toHaveBeenCalled();
       expect(boundary.run).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each([
+    {
+      label:
+        'a workstation without a record, created or a create resumed by setup, records the policy its provider and profile give',
+      provider: 'fly-machine',
+      profile: DISABLED_NETWORK_PROFILE,
+      previous: undefined,
+      recorded: POLICY,
+    },
+    {
+      label:
+        'a workstation without a record records automatic growth its profile turns off',
+      provider: 'fly-machine',
+      profile: {
+        ...DISABLED_NETWORK_PROFILE,
+        options: { ...DISABLED_NETWORK_PROFILE.options, autoExtend: false },
+      },
+      previous: undefined,
+      recorded: { state: 'off' },
+    },
+    {
+      label:
+        'a workstation without a record on fixed storage records growth as unsupported',
+      provider: 'sprite',
+      profile: DISABLED_NETWORK_PROFILE,
+      previous: undefined,
+      recorded: { state: 'unsupported' },
+    },
+    {
+      label: 'a setup of a record without a policy records none',
+      provider: 'fly-machine',
+      profile: DISABLED_NETWORK_PROFILE,
+      previous: environmentOf(DISABLED_NETWORK_PROFILE),
+      recorded: undefined,
+    },
+    {
+      label: 'a setup carries the recorded policy unchanged',
+      provider: 'fly-machine',
+      profile: DISABLED_NETWORK_PROFILE,
+      previous: environmentOf(DISABLED_NETWORK_PROFILE, {
+        storage: { state: 'off' },
+      }),
+      recorded: { state: 'off' },
+    },
+  ] as const)(
+    'should assemble the plan so $label',
+    async ({ provider, profile, previous, recorded }) => {
+      await using boundary = await installationBoundary();
+
+      await installWorkstation(boundary.mechanics, {
+        provider: dependencies.registry.providers[provider],
+        connection: boundary.connection,
+        profile,
+        ...(previous && { previous }),
+      });
+
+      expect(
+        boundary.assemble.mock.calls.map(([{ storage }]) => storage),
+      ).toEqual([recorded]);
     },
   );
 });

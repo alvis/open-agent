@@ -202,13 +202,21 @@ export function requireValidProfile(
   resolution: SelectionResolution,
   options: CommandOptions,
 ): WorkstationProfile {
-  const { candidate, problems, isIdleTimeoutRequested } = resolution;
+  const {
+    candidate,
+    problems,
+    isIdleTimeoutRequested,
+    isStorageLimitRequested,
+    storagePolicyFlags,
+  } = resolution;
   const validation = validateProfile({
     declarations: dependencies.registry,
     candidate,
     options: {
       isPairingRequested: options.withPairCode === true,
       isIdleTimeoutRequested,
+      isStorageLimitRequested,
+      storagePolicyFlags,
     },
   });
   if (!validation.isValid || problems.length > 0) {

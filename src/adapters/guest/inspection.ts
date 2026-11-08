@@ -1,5 +1,7 @@
 import { inspectGovernor } from '#adapters/guest/governor';
 import { inspectHub } from '#adapters/guest/hub';
+import { inspectStorage } from '#adapters/guest/storage';
+import { storagePath } from '#domain/storage';
 import { checkOperation, traceStage } from '#kernel/operation';
 
 import { settleInspectionResults } from './inspection/results';
@@ -15,6 +17,8 @@ import type {
 } from '#application/ports/guest';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { BootReport } from '#domain/observations/boot';
+import type { GuestEnvironment } from '#domain/observations/environment';
+import type { StorageReport } from '#domain/observations/storage';
 
 /**
  * builds the guest inspection over the registered drivers
@@ -37,7 +41,7 @@ export function createInspection(context: {
      * fetches current service, route, and installation state on explicit inspection
      * @param guest target guest
      * @param options probe observer and the provider whose boot record is read
-     * @returns current service, network, native, gateway, environment, update and boot status
+     * @returns current service, network, native, gateway, storage, environment, update and boot status
      */
     inspect: async (guest, options = {}) => {
       const { onProbe } = options;
@@ -50,11 +54,7 @@ export function createInspection(context: {
       const { profile } = environment;
       const network = registry.networks[profile.network];
       // the governor report settles every failure into a reason itself
-      const [
-        [serviceProbe, networkProbe, nativeProbe, proxyProbe],
-        governor,
-        boot,
-      ] = await Promise.all([
+      const [probes, governor, boot] = await Promise.all([
         Promise.allSettled([
           inspectStage('services', async () => guest.services.list(), onProbe),
           inspectStage('network', async () => network.status(guest), onProbe),
@@ -75,18 +75,14 @@ export function createInspection(context: {
                   }),
             onProbe,
           ),
+          inspectStorageStage(guest, { registry, environment, onProbe }),
         ] as const),
         inspectStage('governor', async () => inspectGovernor(guest), onProbe),
         inspectBoot(guest, options),
       ]);
 
       return {
-        ...settleInspectionResults({ environment, updates }, [
-          serviceProbe,
-          networkProbe,
-          nativeProbe,
-          proxyProbe,
-        ]),
+        ...settleInspectionResults({ environment, updates }, probes),
         governor,
         ...(boot ? { boot } : {}),
       };
@@ -94,6 +90,40 @@ export function createInspection(context: {
     // a restart that waits for an idle agent reads the governor alone
     governor: inspectGovernor,
   };
+}
+
+/**
+ * measures the storage the workstation's provider declares and reports it
+ * under the growth policy the workstation recorded, or not-recorded for one
+ * created before
+ * @param guest target guest
+ * @param context what the storage probe reads
+ * @param context.registry every registered driver
+ * @param context.environment the recorded environment
+ * @param context.onProbe optional lifecycle observer
+ * @returns the storage report
+ */
+async function inspectStorageStage(
+  guest: GuestChannel,
+  context: {
+    registry: DriverRegistry;
+    environment: GuestEnvironment;
+    onProbe?: (event: ProbeEvent) => void;
+  },
+): Promise<StorageReport> {
+  const { registry, environment, onProbe } = context;
+  const { provider } = environment.profile;
+  const { storage } = registry.providers[provider].capabilities;
+
+  return inspectStage(
+    'storage',
+    async () =>
+      inspectStorage(guest, {
+        path: storagePath(storage),
+        policy: environment.storage ?? { state: 'not-recorded' },
+      }),
+    onProbe,
+  );
 }
 
 /**

@@ -16,7 +16,7 @@ import { registry } from '#composition/registry';
 import { summarizeProfile } from '#domain/recorded';
 import { OPEN_AGENT_VERSION } from '#kernel/version';
 
-import { environmentOf } from '../fixtures/environment';
+import { earlierEnvironmentOf, environmentOf } from '../fixtures/environment';
 import { DISABLED_NETWORK_PROFILE } from '../fixtures/profile';
 import { dependencies, dependenciesWith } from '../mocks/dependencies';
 import {
@@ -27,6 +27,7 @@ import {
 
 import type { Sprite } from '@fly/sprites';
 
+import type { ProviderDriver } from '#application/ports/drivers';
 import type { Interaction } from '#application/ports/interaction';
 
 // A setup section's root session is the framed guest shell represented by the stand-in.
@@ -49,9 +50,13 @@ vi.mock(
 /**
  * a managed workstation with a ready guest record for section behavior
  * @param root temporary guest filesystem root
+ * @param environment the environment.json its guest records
  * @returns its sprite and provider control
  */
-async function managedWorkstation(root: string): Promise<{
+async function managedWorkstation(
+  root: string,
+  environment: object = environmentOf(DISABLED_NETWORK_PROFILE),
+): Promise<{
   sprite: Sprite;
   provider: ReturnType<typeof providerOf>;
 }> {
@@ -87,12 +92,32 @@ async function managedWorkstation(root: string): Promise<{
   });
   await sprite
     .filesystem()
-    .writeFile(
-      ENVIRONMENT_PATH,
-      JSON.stringify(environmentOf(DISABLED_NETWORK_PROFILE)),
-    );
+    .writeFile(ENVIRONMENT_PATH, JSON.stringify(environment));
 
   return { sprite, provider: providerOf(client) };
+}
+
+/**
+ * makes the stand-in Sprite's provider take the place of one whose host grows
+ * storage on request, to 500 GB, to exactly the size asked for
+ * @param provider the stand-in's provider
+ * @returns the same provider, now growable
+ */
+function growableProvider(
+  provider: ReturnType<typeof providerOf>,
+): ReturnType<typeof providerOf> &
+  Required<Pick<ProviderDriver, 'extendStorage'>> {
+  const { capabilities } = provider;
+
+  return Object.assign(provider, {
+    capabilities: {
+      ...capabilities,
+      storage: { ...capabilities.storage, hostExtend: true, maxGb: 500 },
+    },
+    extendStorage: vi.fn<NonNullable<ProviderDriver['extendStorage']>>(
+      async (_, sizeGb) => ({ sizeGb, needsRestart: false }),
+    ),
+  });
 }
 
 describe('fn:setupWorkstation', () => {
@@ -193,6 +218,124 @@ describe('fn:setupWorkstation', () => {
       });
     },
   );
+
+  it('should grow storage to the --storage size and report it with the section outcome', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-setup-storage-'),
+    );
+    const { sprite, provider } = await managedWorkstation(directory.path);
+    const growable = growableProvider(provider);
+
+    const result = await setupWorkstation(dependencies, {
+      request: {
+        command: 'setup',
+        machine: sprite.name,
+        options: { section: 'system', nonInteractive: true, storage: 200 },
+      },
+      provider: growable,
+    });
+
+    expect(result).toMatchObject({
+      command: 'setup',
+      ok: true,
+      data: {
+        section: 'system',
+        setupFile: 'skipped',
+        storage: { sizeGb: 200, needsRestart: false },
+      },
+    });
+    expect(vi.mocked(growable.extendStorage).mock.calls).toEqual([
+      [expect.objectContaining({ name: sprite.name }), 200],
+    ]);
+  });
+
+  it.each([
+    { label: 'without --storage', storage: undefined, grown: undefined },
+    {
+      label: 'with --storage',
+      storage: 200,
+      grown: { sizeGb: 200, needsRestart: false },
+    },
+  ])(
+    'should set up a workstation an earlier release recorded $label, leaving its growth policy unrecorded',
+    async ({ storage, grown }) => {
+      await using directory = await mkdtempDisposable(
+        join(tmpdir(), 'open-agent-setup-earlier-'),
+      );
+      const { sprite, provider } = await managedWorkstation(
+        directory.path,
+        earlierEnvironmentOf(DISABLED_NETWORK_PROFILE),
+      );
+
+      const result = await setupWorkstation(dependencies, {
+        request: {
+          command: 'setup',
+          machine: sprite.name,
+          options: { section: 'system', nonInteractive: true, storage },
+        },
+        provider: growableProvider(provider),
+      });
+      const recorded: unknown = JSON.parse(
+        await sprite.filesystem().readFile(ENVIRONMENT_PATH, 'utf8'),
+      );
+
+      expect(result).toMatchObject({
+        command: 'setup',
+        ok: true,
+        data: { section: 'system', setupFile: 'skipped' },
+      });
+      expect(result.ok && Reflect.get(result.data, 'storage')).toEqual(grown);
+      expect(recorded).not.toHaveProperty('storage');
+    },
+  );
+
+  it('should refuse --storage on a provider that cannot grow its storage before any prompt, provider call or guest connection', async () => {
+    const called: PropertyKey[] = [];
+    const provider = new Proxy(registry.providers.sprite, {
+      get: (target, key, receiver) => {
+        const value: unknown = Reflect.get(target, key, receiver);
+        if (typeof value === 'function') {
+          called.push(key);
+        }
+
+        return value;
+      },
+    });
+    const prompt = vi.fn(async () => {
+      throw new Error('No prompt was expected');
+    });
+    const interaction: Interaction = {
+      input: prompt,
+      secret: prompt,
+      select: prompt,
+      multiselect: prompt,
+      confirm: prompt,
+      progress: () => undefined,
+      status: () => undefined,
+    };
+    const connect = vi.fn<typeof dependencies.guest.session.connect>();
+    const guest = { ...dependencies.guest, session: { connect } };
+
+    await expect(
+      setupWorkstation(dependenciesWith({ guest }), {
+        request: {
+          command: 'setup',
+          machine: 'devbox',
+          options: { section: 'system', storage: 200 },
+        },
+        provider,
+        interaction,
+      }),
+    ).rejects.toMatchObject({
+      code: 'INPUT',
+      message: expect.stringContaining('cannot grow its storage on request'),
+    });
+    expect({
+      called,
+      prompts: prompt.mock.calls,
+      connections: connect.mock.calls,
+    }).toEqual({ called: [], prompts: [], connections: [] });
+  });
 
   it('should retain an incomplete setup after the selected full plan fails', async () => {
     await using directory = await mkdtempDisposable(

@@ -7,6 +7,7 @@ import type { ProviderDriver, NetworkDriver } from '#application/ports/drivers';
 import type { ProviderCapabilities } from '#domain/declarations';
 import type { EnvironmentNetwork } from '#domain/observations/environment';
 import type { ServiceDefinition, PeriodicJob } from '#domain/services';
+import type { StoragePolicy } from '#domain/storage';
 
 /**
  * lists the services environment.json records for the backend to run: cron,
@@ -33,14 +34,16 @@ export function guestServices(
 
 /**
  * lists the jobs environment.json records for cron to run: the hourly update
- * gate, then a governed provider's per-minute governor tick
- * @param capabilities whether the provider governs its keep-awake
+ * gate, then the governor's per-minute tick where it has work
+ * @param capabilities whether the provider governs its keep-awake, and its storage
+ * @param storage the growth policy recorded for the workstation; absent when none is
  * @returns the jobs, in the order cron lists them
  */
 export function guestJobs(
-  capabilities: Pick<ProviderCapabilities, 'keepAwakeMode'>,
+  capabilities: Pick<ProviderCapabilities, 'keepAwakeMode' | 'storage'>,
+  storage?: StoragePolicy,
 ): PeriodicJob[] {
-  return [UPDATE_JOB, ...governorJobs(capabilities)];
+  return [UPDATE_JOB, ...governorJobs(capabilities, storage)];
 }
 
 /**

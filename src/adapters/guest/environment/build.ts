@@ -1,3 +1,5 @@
+import { storagePath } from '#domain/storage';
+
 import { ENVIRONMENT_SCHEMA } from './contracts';
 import { environmentProblem } from './validation';
 
@@ -19,6 +21,7 @@ import type {
 import type { GuestNetworkIdentity } from '#domain/observations/network';
 import type { WorkstationProfile } from '#domain/profile';
 import type { ServiceDefinition, PeriodicJob } from '#domain/services';
+import type { StoragePolicy } from '#domain/storage';
 import type {
   Resolution,
   ToolOwner,
@@ -41,8 +44,10 @@ interface EnvironmentParams {
   /** the selected provider */
   provider: Pick<
     ProviderDeclaration,
-    'id' | 'capabilities' | 'serviceBackend' | 'awakeAsset'
+    'id' | 'capabilities' | 'serviceBackend' | 'awakeAsset' | 'storageAsset'
   >;
+  /** the storage growth policy to record; absent leaves the record without one */
+  storage?: StoragePolicy;
   /** every tool setup resolved */
   tools: readonly ToolSpec[];
   /** the source picked for each tool, or why none is usable */
@@ -75,10 +80,11 @@ interface EnvironmentParams {
 
 /**
  * builds the environment record from the selection and what setup resolved;
- * a tool without a usable source is recorded as skipped, and the idle settings
- * are capped at the furthest the provider can keep the workstation awake
+ * a tool without a usable source is recorded as skipped, the idle settings
+ * are capped at the furthest the provider can keep the workstation awake, and
+ * the storage growth policy is recorded only when one is given
  * @param declarations the data every registered driver declares, which the record is validated against
- * @param params version, outcome, selection, tools, services and jobs
+ * @param params version, outcome, selection, tools, services, jobs and growth policy
  * @returns the record, validated
  * @throws {Error} when a resolution names an undeclared tool, the agent
  * publishes no port, or the record is inconsistent
@@ -87,7 +93,7 @@ export function buildEnvironment(
   declarations: ProductDeclarations,
   params: EnvironmentParams,
 ): GuestEnvironment {
-  const { profile, agent, networkIdentity } = params;
+  const { profile, agent, storage, networkIdentity } = params;
   const { httpPort } = agent.service;
   if (httpPort === undefined) {
     throw new Error(`Agent ${agent.id} publishes no port`);
@@ -102,6 +108,7 @@ export function buildEnvironment(
     tools,
     schedule: { dueDays: profile.options.updateDueIntervalDays },
     provider: providerFacts(params.provider, profile),
+    ...(storage && { storage }),
     agent: {
       id: agent.id,
       service: agent.service.name,
@@ -159,11 +166,12 @@ function recordTools(
 }
 
 /**
- * gathers the provider facts the governor reads, with the profile's idle
- * settings capped at the furthest one deadline keeps the workstation awake
- * @param provider the provider's id, capabilities and service backend
+ * gathers the provider facts the governor and the storage watcher read, with
+ * the profile's idle settings capped at the furthest one deadline keeps the
+ * workstation awake
+ * @param provider the provider's id, capabilities, service backend and adapters
  * @param profile the profile whose idle settings are capped
- * @returns the facts the governor and the awake adapter read
+ * @returns the facts the governor, the awake adapter and the storage watcher read
  */
 function providerFacts(
   provider: EnvironmentParams['provider'],
@@ -186,6 +194,8 @@ function providerFacts(
     idleTimeoutMinutes: capped(profile.options.idleTimeoutMinutes),
     holdMaxMinutes: capped(profile.options.holdMaxMinutes),
     awakeAdapter: provider.awakeAsset?.installAs ?? null,
+    storagePath: storagePath(capabilities.storage),
+    storageAdapter: provider.storageAsset?.installAs ?? null,
   };
 }
 

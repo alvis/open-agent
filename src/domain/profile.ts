@@ -1,3 +1,4 @@
+import { STORAGE_OPTION_DEFAULTS } from '#domain/storage';
 import { isRecord } from '#kernel/guards';
 
 import { OPTION_BOUNDS, optionViolations } from './profile/options';
@@ -13,6 +14,7 @@ import {
 import type { ProductDeclarations } from '#domain/declarations';
 import type { AgentId, HarnessId, NetworkId, ProviderId } from '#domain/ids';
 import type { RecordedProfile } from '#domain/recorded';
+import type { StoragePolicyOption } from '#domain/storage';
 
 export {
   MAX_UPDATE_DUE_DAYS,
@@ -68,6 +70,16 @@ export interface ProfileOptions {
   minCpus: number;
   /** least memory, in whole gigabytes, the machine must provide */
   minMemoryGb: number;
+  /** least storage, in whole gigabytes, a new workstation starts with */
+  minStorageGb: number;
+  /** grow storage automatically; absent means on where the provider supports it */
+  autoExtend?: boolean;
+  /** used share of storage, in percent, at which it grows */
+  autoExtendThresholdPercent: number;
+  /** whole gigabytes each automatic growth adds */
+  autoExtendStepGb: number;
+  /** size, in whole gigabytes, automatic growth never exceeds */
+  storageLimitGb: number;
   /** release channel the agent follows; absent when the agent declares none */
   agentRelease?: string;
 }
@@ -118,6 +130,10 @@ export interface ProfileValidationOptions {
   isPairingRequested?: boolean;
   /** the caller supplied an idle timeout rather than taking the default */
   isIdleTimeoutRequested?: boolean;
+  /** the caller supplied a storage growth limit rather than taking the default */
+  isStorageLimitRequested?: boolean;
+  /** storage policy options the caller gave as explicit flags, which are refused when they would have no effect */
+  storagePolicyFlags?: readonly StoragePolicyOption[];
 }
 
 /** decoded value and catalog used for untrusted profile validation */
@@ -237,8 +253,10 @@ export function parseProfile({
   value,
   options,
 }: ParseProfileParams): ProfileValidation {
-  return isProfileCandidate(value)
-    ? validateProfile({ declarations, candidate: value, options })
+  const candidate = withStorageDefaults(value);
+
+  return isProfileCandidate(candidate)
+    ? validateProfile({ declarations, candidate, options })
     : {
         isValid: false,
         violations: [
@@ -347,8 +365,37 @@ function incompatibilityViolations(
         ...OPTION_BOUNDS.map(({ key }) => key),
         'isExitNodeEnabled' as const,
         'isProxyEnabled' as const,
+        'autoExtend' as const,
       ],
     }));
+}
+
+/**
+ * fills the storage options a profile recorded before they existed
+ * @param value decoded value
+ * @returns the value with each missing storage option set to its default; any other value unchanged
+ */
+function withStorageDefaults(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.options)) {
+    return value;
+  }
+  const { options } = value;
+
+  return {
+    ...value,
+    options: {
+      ...options,
+      minStorageGb:
+        options.minStorageGb ?? STORAGE_OPTION_DEFAULTS.minStorageGb,
+      autoExtendThresholdPercent:
+        options.autoExtendThresholdPercent ??
+        STORAGE_OPTION_DEFAULTS.autoExtendThresholdPercent,
+      autoExtendStepGb:
+        options.autoExtendStepGb ?? STORAGE_OPTION_DEFAULTS.autoExtendStepGb,
+      storageLimitGb:
+        options.storageLimitGb ?? STORAGE_OPTION_DEFAULTS.storageLimitGb,
+    },
+  };
 }
 
 /**
@@ -371,6 +418,8 @@ function isProfileCandidate(value: unknown): value is ProfileCandidate {
     typeof options.isExitNodeEnabled === 'boolean' &&
     typeof options.isProxyEnabled === 'boolean' &&
     OPTION_BOUNDS.every(({ key }) => typeof options[key] === 'number') &&
+    (options.autoExtend === undefined ||
+      typeof options.autoExtend === 'boolean') &&
     (options.agentRelease === undefined ||
       typeof options.agentRelease === 'string')
   );

@@ -59,6 +59,14 @@ export interface ProviderBinding {
   restorableServices: readonly string[];
 }
 
+/** a workstation's storage after a host extend */
+export interface StorageExtension {
+  /** size now provisioned, in whole GB */
+  sizeGb: number;
+  /** whether the added space becomes usable only after the next restart */
+  needsRestart: boolean;
+}
+
 /** a provider: where the workstation runs and how it is reached */
 export interface ProviderDriver<
   Name extends string = string,
@@ -135,6 +143,18 @@ export interface ProviderDriver<
     workstation: WorkstationRecord,
     offer: MachineOffer,
   ): Promise<WorkstationRecord>;
+  /**
+   * grows a workstation's storage to a size, never shrinking it: a size at
+   * or below the current one is left alone. Present exactly when the
+   * provider's storage declaration supports host growth
+   * @param workstation managed workstation
+   * @param sizeGb size to grow the storage to, in whole GB
+   * @returns the size now provisioned and whether the space needs a restart to be usable
+   */
+  extendStorage?(
+    workstation: WorkstationRecord,
+    sizeGb: number,
+  ): Promise<StorageExtension>;
   /**
    * publishes the ACP agent port, only after readiness
    * @param workstation managed workstation

@@ -62,6 +62,7 @@ describe('input source resolution', () => {
         { waitFor: 'Provider', input: '\r' },
         { waitFor: 'Minimum CPUs', input: '\r' },
         { waitFor: 'Minimum memory (GB)', input: '\r' },
+        { waitFor: 'Minimum storage (GB)', input: '\r' },
         { waitFor: 'Release channel', input: '\r' },
         { waitFor: 'Harnesses', input: '\r' },
         { waitFor: 'Network', input: '\r' },
@@ -70,7 +71,7 @@ describe('input source resolution', () => {
       ],
     );
 
-    expect(observed.matchedSteps, observed.output).toBe(8);
+    expect(observed.matchedSteps, observed.output).toBe(9);
     expect(observed.result.candidate).toMatchObject({
       provider: 'sprite',
       harnesses: ['claude', 'codex'],
@@ -78,6 +79,7 @@ describe('input source resolution', () => {
       options: {
         minCpus: 2,
         minMemoryGb: 2,
+        minStorageGb: 10,
         agentRelease: 'stable',
         isProxyEnabled: false,
         idleTimeoutMinutes: 5,

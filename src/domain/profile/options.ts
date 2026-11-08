@@ -18,7 +18,7 @@ interface OptionBound {
   /** largest valid value, when the option has one */
   maximum?: number;
   /** unit used in the violation message */
-  unit: 'minutes' | 'days' | 'CPUs' | 'GB';
+  unit: 'minutes' | 'days' | 'CPUs' | 'GB' | 'percent';
 }
 
 /** option values and selected drivers to validate */
@@ -61,6 +61,31 @@ export const OPTION_BOUNDS: readonly OptionBound[] = [
   {
     key: 'minMemoryGb',
     label: selectionLabel('minMemoryGb'),
+    minimum: 1,
+    unit: 'GB',
+  },
+  {
+    key: 'minStorageGb',
+    label: selectionLabel('minStorageGb'),
+    minimum: 1,
+    unit: 'GB',
+  },
+  {
+    key: 'autoExtendThresholdPercent',
+    label: selectionLabel('autoExtendThresholdPercent'),
+    minimum: 50,
+    maximum: 95,
+    unit: 'percent',
+  },
+  {
+    key: 'autoExtendStepGb',
+    label: selectionLabel('autoExtendStepGb'),
+    minimum: 1,
+    unit: 'GB',
+  },
+  {
+    key: 'storageLimitGb',
+    label: selectionLabel('storageLimitGb'),
     minimum: 1,
     unit: 'GB',
   },

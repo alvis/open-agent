@@ -56,6 +56,16 @@ export interface CommandOptions {
   cpu?: number;
   /** least memory in whole gigabytes the machine must provide, from --mem */
   mem?: number;
+  /** least storage in whole gigabytes a new workstation starts with, or the size setup grows it to, from --storage */
+  storage?: number;
+  /** turns automatic storage growth on or off, from --auto-extend or --no-auto-extend */
+  autoExtend?: boolean;
+  /** storage use, in percent, that triggers automatic growth, from --auto-extend-at */
+  autoExtendAt?: number;
+  /** whole gigabytes each automatic growth adds, from --auto-extend-step */
+  autoExtendStep?: number;
+  /** size, in whole gigabytes, automatic growth never exceeds, from --storage-limit */
+  storageLimit?: number;
   /** selected harnesses, from the repeatable --harness */
   harness?: HarnessId[];
   /** selected network */

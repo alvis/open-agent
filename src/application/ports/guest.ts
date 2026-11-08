@@ -57,7 +57,8 @@ export type InspectionProbe =
   | 'native'
   | 'proxy'
   | 'governor'
-  | 'boot';
+  | 'boot'
+  | 'storage';
 
 /** the lifecycle of one probe an inspection runs */
 export type ProbeEvent =

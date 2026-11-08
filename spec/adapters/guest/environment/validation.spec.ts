@@ -7,8 +7,12 @@ import {
 } from '#adapters/guest/environment/validation';
 import { GUEST_ROOT } from '#adapters/guest/platform/layout';
 import { registry } from '#composition/registry';
+import { STORAGE_OPTION_DEFAULTS } from '#domain/storage';
 
-import { environmentOf } from '../../../fixtures/environment';
+import {
+  earlierEnvironmentOf,
+  environmentOf,
+} from '../../../fixtures/environment';
 import { DISABLED_NETWORK_PROFILE } from '../../../fixtures/profile';
 
 const RECORDED = environmentOf(DISABLED_NETWORK_PROFILE);
@@ -161,6 +165,119 @@ describe('fn:parseEnvironment', () => {
 
     expect(parseEnvironment(registry, JSON.stringify(candidate))).toEqual(
       candidate,
+    );
+  });
+});
+
+describe('storage growth fields', () => {
+  it('should read a record an earlier release wrote with its profile given the storage defaults and no policy', () => {
+    const earlier = earlierEnvironmentOf(DISABLED_NETWORK_PROFILE);
+
+    const parsed = parseEnvironment(registry, JSON.stringify(earlier));
+
+    expect(parsed).toEqual({
+      ...earlier,
+      profile: {
+        ...earlier.profile,
+        options: { ...earlier.profile.options, ...STORAGE_OPTION_DEFAULTS },
+      },
+    });
+    expect(parsed).not.toHaveProperty('storage');
+    expect(parsed.profile.options).not.toHaveProperty('autoExtend');
+  });
+
+  it.each([
+    ['unsupported', { state: 'unsupported' }],
+    ['off', { state: 'off' }],
+    [
+      'on',
+      {
+        state: 'on',
+        thresholdPercent: 80,
+        stepGb: 10,
+        limitGb: 100,
+        mechanisms: ['provider-auto'],
+      },
+    ],
+  ])('should accept a recorded %s policy with storage facts', (_, storage) => {
+    const candidate = {
+      ...RECORDED,
+      provider: {
+        ...RECORDED.provider,
+        storagePath: '/data',
+        storageAdapter: '/opt/open-agent/storage.sh',
+      },
+      storage,
+    };
+
+    expect(parseEnvironment(registry, JSON.stringify(candidate))).toEqual(
+      candidate,
+    );
+  });
+
+  it.each([
+    ['a non-record', 'on'],
+    ['an unknown state', { state: 'unknown' }],
+    ['a state inherited from the prototype', { state: 'constructor' }],
+    ['an off policy with a limit', { state: 'off', limitGb: 100 }],
+    [
+      'an on policy without a step',
+      {
+        state: 'on',
+        thresholdPercent: 80,
+        limitGb: 100,
+        mechanisms: ['provider-auto'],
+      },
+    ],
+    [
+      'a threshold above 100%',
+      {
+        state: 'on',
+        thresholdPercent: 101,
+        stepGb: 10,
+        limitGb: 100,
+        mechanisms: ['provider-auto'],
+      },
+    ],
+    [
+      'no growth mechanism',
+      {
+        state: 'on',
+        thresholdPercent: 80,
+        stepGb: 10,
+        limitGb: 100,
+        mechanisms: [],
+      },
+    ],
+    [
+      'an unknown growth mechanism',
+      {
+        state: 'on',
+        thresholdPercent: 80,
+        stepGb: 10,
+        limitGb: 100,
+        mechanisms: ['manual'],
+      },
+    ],
+  ])('should reject %s as the recorded policy', (_, storage) => {
+    const candidate = { ...RECORDED, storage };
+
+    expect(() => parseEnvironment(registry, JSON.stringify(candidate))).toThrow(
+      /storage is malformed/u,
+    );
+  });
+
+  it.each([
+    ['a relative storage path', { storagePath: 'data' }],
+    ['a relative storage adapter', { storageAdapter: 'storage.sh' }],
+  ])('should reject %s in the provider facts', (_, facts) => {
+    const candidate = {
+      ...RECORDED,
+      provider: { ...RECORDED.provider, ...facts },
+    };
+
+    expect(() => parseEnvironment(registry, JSON.stringify(candidate))).toThrow(
+      /provider is malformed/u,
     );
   });
 });
