@@ -365,6 +365,26 @@ describe('fn:runCommand', () => {
     });
   });
 
+  it('should upgrade a managed workstation, refusing a tool it does not record', async () => {
+    spriteCredential();
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-command-upgrade-'),
+    );
+    await managedSprite(directory.path);
+
+    const result = await runCommand(dependencies, {
+      command: 'upgrade',
+      machine: 'workstation',
+      options: { ...options, provider: 'sprite', tools: ['bogus'] },
+    });
+
+    expect(result).toMatchObject({
+      command: 'upgrade',
+      ok: false,
+      error: { code: 'USAGE', message: 'Unknown tool: bogus' },
+    });
+  });
+
   it('should cancel termination when the typed workstation name differs', async () => {
     spriteCredential();
     await using directory = await mkdtempDisposable(
@@ -449,6 +469,7 @@ describe('fn:runCommand', () => {
             ...(supportsPairing ? ['pair'] : []),
             'inspect',
             'setup',
+            'upgrade',
             'copy',
             'terminate',
           ],

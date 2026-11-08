@@ -242,6 +242,7 @@ export function requestedCommand(argv: string[]): CommandName | null {
     case 'show':
     case 'terminate':
     case 'doctor':
+    case 'upgrade':
       return argv[0];
     default:
       return null;

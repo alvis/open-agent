@@ -22,7 +22,8 @@ import type { BootReport } from '#domain/observations/boot';
  * @param context.registry every registered driver
  * @param context.environment the recorded environment's reads
  * @param context.native the native configuration's reads
- * @returns the probes an inspection runs, settled into one report
+ * @returns the probes an inspection runs, settled into one report, and the
+ * governor read alone
  */
 export function createInspection(context: {
   registry: DriverRegistry;
@@ -90,6 +91,8 @@ export function createInspection(context: {
         ...(boot ? { boot } : {}),
       };
     },
+    // a restart that waits for an idle agent reads the governor alone
+    governor: inspectGovernor,
   };
 }
 

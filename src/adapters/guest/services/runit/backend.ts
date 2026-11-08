@@ -29,7 +29,7 @@ const SERVICES_LIMIT_MS = 300_000;
 const CONTROL_LIMIT_MS = 90_000;
 /** longest a listing may take, short enough for a provider's quick exec */
 const LIST_LIMIT_MS = 30_000;
-/** the exit of `oa_sv_stop` for a service open-agent did not install */
+/** the exit of `oa_sv_stop` and `oa_sv_restart` for a service open-agent did not install */
 const NOT_INSTALLED = 2;
 /** every status a listed service can report */
 const STATUSES: ReadonlySet<unknown> = new Set([
@@ -193,6 +193,24 @@ export class RunitServiceControl implements GuestServiceControl {
     );
     if (result.exitCode === NOT_INSTALLED) {
       throw new Error(`There is no service ${name} to stop`);
+    }
+
+    return result.exitCode === 0;
+  }
+
+  /**
+   * restarts a running service and waits for it to run again
+   * @param name name of the service to restart
+   * @returns false when it did not run again in time
+   * @throws {Error} when open-agent installed no such service
+   */
+  public async restart(name: string): Promise<boolean> {
+    const result = await this.#run(
+      this.#argv(['oa_sv_restart', name]),
+      CONTROL_LIMIT_MS,
+    );
+    if (result.exitCode === NOT_INSTALLED) {
+      throw new Error(`There is no service ${name} to restart`);
     }
 
     return result.exitCode === 0;

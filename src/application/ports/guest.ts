@@ -2,6 +2,7 @@ import type { GitIdentity } from '#domain/git';
 import type { AgentId, NetworkId } from '#domain/ids';
 import type { AgentEnvironments } from '#domain/observations/agent';
 import type { GuestEnvironment } from '#domain/observations/environment';
+import type { GovernorReport } from '#domain/observations/governor';
 import type { GuestInspection } from '#domain/observations/inspection';
 import type { UpdateStatus } from '#domain/observations/updates';
 import type { WorkstationProfile } from '#domain/profile';
@@ -309,6 +310,12 @@ export interface GuestMechanics {
       guest: GuestChannel,
       params?: InspectionParams,
     ): Promise<GuestInspection>;
+    /**
+     * reads the idle governor's recorded state alone, such as its open holds
+     * @param guest target guest
+     * @returns the validated state, or why none could be read
+     */
+    governor(guest: GuestChannel): Promise<GovernorReport>;
   };
   native: GuestNativeConfiguration;
   label: {

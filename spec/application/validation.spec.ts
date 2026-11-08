@@ -26,6 +26,27 @@ describe('fn:validateCommandRequest', () => {
     },
   );
 
+  it.each([
+    { restart: false, force: true },
+    { restart: false, waitTimeout: 60_000 },
+  ] satisfies CommandOptions[])(
+    'should refuse an upgrade restart control without --restart: %j',
+    (options) => {
+      expect(() =>
+        validateCommandRequest({ command: 'upgrade', options }),
+      ).toThrow(expect.objectContaining({ code: 'USAGE' }));
+    },
+  );
+
+  it('should accept upgrade restart controls with --restart', () => {
+    expect(() =>
+      validateCommandRequest({
+        command: 'upgrade',
+        options: { restart: true, force: true, waitTimeout: 60_000 },
+      }),
+    ).not.toThrow();
+  });
+
   it('should infer the plugins section from actions while skip flags select no section', () => {
     expect(() =>
       validateCommandRequest({

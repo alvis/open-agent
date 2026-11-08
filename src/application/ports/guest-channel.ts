@@ -60,6 +60,14 @@ export interface GuestServiceControl {
    */
   stop(name: string): Promise<boolean>;
   /**
+   * restarts a running service so it runs the tools installed since it
+   * started, and waits for it to run again; a stopped service stays stopped
+   * @param name service identifier
+   * @returns false when it did not run again in time
+   * @throws {Error} when there is no such service, or the provider reports the restart failed
+   */
+  restart(name: string): Promise<boolean>;
+  /**
    * unregisters a service
    * @param name service identifier
    */

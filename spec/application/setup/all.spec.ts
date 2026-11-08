@@ -161,6 +161,7 @@ describe('fn:setupAll', () => {
           }),
         },
         inspection: {
+          ...dependencies.guest.inspection,
           inspect: async () => ({
             services: [
               registry.agents[profile.agent].service.name,

@@ -128,6 +128,31 @@ describe('command route dispatch', () => {
       machine: 'dev-box',
       options: {},
     },
+    {
+      argv: ['upgrade', 'dev-box'],
+      command: 'upgrade',
+      machine: 'dev-box',
+      options: { restart: false, force: false },
+    },
+    {
+      argv: [
+        'upgrade',
+        'dev-box',
+        'node, t3,node',
+        '--restart',
+        '--force',
+        '--wait-timeout',
+        '1h30m',
+      ],
+      command: 'upgrade',
+      machine: 'dev-box',
+      options: {
+        tools: ['node', 't3'],
+        restart: true,
+        force: true,
+        waitTimeout: 5_400_000,
+      },
+    },
   ])(
     'should dispatch $command with parsed request and invocation state',
     async ({ argv, command, machine, options }) => {
@@ -157,8 +182,58 @@ describe('command route dispatch', () => {
       'show',
       'terminate',
       'doctor',
+      'upgrade',
     ]) {
       expect(output).toContain(`open-agent ${command} `);
     }
   });
+});
+
+describe('cmd:upgrade', () => {
+  it.each([
+    ['an empty tool name', ['upgrade', 'dev-box', 'node,,t3']],
+    [
+      'a bare number of minutes',
+      ['upgrade', 'dev-box', '--restart', '--wait-timeout', '30'],
+    ],
+    [
+      'a zero wait',
+      ['upgrade', 'dev-box', '--restart', '--wait-timeout', '0m'],
+    ],
+    [
+      'units out of order',
+      ['upgrade', 'dev-box', '--restart', '--wait-timeout', '30m1h'],
+    ],
+  ])('should refuse %s before the command runs', async (_, argv) => {
+    const { exitCode } = await route(argv);
+
+    expect(exitCode).not.toBe(0);
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['90s', 90_000],
+    ['45m', 2_700_000],
+    ['2h', 7_200_000],
+  ])(
+    'should read a --wait-timeout of %s as %d ms',
+    async (text, milliseconds) => {
+      const { exitCode } = await route([
+        'upgrade',
+        'dev-box',
+        '--restart',
+        '--wait-timeout',
+        text,
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(executeCommand).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          request: expect.objectContaining({
+            options: expect.objectContaining({ waitTimeout: milliseconds }),
+          }),
+        }),
+      );
+    },
+  );
 });

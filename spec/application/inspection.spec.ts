@@ -558,6 +558,38 @@ describe('cmd:show', () => {
     expect(execute).not.toHaveBeenCalled();
   }, 15_000);
 
+  it('should offer an upgrade of the recorded tools that goes back to the actions before upgrading', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-show-upgrade-'),
+    );
+    const { client, execute } = await installedSprite(directory.path);
+
+    const observed = await driveInk(
+      async (interaction) =>
+        chooseWorkstationAction(dependencies, {
+          request: { command: 'show', machine: 'temporary', options: {} },
+          provider: providerOf(client),
+          interaction,
+        }),
+      [
+        { waitFor: 'Workstation action', input: 'Upgrade tools' },
+        { waitFor: 'Search: Upgrade tools', input: '\r' },
+        { waitFor: 'Tools to upgrade', input: '\x1b' },
+        { waitFor: 'Workstation action', input: '\r' },
+      ],
+    );
+
+    expect(observed.matchedSteps, observed.output).toBe(4);
+    expect(observed.result).toMatchObject({ command: 'show', ok: true });
+    expect(
+      execute.mock.calls
+        .map(([file, args = []]) => [file, ...args].join(' '))
+        .filter((command) =>
+          command.includes(dependencies.guest.facts.updateGateCommand),
+        ),
+    ).toEqual([]);
+  }, 15_000);
+
   it('should not carry show consent into setup tools, and still navigates real sections', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-show-setup-'),

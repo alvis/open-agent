@@ -462,6 +462,92 @@ describe('fn:prepareResult', () => {
     });
   });
 
+  it('should keep each restart of a partly failed upgrade in its JSON and human failure', () => {
+    const result: CommandResult = {
+      command: 'upgrade',
+      ok: false,
+      data: {
+        machine,
+        selection: ['t3', 'tailscale'],
+        components: { installed: 2, skipped: 0, failed: 0 },
+        tools: [
+          { name: 't3', manager: 'npm', required: true, outcome: 'installed' },
+        ],
+        restarts: [
+          { service: 'tailscaled', tools: ['tailscale'], outcome: 'restarted' },
+          {
+            service: 't3-code',
+            tools: ['t3'],
+            outcome: 'deferred',
+            reason: 'after 30 min, an agent turn is in flight (claude)',
+          },
+        ],
+      },
+      error: {
+        code: 'CONFLICT',
+        message: 'A service still runs an older tool',
+        machine: machine.name,
+        machineId: machine.id,
+      },
+    };
+    const human = captureResult(result, {});
+    const json = captureResult(result, { json: true });
+
+    expect(human.stderr).toContain('t3-code');
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      command: 'upgrade',
+      ok: false,
+      error: { code: 'CONFLICT' },
+      data: {
+        selection: ['t3', 'tailscale'],
+        components: { installed: 2, skipped: 0, failed: 0 },
+        tools: [{ name: 't3', outcome: 'installed' }],
+        restarts: [
+          { service: 'tailscaled', outcome: 'restarted' },
+          { service: 't3-code', outcome: 'deferred', tools: ['t3'] },
+        ],
+      },
+    });
+  });
+
+  it('should report a complete upgrade and each restarted service in its JSON success', () => {
+    const result: CommandResult = {
+      command: 'upgrade',
+      ok: true,
+      data: {
+        machine,
+        selection: ['tailscale'],
+        components: { installed: 1, skipped: 0, failed: 0 },
+        tools: [
+          {
+            name: 'tailscale',
+            manager: 'brew',
+            required: true,
+            outcome: 'installed',
+          },
+        ],
+        restarts: [
+          { service: 'tailscaled', tools: ['tailscale'], outcome: 'restarted' },
+        ],
+      },
+    };
+    const json = captureResult(result, { json: true });
+
+    expect(json.stderr).toBe('');
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      command: 'upgrade',
+      ok: true,
+      data: {
+        selection: ['tailscale'],
+        components: { installed: 1, skipped: 0, failed: 0 },
+        tools: [{ name: 'tailscale', outcome: 'installed' }],
+        restarts: [
+          { service: 'tailscaled', tools: ['tailscale'], outcome: 'restarted' },
+        ],
+      },
+    });
+  });
+
   it('should show disabled checks from a typed inspection on stdout', () => {
     const output = captureResult(
       { command: 'show', ok: true, data: { machine, inspection } },

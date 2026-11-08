@@ -1,6 +1,7 @@
 # the system-package part of the debian family's updater, sourced after the
 # family library: it refreshes apt's lists and upgrades the packages of every
-# system tool environment.json records, never installing a missing one.
+# system tool environment.json records, or of those a selection names, never
+# installing a missing one.
 # environment.json lists its tools under `tools`, each with the source setup
 # resolved for it; a system source names its packages under `packages`. No
 # package it upgrades starts, stops or restarts a daemon: open-agent's
@@ -8,15 +9,18 @@
 # stays suspended. Its cleanup removes the package files of superseded
 # versions from apt's download cache once the upgrade is recorded
 
-# upgrades the system tools environment.json records
-# arguments: path of environment.json
+# upgrades the system tools environment.json records, or only those the
+# selection names, so a package no selected tool needs stays as it is
+# arguments: path of environment.json, and the selection, a comma-separated
+# list of tool names, empty or absent for every tool
 oa_update_system() {
   if ! test -x /usr/bin/jq; then
     echo "The updater needs the system's jq to read $1" >&2
     return 1
   fi
-  oa_update_packages=$(/usr/bin/jq -r \
-    '[.tools[]? | .source | select(.kind == "system") | .packages[]] | unique | .[]' \
+  oa_update_packages=$(/usr/bin/jq -r --arg only "${2-}" \
+    '[.tools[]? | select($only == "" or (.name | IN($only | split(",")[])))
+      | .source | select(.kind == "system") | .packages[]] | unique | .[]' \
     "$1") || return 1
   set --
   while IFS= read -r oa_update_package; do

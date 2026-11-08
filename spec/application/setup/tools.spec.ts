@@ -246,6 +246,33 @@ describe('fn:setupTools --update', () => {
     });
   });
 
+  it('should force the update gate over every tool, naming no selection', async () => {
+    await using directory = await mkdtempDisposable(
+      join(tmpdir(), 'open-agent-tools-gate-argv-'),
+    );
+    const execute = vi.fn<GuestExecute>(async () => ({
+      stdout: '',
+      stderr: '',
+      exitCode: 0,
+    }));
+    const sprite = createFilesystemSprite({ root: directory.path, execute });
+    holdServices(sprite);
+    const context = {
+      ...toolsContext(sprite, { persists: false }),
+      options: { update: true },
+    } satisfies SetupContext;
+
+    await setupTools(dependencies, await context.connection.guest(), context);
+
+    expect(
+      execute.mock.calls.flatMap(([, args = []]) =>
+        args.includes(UPDATE_GATE_ASSET.installAs)
+          ? [args.slice(args.indexOf(UPDATE_GATE_ASSET.installAs))]
+          : [],
+      ),
+    ).toEqual([[UPDATE_GATE_ASSET.installAs, '--force']]);
+  });
+
   it('should reject a failed forced update gate after the setup plan runs', async () => {
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-tools-gate-failure-'),

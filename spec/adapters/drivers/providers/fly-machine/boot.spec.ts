@@ -73,6 +73,7 @@ function guestWithOutput(stdout: string): GuestChannel {
       list: vi.fn(async () => []),
       ensure: vi.fn(async () => undefined),
       stop: vi.fn(async () => true),
+      restart: vi.fn(async () => true),
       remove: vi.fn(async () => undefined),
     },
   };

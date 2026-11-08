@@ -94,6 +94,14 @@ export interface CommandOptions {
   inspect?: boolean;
   /** installs the latest managed tools in place, without restarting a service */
   update?: boolean;
+  /** tools upgrade installs, from its comma-separated list; every recorded tool when absent */
+  tools?: string[];
+  /** restarts, after an upgrade, each service still running an older tool */
+  restart?: boolean;
+  /** restarts a service that waits for the agent to be idle without waiting */
+  force?: boolean;
+  /** longest, in milliseconds, a restart waits for the agent to be idle */
+  waitTimeout?: number;
   /** routes harnesses through CLIProxyAPI when enabled */
   proxy?: boolean;
   /** routes guest traffic through a network exit node when enabled */

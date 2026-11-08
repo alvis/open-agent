@@ -15,7 +15,9 @@
 # or the run was recorded, whatever each tool's outcome, and 1 otherwise.
 # `--force`, which setup passes from its session when the user asks for an
 # update, runs the updater whether or not one is due, under the lock that
-# session already holds
+# session already holds. `--only` after `--force`, which upgrade passes,
+# names the tools the forced run upgrades, comma-separated; the updater then
+# leaves every other tool, and the last success, as they are
 
 set -u
 umask 022
@@ -102,22 +104,33 @@ oa_gate_update() {
   done
   /bin/sh -c '. "$1" && . "$2" && . "$3" && . "$4" && . "$5" && . "$6" && . "$7" && . "$8" &&
     shift 8 && oa_update_run "$@"' oa-updater "$@" \
-    "$OA_ENVIRONMENT_PATH" "$OA_UPDATE_STATUS_PATH" "$oa_gate_jq" "$OA_GATE_AWAKE" "$$"
+    "$OA_ENVIRONMENT_PATH" "$OA_UPDATE_STATUS_PATH" "$oa_gate_jq" "$OA_GATE_AWAKE" "$$" \
+    "$oa_gate_only"
 }
 
+oa_gate_usage() {
+  echo 'usage: update-gate.sh [--force [--only <tool>[,<tool>...]]]' >&2
+  exit 2
+}
+
+oa_gate_force=0
+oa_gate_only=
 case $# in
-0) oa_gate_force=0 ;;
+0) ;;
 1)
-  test "$1" = --force || {
-    echo 'usage: update-gate.sh [--force]' >&2
-    exit 2
-  }
+  test "$1" = --force || oa_gate_usage
   oa_gate_force=1
   ;;
-*)
-  echo 'usage: update-gate.sh [--force]' >&2
-  exit 2
+3)
+  test "$1" = --force && test "$2" = --only || oa_gate_usage
+  # tool names as environment.json records them, joined by single commas
+  case $3 in
+  '' | ,* | *, | *,,* | *[!a-z0-9,._-]*) oa_gate_usage ;;
+  esac
+  oa_gate_force=1
+  oa_gate_only=$3
   ;;
+*) oa_gate_usage ;;
 esac
 
 if test "$(id -u)" != 0; then

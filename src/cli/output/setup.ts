@@ -128,7 +128,9 @@ function projectToolsOutcome(tools: ToolsSetupData['tools']): ToolsSetupOutput {
  * @param counts internal counts
  * @returns output counts
  */
-function projectComponents(counts: ComponentCounts): ComponentCountsOutput {
+export function projectComponents(
+  counts: ComponentCounts,
+): ComponentCountsOutput {
   return projectFields<ComponentCounts, ComponentCountsOutput>(counts, {
     installed: same,
     skipped: same,

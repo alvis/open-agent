@@ -464,6 +464,24 @@ oa_sv_stop() {
   sv -w "$OA_SV_WAIT" stop "$OA_SV_DEFINITIONS/$1" >/dev/null
 }
 
+# restarts one of open-agent's running services, so it runs the tools
+# installed since it started, and waits for it to run again; a stopped
+# service is left stopped. Exits 2 when it is not installed, and 1 when it
+# did not run again in time
+# arguments: service name
+oa_sv_restart() {
+  oa_sv_name "$1" || return 2
+  if ! test -f "$OA_SV_DEFINITIONS/$1/$OA_SV_MARK"; then
+    echo "There is no open-agent service $1" >&2
+    return 2
+  fi
+  if ! oa_sv_supervised "$1"; then
+    return 0
+  fi
+  sv status "$OA_SV_DEFINITIONS/$1" 2>/dev/null | grep -q '^run:' || return 0
+  sv -w "$OA_SV_WAIT" restart "$OA_SV_DEFINITIONS/$1" >/dev/null
+}
+
 # prints the state of each of open-agent's services as one JSON line of
 # {name, status, needs, startedAt}; a service runsv does not supervise is
 # stopped

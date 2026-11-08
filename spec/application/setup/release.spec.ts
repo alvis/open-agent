@@ -220,6 +220,7 @@ function mechanicsReporting(report: GuestReport): {
       tools: { inspectAgentRelease: async () => release },
       plan: { ...dependencies.guest.plan, run },
       inspection: {
+        ...dependencies.guest.inspection,
         inspect: async () => ({
           ...READY,
           native: {

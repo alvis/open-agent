@@ -62,6 +62,9 @@ export function validateCommandRequest(
     });
   }
   validateCommonOptions(options);
+  if (request.command === 'upgrade') {
+    validateUpgradeOptions(options);
+  }
   let plugins: HarnessPluginActions;
   const normalizedPlugins = normalizePluginOptions(options);
   try {
@@ -112,6 +115,21 @@ function validateCommonOptions(options: CommandOptions): void {
   ) {
     throw new CommandValidationError({
       message: '--no-local-credentials conflicts with a keychain source',
+    });
+  }
+}
+
+/**
+ * keeps the restart controls with the restart they control
+ * @param options parsed upgrade flags
+ */
+function validateUpgradeOptions(options: CommandOptions): void {
+  if (
+    !options.restart &&
+    (options.force || options.waitTimeout !== undefined)
+  ) {
+    throw new CommandValidationError({
+      message: '--force and --wait-timeout require --restart',
     });
   }
 }

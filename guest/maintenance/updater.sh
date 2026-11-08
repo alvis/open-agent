@@ -11,6 +11,12 @@
 # update-status.json: when it started and finished, each tool's outcome with
 # its versions before and after, and the last success, which moves only when
 # every required tool was installed or skipped and the links were restored.
+# A run given a selection upgrades only the tools it names, records the
+# selection, and never moves the last success, which stays the verdict of
+# a run over every tool. Each tool an upgrade installed gets `installedAt` in
+# environment.json, the time its upgrade finished, which a later run keeps
+# until it installs the tool again; the host compares it with a service's
+# start to find a service that still runs an older tool.
 # It leaves every daemon as it is: it neither starts, stops nor signals one,
 # and the family's fragment keeps the packages it upgrades from doing so.
 # Between tools it renews the gate's awake hold, which a provider that keeps
@@ -55,7 +61,8 @@ oa_updater_record() {
     --argjson schema "$OA_UPDATER_SCHEMA" --arg started "$oa_updater_started" \
     --arg finished "$1" --arg last "$2" --arg links "$oa_updater_links" \
     --rawfile tools "$oa_updater_work/outcomes" \
-    --rawfile cleanups "$oa_updater_work/cleanups" >"$oa_updater_record_file" &&
+    --rawfile cleanups "$oa_updater_work/cleanups" --arg only "$oa_updater_only" \
+    >"$oa_updater_record_file" &&
     chmod 0644 "$oa_updater_record_file" &&
     mv -f "$oa_updater_record_file" "$oa_updater_status"; then
     return 0
@@ -84,7 +91,28 @@ oa_updater_outcome() {
   if test "$4" = failed && test "$3" = true; then
     oa_updater_failed=1
   fi
+  if test "$4" = installed; then
+    printf '%s\t%s\n' "$1" "$(oa_updater_now)" >>"$oa_updater_work/installed"
+  fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$@" | tr -d '\r' >>"$oa_updater_work/outcomes"
+}
+
+# records in environment.json when each tool this run installed was
+# installed, keeping every other tool's record as it is; the record is
+# replaced at once, so a reader never sees half of it
+oa_updater_mark_installed() {
+  test -s "$oa_updater_work/installed" || return 0
+  oa_updater_mark_file=$(mktemp "${oa_updater_environment%/*}/.environment.XXXXXX") || return 1
+  if "$oa_updater_jq" --rawfile installed "$oa_updater_work/installed" '
+      ($installed | split("\n") | map(select(. != "") | split("\t") | {(.[0]): .[1]}) | add // {}) as $at
+      | .tools |= map(if $at[.name] then .installedAt = $at[.name] else . end)' \
+    "$oa_updater_environment" >"$oa_updater_mark_file" &&
+    chmod 0644 "$oa_updater_mark_file" &&
+    mv -f "$oa_updater_mark_file" "$oa_updater_environment"; then
+    return 0
+  fi
+  rm -f "$oa_updater_mark_file"
+  return 1
 }
 
 # prints the tools environment.json records for one manager, one a line:
@@ -92,11 +120,12 @@ oa_updater_outcome() {
 # npm dist-tag
 # arguments: the manager
 oa_updater_tools() {
-  "$oa_updater_jq" -r --arg kind "$1" -f "$oa_updater_work/tools.jq" "$oa_updater_environment"
+  "$oa_updater_jq" -r --arg kind "$1" --arg only "$oa_updater_only" \
+    -f "$oa_updater_work/tools.jq" "$oa_updater_environment"
 }
 
-# upgrades the system packages of every system tool at once, through the
-# family's fragment, reading each tool's version from its first package
+# upgrades the system packages of every selected system tool at once, through
+# the family's fragment, reading each tool's version from its first package
 oa_updater_system() {
   oa_updater_system_tools=$(oa_updater_tools system) || return 1
   test -n "$oa_updater_system_tools" || return 0
@@ -108,7 +137,7 @@ oa_updater_system() {
 $oa_updater_system_tools
 EOF
   oa_updater_hold
-  oa_update_system "$oa_updater_environment"
+  oa_update_system "$oa_updater_environment" "$oa_updater_only"
   oa_updater_system_status=$?
   while IFS="$(printf '\t')" read -r oa_updater_name oa_updater_required oa_updater_package _ <&3; do
     oa_updater_from=$(awk -F '\t' -v name="$oa_updater_name" '$1 == name { print $2; exit }' \
@@ -304,22 +333,25 @@ oa_updater_cleanup() {
     "$oa_cleanup_millis" "$3" | tr -d '\r' >>"$oa_updater_work/cleanups"
 }
 
-# runs one update: upgrades every recorded tool through its manager, restores
-# the links, records the run and cleans up after it; it returns non-zero only
-# when the run could not be recorded
+# runs one update: upgrades every recorded tool, or the selected ones, through
+# its manager, restores the links, records the run and cleans up after it; it
+# returns non-zero only when the run could not be recorded
 # arguments: path of environment.json, path of update-status.json, jq, the
-# awake command, and the pid the awake hold is keyed by
+# awake command, the pid the awake hold is keyed by, and the selection, a
+# comma-separated list of tool names, empty or absent for every tool
 oa_update_run() {
   oa_updater_environment=$1
   oa_updater_status=$2
   oa_updater_jq=$3
   oa_updater_awake=$4
   oa_updater_pid=$5
+  oa_updater_only=${6-}
   oa_updater_work=$(mktemp -d) || return 1
   trap 'rm -rf "$oa_updater_work"' EXIT
   trap 'exit 143' HUP INT TERM
   cat >"$oa_updater_work/tools.jq" <<'EOF'
 .tools[]? | select(.source.kind == $kind)
+| select($only == "" or (.name | IN($only | split(",")[])))
 | [.name, (.required | tostring),
    (.source | .packages[0] // .formula // .package // .toolchain // ""),
    (.source.distTag // "latest")]
@@ -332,6 +364,7 @@ def present: if . == "" then null else . end;
   startedAt: $started,
   finishedAt: ($finished | present),
   lastSuccess: ($last | present),
+  selection: (if $only == "" then null else ($only | split(",")) end),
   links: ($links | present),
   tools: [
     $tools | split("\n")[] | select(. != "") | split("\t")
@@ -348,6 +381,7 @@ def present: if . == "" then null else . end;
 EOF
   : >"$oa_updater_work/outcomes"
   : >"$oa_updater_work/cleanups"
+  : >"$oa_updater_work/installed"
   oa_updater_previous=$("$oa_updater_jq" -r '.lastSuccess | strings' "$oa_updater_status" 2>/dev/null) ||
     oa_updater_previous=
   oa_updater_started=$(oa_updater_now)
@@ -370,6 +404,8 @@ EOF
   # leaves the update's outcome as it is, since every tool is still in place
   oa_tools_record_versions "$oa_updater_environment" ||
     echo "the tool versions could not be recorded in $oa_updater_environment"
+  oa_updater_mark_installed ||
+    echo "the install times could not be recorded in $oa_updater_environment"
   if oa_links_restore "$oa_updater_environment"; then
     oa_updater_links=restored
   else
@@ -378,7 +414,7 @@ EOF
   fi
   oa_updater_finished=$(oa_updater_now)
   oa_updater_last=$oa_updater_previous
-  if test "$oa_updater_failed" = 0; then
+  if test "$oa_updater_failed" = 0 && test -z "$oa_updater_only"; then
     oa_updater_last=$oa_updater_finished
   fi
   echo "update finished at $oa_updater_finished; links $oa_updater_links; last success ${oa_updater_last:-none}"

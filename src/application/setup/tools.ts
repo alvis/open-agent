@@ -1,19 +1,16 @@
 import { markInstallationReady } from '#application/installation/readiness';
+import { countOutcomes, runUpdate } from '#application/update';
 import { CommandFault } from '#kernel/faults';
-import { promptUnavailableDetail, traceStage } from '#kernel/operation';
+import { promptUnavailableDetail } from '#kernel/operation';
 
 import { installSetupPlan } from './installation';
 
-import type { ComponentCounts, ToolsSetupData } from '#application/data';
+import type { ToolsSetupData } from '#application/data';
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { Interaction } from '#application/ports/interaction';
-import type { UpdateStatus } from '#domain/observations/updates';
 
 import type { SetupContext } from './context';
-
-/** longest a forced update may take */
-const UPDATE_LIMIT_MS = 3_600_000;
 
 /**
  * refreshes managed developer tools on the guest: an update runs the setup
@@ -29,7 +26,7 @@ export async function setupTools(
   guest: GuestChannel,
   context: SetupContext,
 ): Promise<ToolsSetupData> {
-  const { options, interaction } = context;
+  const { options, interaction, connection } = context;
   // a changed due interval was stored before this section ran;
   // with nothing else asked for and nobody to ask, that is the whole outcome
   if (context.persistsProfile && !options.update && !interaction) {
@@ -82,60 +79,11 @@ export async function setupTools(
   });
   await installSetupPlan(dependencies, context);
   await markInstallationReady(dependencies.guest, guest);
-  const status = await forceUpdate(dependencies, guest, context);
+  const status = await runUpdate(dependencies, { connection, guest });
 
   return status?.finishedAt
     ? { tools: 'updated', components: countOutcomes(status) }
     : { tools: 'updated' };
-}
-
-/**
- * runs the update gate whether or not an update is due, in the setup session,
- * timed as its own stage
- * @param dependencies the guest mechanics
- * @param guest guest channel of the managed workstation
- * @param context the setup session
- * @returns what the update recorded, when it recorded anything
- * @throws {CommandFault} when the gate could not record the update
- */
-async function forceUpdate(
-  dependencies: Pick<ApplicationDependencies, 'guest'>,
-  guest: GuestChannel,
-  context: Pick<SetupContext, 'connection'>,
-): Promise<UpdateStatus | undefined> {
-  const { exitCode } = await traceStage({
-    stage: 'setup.update',
-    action: async () =>
-      context.connection.run({
-        argv: [dependencies.guest.facts.updateGateCommand, '--force'],
-        account: 'root',
-        timeoutMs: UPDATE_LIMIT_MS,
-      }),
-    context: { succeeded: (result) => result.exitCode === 0 },
-  });
-  if (exitCode !== 0) {
-    throw new CommandFault({
-      code: 'PROVIDER',
-      message: `The update gate exited with status ${String(exitCode)}; see ${dependencies.guest.facts.updateLog} on the guest`,
-    });
-  }
-
-  return dependencies.guest.environment.readUpdateStatus(guest);
-}
-
-/**
- * summarizes an update as counts of current, untouched and failed tools
- * @param status what the update recorded
- * @returns how many tools are current, were skipped and failed
- */
-function countOutcomes(status: UpdateStatus): ComponentCounts {
-  const outcomes = status.tools.map(({ outcome }) => outcome);
-
-  return {
-    installed: outcomes.filter((outcome) => outcome === 'installed').length,
-    skipped: outcomes.filter((outcome) => outcome === 'skipped').length,
-    failed: outcomes.filter((outcome) => outcome === 'failed').length,
-  };
 }
 
 /**

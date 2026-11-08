@@ -4,6 +4,7 @@ import { summarizeMachine } from '#application/machine';
 import { withBackNavigation } from '#application/navigation';
 import { setupWorkstation } from '#application/setup';
 import { terminateWorkstation } from '#application/terminate';
+import { upgradeWorkstation } from '#application/upgrade';
 import { CommandFault } from '#kernel/faults';
 import { InteractionExit, returnOnBack } from '#kernel/navigation';
 import { currentOperation, checkOperation } from '#kernel/operation';
@@ -36,7 +37,7 @@ interface WorkstationActionContext {
 }
 
 type WorkstationAction =
-  'details' | 'pair' | 'inspect' | 'setup' | 'copy' | 'terminate';
+  'details' | 'pair' | 'inspect' | 'setup' | 'upgrade' | 'copy' | 'terminate';
 
 /**
  * lists the actions for one workstation, named after its recorded drivers
@@ -78,6 +79,12 @@ function workstationActions(
       value: 'setup',
       description:
         'Choose plugins, network, proxy, Git, tools or another setup area',
+    },
+    {
+      label: 'Upgrade tools',
+      value: 'upgrade',
+      description:
+        'Choose managed tools to upgrade now and whether to restart the services still running older ones',
     },
     { label: `Copy ${agent.displayName} URL`, value: 'copy' },
     { label: 'Permanently terminate', value: 'terminate' },
@@ -174,16 +181,9 @@ async function applyWorkstationAction(
   const actionRequest = menuActionRequest(request);
   currentOperation()?.select(actionCommand(action));
   try {
-    if (action === 'setup') {
-      return await setupWorkstation(dependencies, {
-        request: { ...actionRequest, command: 'setup' },
-        provider,
-        interaction: nested,
-      });
-    }
-    if (action === 'terminate') {
-      return await terminateWorkstation(dependencies, {
-        request: { ...actionRequest, command: 'terminate' },
+    if (action === 'setup' || action === 'upgrade' || action === 'terminate') {
+      return await runMenuCommand(dependencies, action, {
+        request: actionRequest,
         provider,
         interaction: nested,
       });
@@ -219,6 +219,30 @@ async function applyWorkstationAction(
       },
     };
   }
+}
+
+/**
+ * runs the command a mutating menu action stands for; an upgrade asks for
+ * its tools and restart, since a menu request carries no upgrade flags
+ * @param dependencies the registered drivers, the profile defaults, the guest mechanics, what this computer provides
+ * @param command the command the action runs
+ * @param params the action's own request, provider and nested prompts
+ * @returns the command's result
+ */
+async function runMenuCommand(
+  dependencies: ApplicationDependencies,
+  command: Extract<CommandName, 'setup' | 'upgrade' | 'terminate'>,
+  params: InteractiveWorkstationCommandParams,
+): Promise<CommandResult> {
+  const request = { ...params.request, command };
+  if (command === 'setup') {
+    return setupWorkstation(dependencies, { ...params, request });
+  }
+  if (command === 'upgrade') {
+    return upgradeWorkstation(dependencies, { ...params, request, ask: true });
+  }
+
+  return terminateWorkstation(dependencies, { ...params, request });
 }
 
 /**
@@ -267,9 +291,7 @@ function menuActionRequest(request: CommandRequest): CommandRequest {
  * @returns actual command identity
  */
 function actionCommand(action: WorkstationAction): CommandName {
-  return action === 'setup'
-    ? 'setup'
-    : action === 'terminate'
-      ? 'terminate'
-      : 'show';
+  return action === 'setup' || action === 'upgrade' || action === 'terminate'
+    ? action
+    : 'show';
 }
