@@ -115,3 +115,31 @@ EXAMPLES
   open-agent doctor devbox --json
   open-agent doctor devbox --non-interactive`,
 } as const;
+
+/** an upgrade leaves every service alone unless a restart is asked for */
+export const upgradeDocumentation = {
+  brief:
+    'upgrade managed tools, and restart the services still running older ones',
+  customUsage: [
+    '[<workstation>] [<tools>] [--restart [--force] [--wait-timeout DURATION]] [options]',
+  ],
+  fullDescription: `Upgrades managed tools on the guest in place: the comma-separated tools
+named, as the workstation records them, or every managed tool. An upgrade alone
+restarts no service; a service keeps running its older tool until it restarts.
+--restart then restarts each service started before a tool it runs on was
+installed. The network daemon restarts at once; the agent waits until no agent
+turn is in flight, checked every 15 seconds, for up to --wait-timeout (30m by
+default), and --force restarts it without waiting. A service left running an
+older tool is reported and fails the command; running upgrade --restart again
+restarts it. A tool that fails to upgrade stops neither the other tools nor the
+restarts, but it is reported and fails the command too. A workstation an
+earlier open-agent set up is refused until setup brings it up to date.
+${PROVIDER_SELECTION}
+
+EXAMPLES
+  open-agent upgrade devbox
+  open-agent upgrade devbox t3,node --restart
+  open-agent upgrade devbox tailscale --restart
+  open-agent upgrade devbox --restart --wait-timeout 1h
+  open-agent upgrade devbox --restart --force`,
+} as const;

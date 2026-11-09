@@ -6,6 +6,7 @@ import { projectList } from './list';
 import { projectSetup, projectSetupFailure } from './setup';
 import { projectShow } from './show';
 import { projectTerminate } from './terminate';
+import { projectUpgrade } from './upgrade';
 
 import type { CommandResult, CommandSuccess } from '#application/result';
 
@@ -74,6 +75,13 @@ function projectSuccess(result: CommandSuccess): SuccessOutput {
         data: projectDoctor(result.data),
         retainedCredential,
       };
+    case 'upgrade':
+      return {
+        command: 'upgrade',
+        ok: true,
+        data: projectUpgrade(result.data),
+        retainedCredential,
+      };
     // no default
   }
 }
@@ -119,6 +127,13 @@ function projectFailure(result: Failed): FailureOutput {
         ok: false,
         error,
         data: optional(result.data, projectDoctor),
+      };
+    case 'upgrade':
+      return {
+        command: 'upgrade',
+        ok: false,
+        error,
+        data: optional(result.data, projectUpgrade),
       };
     // no default
   }

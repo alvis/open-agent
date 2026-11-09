@@ -120,4 +120,29 @@ describe('cl:RunitServiceControl', () => {
     run.mockResolvedValueOnce({ exitCode: 2, stdout: '', stderr: '' });
     await expect(control.stop('absent')).rejects.toThrow(/no service.*absent/u);
   });
+
+  it('should restart through the root library runner and report one that did not run again', async () => {
+    await expect(control.restart(service.name)).resolves.toBe(true);
+    run.mockResolvedValueOnce({ exitCode: 1, stdout: '', stderr: '' });
+    await expect(control.restart(service.name)).resolves.toBe(false);
+
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenNthCalledWith(
+      1,
+      ['/bin/dash', '-c', expect.stringContaining("'oa_sv_restart' 'agent'")],
+      90_000,
+    );
+    expect(run).toHaveBeenNthCalledWith(
+      2,
+      ['/bin/dash', '-c', expect.stringContaining("'oa_sv_restart' 'agent'")],
+      90_000,
+    );
+  });
+
+  it('should refuse restarting an uninstalled service', async () => {
+    run.mockResolvedValueOnce({ exitCode: 2, stdout: '', stderr: '' });
+    await expect(control.restart('absent')).rejects.toThrow(
+      /no service.*absent/u,
+    );
+  });
 });

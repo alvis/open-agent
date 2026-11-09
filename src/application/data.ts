@@ -9,7 +9,10 @@ import type { HarnessId, ProviderId } from '#domain/ids';
 import type { BootReport } from '#domain/observations/boot';
 import type { GuestEnvironment } from '#domain/observations/environment';
 import type { GuestInspection } from '#domain/observations/inspection';
-import type { UpdateStatus } from '#domain/observations/updates';
+import type {
+  UpdateStatus,
+  UpdateToolOutcome,
+} from '#domain/observations/updates';
 import type { WorkstationProfile } from '#domain/profile';
 import type { CommandErrorCode } from '#kernel/faults';
 import type { PairingSecret } from '#kernel/pairing-secret';
@@ -237,6 +240,44 @@ export type SetupData =
     })
   | LocalCredentialData;
 
+/** what an upgrade did to one service still running an older tool */
+export type ServiceRestart = RestartedService | UnrestartedService;
+
+/** a stale service that runs again on its upgraded tools */
+export interface RestartedService {
+  /** the service */
+  service: string;
+  /** the tools installed since the service started */
+  tools: string[];
+  /** it runs again */
+  outcome: 'restarted';
+}
+
+/** a stale service an upgrade left running an older tool */
+export interface UnrestartedService {
+  /** the service */
+  service: string;
+  /** the tools installed since the service started */
+  tools: string[];
+  /** `deferred` when the agent stayed busy, `failed` otherwise */
+  outcome: 'deferred' | 'failed';
+  /** why it was deferred or failed */
+  reason: string;
+}
+
+/** the tools an upgrade installed and the services it restarted */
+export interface UpgradeData {
+  machine: MachineSummary;
+  /** the tools the upgrade was asked for: those named, or every recorded tool */
+  selection: string[];
+  /** how many tools are current, were skipped and failed, when the update recorded a finished run */
+  components?: ComponentCounts;
+  /** what the update did to each selected tool, as it recorded it */
+  tools: UpdateToolOutcome[];
+  /** each service still running an older tool and what became of it; absent without --restart */
+  restarts?: ServiceRestart[];
+}
+
 /** success payload for each executed command */
 export interface CommandData {
   create: CreateData;
@@ -245,6 +286,7 @@ export interface CommandData {
   show: ShowData;
   terminate: TerminateData;
   doctor: DoctorData;
+  upgrade: UpgradeData;
 }
 
 /** failed creation can still preserve verified preflight facts */
@@ -269,4 +311,5 @@ export interface CommandFailureData {
   show: never;
   terminate: TerminateData;
   doctor: DoctorData;
+  upgrade: UpgradeData;
 }

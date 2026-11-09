@@ -32,6 +32,8 @@ export interface EnvironmentToolOutput {
   source: unknown;
   /** the version its manager reported installed when it was last recorded */
   version?: string;
+  /** when an upgrade last installed it; absent when none did since setup */
+  installedAt?: string;
 }
 
 /** an optional tool setup did not install */
@@ -87,6 +89,8 @@ export interface ServiceDefinitionOutput {
   needs: readonly string[];
   httpPort?: number;
   machineLog?: boolean;
+  runsOn?: readonly string[];
+  waitsForIdle?: boolean;
 }
 
 /** a periodic job the guest runs */
@@ -239,6 +243,7 @@ export function projectTool(tool: EnvironmentTool): EnvironmentToolOutput {
     executables: same,
     source: same,
     version: same,
+    installedAt: same,
   });
 }
 
@@ -296,6 +301,8 @@ function projectServiceDefinition(
     needs: same,
     httpPort: same,
     machineLog: same,
+    runsOn: same,
+    waitsForIdle: same,
   });
 }
 

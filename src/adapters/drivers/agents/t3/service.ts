@@ -44,7 +44,8 @@ export const T3_LAUNCHER = guestAsset(
 
 /**
  * the T3 service; it lists no dependencies because core adds the daemon of
- * whichever network the workstation selected
+ * whichever network the workstation selected, and an upgrade restarts it only
+ * once no agent turn is in flight
  */
 export const t3Service: ServiceDefinition = {
   name: T3_SERVICE_NAME,
@@ -53,4 +54,9 @@ export const t3Service: ServiceDefinition = {
   account: 'agent',
   needs: [],
   httpPort: T3_HTTP_PORT,
+  // the T3 CLI and the runtimes it runs on; the harnesses it spawns are
+  // processes of their own, never kept running across turns as a service
+  runsOn: ['t3', 'bun', 'node'],
+  // a restart cuts short every turn in flight
+  waitsForIdle: true,
 };

@@ -6,6 +6,7 @@ import {
   agentService,
   dependOnDaemon,
   networkDaemon,
+  staleServices,
 } from '#domain/services';
 
 import type { ServiceDefinition } from '#domain/services';
@@ -83,5 +84,80 @@ describe('fn:networkDaemon', () => {
   it('should find a daemon only for a network that declares one', () => {
     expect(networkDaemon(registry, 'none')).toBeUndefined();
     expect(networkDaemon(registry, 'tailscale')?.name).toBe('tailscaled');
+  });
+});
+
+describe('fn:staleServices', () => {
+  const agent: ServiceDefinition = {
+    name: 't3-code',
+    command: '/usr/local/bin/t3',
+    arguments: [],
+    account: 'agent',
+    needs: [],
+    runsOn: ['t3', 'bun', 'node'],
+    waitsForIdle: true,
+  };
+  const daemon: ServiceDefinition = {
+    name: 'tailscaled',
+    command: '/usr/local/bin/tailscaled',
+    arguments: [],
+    account: 'root',
+    needs: [],
+    runsOn: ['tailscale'],
+  };
+  const cron: ServiceDefinition = {
+    name: 'open-agent-cron',
+    command: '/usr/sbin/cron',
+    arguments: [],
+    account: 'root',
+    needs: [],
+  };
+  const STARTED = '2026-11-01T10:00:00Z';
+  const running = (name: string, startedAt = STARTED) => ({
+    name,
+    status: 'running' as const,
+    needs: [],
+    startedAt,
+  });
+
+  it('should name each running service a tool it runs on was installed for after it started', () => {
+    const result = staleServices(
+      [agent, daemon, cron],
+      [running('t3-code'), running('tailscaled'), running('open-agent-cron')],
+      [
+        { name: 'node', installedAt: '2026-11-02T00:00:00Z' },
+        { name: 'bun', installedAt: '2026-11-03T00:00:00Z' },
+        { name: 'tailscale', installedAt: '2026-10-30T00:00:00Z' },
+        { name: 'codex', installedAt: '2026-11-03T00:00:00Z' },
+      ],
+    );
+
+    expect(result).toEqual([{ service: agent, tools: ['bun', 'node'] }]);
+  });
+
+  it('should keep a service whose start time is unknown or that is not running', () => {
+    const result = staleServices(
+      [agent, daemon],
+      [
+        { name: 't3-code', status: 'running', needs: [] },
+        { ...running('tailscaled'), status: 'stopped' },
+      ],
+      [
+        { name: 't3', installedAt: '2026-11-02T00:00:00Z' },
+        { name: 'tailscale', installedAt: '2026-11-02T00:00:00Z' },
+      ],
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it('should ignore a tool without a readable install time', () => {
+    const result = staleServices(
+      [daemon],
+      [running('tailscaled')],
+      [{ name: 'tailscale' }, { name: 'tailscale', installedAt: 'soon' }],
+    );
+
+    expect(result).toEqual([]);
   });
 });

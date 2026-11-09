@@ -10,6 +10,7 @@ import {
 } from '#application/inspection';
 import { setupWorkstation } from '#application/setup';
 import { terminateWorkstation } from '#application/terminate';
+import { upgradeWorkstation } from '#application/upgrade';
 import { validateCommandRequest } from '#application/validation';
 import { PROVIDER_IDS } from '#domain/ids';
 import { prerequisiteDetails } from '#domain/prerequisites';
@@ -296,6 +297,8 @@ async function dispatchAuthenticated(
         provider,
         interaction,
       }),
+    upgrade: async () =>
+      upgradeWorkstation(dependencies, { request, provider, interaction }),
   } satisfies Record<AuthenticatedCommand, () => Promise<CommandResult>>;
 
   return actions[request.command]();

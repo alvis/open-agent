@@ -1,5 +1,6 @@
 import { buildCommand } from '@stricli/core';
 
+import { upgradeCommand } from './commands/upgrade';
 import {
   createDocumentation,
   doctorDocumentation,
@@ -56,11 +57,13 @@ type OptionalBooleanKey =
 type RequiredBooleanFields<T> = Omit<T, BooleanKeys<T>> &
   Required<Pick<T, Exclude<BooleanKeys<T>, OptionalBooleanKey>>> &
   Pick<T, Extract<BooleanKeys<T>, OptionalBooleanKey>>;
-type FlagsFor<T> = RequiredBooleanFields<
+/** the command options a set of flag definitions parses into */
+export type FlagsFor<T> = RequiredBooleanFields<
   Pick<CommandOptions, Extract<keyof T, keyof CommandOptions>>
 >;
 type CommonFlags = FlagsFor<typeof commonFlags>;
-type ProviderCommonFlags = CommonFlags & FlagsFor<typeof providerFlags>;
+/** the options of a command on an existing workstation that only reads */
+export type ProviderCommonFlags = CommonFlags & FlagsFor<typeof providerFlags>;
 type ConfigurationFlags = FlagsFor<
   typeof consentFlags &
     typeof pairingFlags &
@@ -320,4 +323,5 @@ export const commandRoutes = {
   show: withRootUsage(showCommand, '[<workstation>]'),
   terminate: withRootUsage(terminateCommand, '[<workstation>]'),
   doctor: withRootUsage(doctorCommand, '[<workstation>]'),
+  upgrade: withRootUsage(upgradeCommand, '[<workstation>] [<tools>]'),
 };

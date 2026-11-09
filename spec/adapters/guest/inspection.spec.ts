@@ -25,6 +25,7 @@ function inspectionGuest(): GuestChannel {
       list: async () => [],
       ensure: async () => undefined,
       stop: async () => true,
+      restart: async () => true,
       remove: async () => undefined,
     },
     exec: async ({ arguments: args }) => ({

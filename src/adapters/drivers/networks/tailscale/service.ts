@@ -32,6 +32,8 @@ export const tailscaleDaemon: ServiceDefinition = {
   arguments: [tailscaleLauncher.asset.installAs],
   account: 'root',
   needs: [],
+  // a restart only interrupts the tunnel for a moment, so it never waits
+  runsOn: ['tailscale'],
 };
 
 /**

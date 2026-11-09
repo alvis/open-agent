@@ -122,6 +122,35 @@ export class SpriteServiceControl implements GuestServiceControl {
   }
 
   /**
+   * restarts a running service and waits for it to run again; a service that
+   * is not running stays as it is
+   * @param name service identifier
+   * @returns true once the service runs again
+   * @throws {Error} when the Sprite has no such service, or reports the restart failed
+   */
+  public async restart(name: string): Promise<boolean> {
+    const services = await runBoundedIO(async () =>
+      this.#request(async () => this.#sprite.listServices()),
+    );
+    const existing = services.find((service) => service.name === name);
+    if (!existing) {
+      throw new Error(`There is no service ${name} to restart`);
+    }
+    if (existing.state?.status !== 'running') {
+      return true;
+    }
+    await drainServiceStartup(
+      name,
+      await this.#stream(async () =>
+        this.#sprite.restartService(name, REPLACEMENT_STARTUP_WINDOW),
+      ),
+    );
+    await waitForService(this.#sprite, name);
+
+    return true;
+  }
+
+  /**
    * unregisters a service
    * @param name service identifier
    */

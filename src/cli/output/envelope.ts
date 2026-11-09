@@ -8,6 +8,7 @@ import type { ListDataOutput } from './list';
 import type { SetupDataOutput, SetupFailureDataOutput } from './setup';
 import type { ShowDataOutput } from './show';
 import type { TerminateDataOutput } from './terminate';
+import type { UpgradeDataOutput } from './upgrade';
 
 /** success payload each command reports under schema version 1 */
 export interface CommandDataOutput {
@@ -17,6 +18,7 @@ export interface CommandDataOutput {
   show: ShowDataOutput;
   terminate: TerminateDataOutput;
   doctor: DoctorDataOutput;
+  upgrade: UpgradeDataOutput;
 }
 
 /** observations each command keeps after failure under schema version 1 */
@@ -27,6 +29,7 @@ export interface CommandFailureDataOutput {
   show: never;
   terminate: TerminateDataOutput;
   doctor: DoctorDataOutput;
+  upgrade: UpgradeDataOutput;
 }
 
 /** a successful command with the credential it retained */

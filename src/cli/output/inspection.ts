@@ -281,21 +281,30 @@ export function projectUpdates(updates: UpdateStatus): UpdateStatusOutput {
     startedAt: same,
     finishedAt: same,
     lastSuccess: same,
-    tools: each((tool) =>
-      projectFields<UpdateToolOutcome, UpdateStatusOutput['tools'][number]>(
-        tool,
-        {
-          name: same,
-          manager: same,
-          required: same,
-          outcome: same,
-          from: same,
-          to: same,
-          reason: same,
-        },
-      ),
-    ),
+    tools: each(projectUpdateTool),
   });
+}
+
+/**
+ * projects what one update did to one tool
+ * @param tool internal tool outcome
+ * @returns output tool outcome
+ */
+export function projectUpdateTool(
+  tool: UpdateToolOutcome,
+): UpdateStatusOutput['tools'][number] {
+  return projectFields<UpdateToolOutcome, UpdateStatusOutput['tools'][number]>(
+    tool,
+    {
+      name: same,
+      manager: same,
+      required: same,
+      outcome: same,
+      from: same,
+      to: same,
+      reason: same,
+    },
+  );
 }
 
 /**

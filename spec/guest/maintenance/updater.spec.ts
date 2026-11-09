@@ -22,8 +22,11 @@ const INSTALLED = { jq: '1.7.1', gh: '2.60.0', node: '22.1.0' } as const;
 const NEWER = { gh: '2.61.0', node: '22.2.0' } as const;
 const PREVIOUS_SUCCESS = '2026-01-01T00:00:00Z';
 
-const UPDATE = `OA_VERSIONS_JQ=$(command -v jq)
-oa_update_system() { :; }
+const buildUpdateScript = (
+  only: string,
+): string => `OA_VERSIONS_JQ=$(command -v jq)
+exec 8>&1
+oa_update_system() { echo "system update for \${2:-every tool}" >&8; }
 oa_update_system_clean() { :; }
 oa_update_system_clean_roots() { :; }
 oa_npm_clean() { :; }
@@ -32,7 +35,7 @@ oa_rustup_clean() { :; }
 oa_rustup_clean_roots() { :; }
 oa_links_restore() { :; }
 (oa_update_run "$OA_TEST_WORK/environment.json" "$OA_TEST_WORK/update-status.json" \\
-  "$(command -v jq)" true 1) >/dev/null 2>&1`;
+  "$(command -v jq)" true 1 '${only}') >/dev/null 2>&1`;
 
 /** one tool's outcome in update-status.json */
 interface ToolOutcome {
@@ -45,33 +48,86 @@ interface ToolOutcome {
   reason?: string;
 }
 
-async function update(scenario: Omit<BrewScenario, 'installed'>) {
+/** what one update is given beside the stand-in Homebrew's scenario */
+interface UpdateOptions {
+  /** the selection, a comma-separated list of tool names, empty for every tool */
+  only?: string;
+  /** each tool's install time environment.json records before the update */
+  installedAt?: Record<string, string>;
+  /** tools environment.json records after the brew ones */
+  extraTools?: readonly object[];
+}
+
+/**
+ * runs one update and reads back everything it recorded
+ * @param scenario what the stand-in Homebrew has and does, beyond the installed versions
+ * @param options the selection and the install times recorded beforehand
+ * @returns the update's summary, each tool's recorded install time and the recorded selection
+ */
+async function runUpdate(
+  scenario: Omit<BrewScenario, 'installed'>,
+  options: UpdateOptions = {},
+) {
+  const { only = '', installedAt = {}, extraTools = [] } = options;
+  const environment = {
+    tools: [
+      ...ENVIRONMENT.tools.map((tool) =>
+        installedAt[tool.name]
+          ? { ...tool, installedAt: installedAt[tool.name] }
+          : tool,
+      ),
+      ...extraTools,
+    ],
+  };
   const run = await runWithBrew({
     scenario: { installed: INSTALLED, newer: NEWER, ...scenario },
     libraries: ['tools/versions.sh', 'maintenance/updater.sh'],
-    script: UPDATE,
+    script: buildUpdateScript(only),
     files: {
-      'environment.json': JSON.stringify(ENVIRONMENT),
+      'environment.json': JSON.stringify(environment),
       'update-status.json': JSON.stringify({ lastSuccess: PREVIOUS_SUCCESS }),
     },
   });
   const status = JSON.parse(run.status) as {
     lastSuccess: string | null;
+    selection: string[] | null;
     tools: ToolOutcome[];
   };
   const recorded = JSON.parse(run.environment) as {
-    tools: Array<{ name: string; version?: string }>;
+    tools: Array<{ name: string; version?: string; installedAt?: string }>;
   };
 
   return {
-    upgrades: run.calls.filter((call) => call.startsWith('upgrade')),
-    succeeded: status.lastSuccess !== PREVIOUS_SUCCESS,
-    lastSuccess: status.lastSuccess,
-    tools: status.tools,
-    versions: Object.fromEntries(
-      recorded.tools.map(({ name, version }) => [name, version]),
+    summary: {
+      upgrades: run.calls.filter((call) => call.startsWith('upgrade')),
+      succeeded: status.lastSuccess !== PREVIOUS_SUCCESS,
+      lastSuccess: status.lastSuccess,
+      tools: status.tools,
+      versions: Object.fromEntries(
+        recorded.tools.map(({ name, version }) => [name, version]),
+      ),
+    },
+    installs: Object.fromEntries(
+      recorded.tools.flatMap(({ name, installedAt: at }) =>
+        at ? [[name, at]] : [],
+      ),
     ),
+    selection: status.selection,
+    systemUpdates: run.stdout.split('\n').filter((line) => line !== ''),
   };
+}
+
+/**
+ * runs one update and summarizes its upgrades, verdict and recorded versions
+ * @param scenario what the stand-in Homebrew has and does, beyond the installed versions
+ * @param options the selection and the install times recorded beforehand
+ * @returns the brew upgrades run, whether the last success moved, the outcomes and versions
+ */
+async function update(
+  scenario: Omit<BrewScenario, 'installed'>,
+  options: UpdateOptions = {},
+) {
+  return (await runUpdate(scenario, options)).summary;
 }
 
 const outcome = (
@@ -359,5 +415,59 @@ describe('fn:oa_update_run', () => {
       ],
       versions: INSTALLED,
     });
+  });
+  it('should record when each installed tool was installed and keep the others', async () => {
+    const { installs, selection } = await runUpdate(
+      { outdated: ['gh'] },
+      { installedAt: { node: '2026-01-02T00:00:00Z' } },
+    );
+
+    expect(installs).toEqual({
+      gh: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/),
+      node: '2026-01-02T00:00:00Z',
+    });
+    expect(selection).toBeNull();
+  });
+
+  it('should upgrade only the selected tools, record the selection and keep the last success', async () => {
+    const { summary, installs, selection } = await runUpdate(
+      { outdated: ['gh', 'node'] },
+      { only: 'gh,jq' },
+    );
+
+    expect(summary).toEqual({
+      upgrades: ['upgrade --formula gh'],
+      succeeded: false,
+      lastSuccess: PREVIOUS_SUCCESS,
+      tools: [
+        outcome('jq', {
+          outcome: 'skipped',
+          to: '1.7.1',
+          reason: 'it is current',
+        }),
+        outcome('gh', { outcome: 'installed', to: '2.61.0' }),
+      ],
+      versions: { ...INSTALLED, gh: '2.61.0' },
+    });
+    expect(selection).toEqual(['gh', 'jq']);
+    expect(Object.keys(installs)).toEqual(['gh']);
+  });
+
+  it('should hand the selection to the system update', async () => {
+    const { systemUpdates } = await runUpdate(
+      {},
+      {
+        only: 'gh,curl',
+        extraTools: [
+          {
+            name: 'curl',
+            required: false,
+            source: { kind: 'system', packages: ['curl'] },
+          },
+        ],
+      },
+    );
+
+    expect(systemUpdates).toEqual(['system update for gh,curl']);
   });
 });

@@ -47,6 +47,12 @@ function createServiceSprite(services: ServiceWithState[]): Sprite {
             new Response('{"type":"complete","timestamp":0}\n'),
           ),
       ),
+      restartService: vi.fn<Sprite['restartService']>(
+        async () =>
+          new ServiceLogStream(
+            new Response('{"type":"complete","timestamp":0}\n'),
+          ),
+      ),
       deleteService: vi.fn<Sprite['deleteService']>(async () => undefined),
       createService: vi.fn<Sprite['createService']>(
         async () =>
@@ -335,5 +341,36 @@ describe('mt:SpriteServiceControl.stop', () => {
     const result = await guestOf(sprite).services.stop('tailscaled');
 
     expect(result).toBe(false);
+  });
+});
+
+describe('mt:SpriteServiceControl.restart', () => {
+  it('should restart a running service and wait for it to run again', async () => {
+    const sprite = createServiceSprite([tailscale]);
+
+    const result = await guestOf(sprite).services.restart('tailscaled');
+
+    expect(result).toBe(true);
+    expect(sprite.restartService).toHaveBeenCalledWith('tailscaled', '5s');
+    expect(sprite.getService).toHaveBeenCalledWith('tailscaled');
+  });
+
+  it('should leave a service that is not running as it is', async () => {
+    const sprite = createServiceSprite([
+      { ...tailscale, state: { name: 'tailscaled', status: 'stopped' } },
+    ]);
+
+    const result = await guestOf(sprite).services.restart('tailscaled');
+
+    expect(result).toBe(true);
+    expect(sprite.restartService).not.toHaveBeenCalled();
+  });
+
+  it('should refuse restarting a service the Sprite does not run', async () => {
+    const sprite = createServiceSprite([]);
+
+    await expect(guestOf(sprite).services.restart('absent')).rejects.toThrow(
+      /no service.*absent/u,
+    );
   });
 });

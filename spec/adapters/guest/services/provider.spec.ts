@@ -15,6 +15,7 @@ const control = {
   ),
   ensure: vi.fn<GuestServiceControl['ensure']>(async () => undefined),
   stop: vi.fn<GuestServiceControl['stop']>(async () => true),
+  restart: vi.fn<GuestServiceControl['restart']>(async () => true),
   remove: vi.fn<GuestServiceControl['remove']>(async () => undefined),
 } satisfies GuestServiceControl;
 const base = {
