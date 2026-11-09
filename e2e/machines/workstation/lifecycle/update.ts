@@ -197,9 +197,20 @@ export async function checkRepeatedUpdate(
     .map(({ name: tool }) => tool)
     .sort();
 
-  await annotate(
-    `forced update: first ${firstMs} ms (re-linked ${STALE_COMPONENT}, upgraded ${codexTool.name}), repeated ${secondMs} ms (all skipped)`,
+  const changed = statusRepeated.tools.filter(
+    ({ outcome }) => outcome !== 'skipped',
   );
+  const repeatedSummary =
+    changed.length === 0
+      ? 'all skipped'
+      : `changed ${changed.map(({ name: tool }) => tool).join(', ')}`;
+
+  await annotate(
+    `forced update: first ${firstMs} ms (re-linked ${STALE_COMPONENT}, upgraded ${codexTool.name}), repeated ${secondMs} ms (${repeatedSummary})`,
+  );
+  // checked first, so a failure names each tool the repeated update did not
+  // skip, with its manager, versions and reason
+  expect(changed).toEqual([]);
   // the outcomes name every tool environment.json records, which holds
   // every one the profile's drivers install, so a tool cannot be
   // skipped unseen
