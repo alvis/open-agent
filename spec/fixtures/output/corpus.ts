@@ -691,7 +691,7 @@ export const CORPUS: readonly CorpusCase[] = [
           provider: 'fly-machine',
           code: 'INPUT',
           reason:
-            'workstation status unknown, no Fly organization token was found; supply one in FLY_API_TOKEN',
+            'workstation status unknown, no Fly organization token was found; supply one in FLY_API_KEY',
         },
         { provider: 'sprite', code: 'AUTH', reason: 'the token was revoked' },
       ],

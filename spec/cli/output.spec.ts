@@ -259,7 +259,7 @@ describe('fn:prepareResult', () => {
 
   it('should name each unavailable provider on stderr beside piped TSV rows', () => {
     const reason =
-      'workstation status unknown, no Fly organization token was found; supply one in FLY_API_TOKEN, or with --provider fly-machine --provider-token-source, to list its workstations';
+      'workstation status unknown, no Fly organization token was found; supply one in FLY_API_KEY, or with --provider fly-machine --provider-token-source, to list its workstations';
     const output = captureResult(
       {
         command: 'list',

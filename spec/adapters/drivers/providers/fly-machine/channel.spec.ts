@@ -349,7 +349,7 @@ describe('cl:FlyGuestChannel', () => {
         await standIn('faithful');
       await mkdir(configDirectory, { recursive: true, mode: 0o755 });
       await chmod(configDirectory, 0o755);
-      vi.stubEnv('FLY_API_TOKEN', 'FlyV1 fm2_caller');
+      vi.stubEnv('FLY_API_KEY', 'FlyV1 fm2_caller');
       vi.stubEnv('FLY_CONFIG_DIR', '/caller/.fly');
       vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'caller-secret');
       vi.stubEnv('LC_ALL', 'C');
@@ -365,7 +365,7 @@ describe('cl:FlyGuestChannel', () => {
 
       expect({
         token: seen.FLY_ACCESS_TOKEN,
-        callerToken: seen.FLY_API_TOKEN,
+        callerToken: seen.FLY_API_KEY,
         callerSecret: seen.AWS_SECRET_ACCESS_KEY,
         configDirectory: seen.FLY_CONFIG_DIR,
         locale: seen.LC_ALL,

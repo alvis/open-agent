@@ -14,7 +14,7 @@ const FUTURE = Math.floor(NOW.getTime() / 1_000) + 3_600;
 const PAST = Math.floor(NOW.getTime() / 1_000) - 3_600;
 const PERMISSION_LOCATION = 'https://api.fly.io/v1';
 const DISCHARGE_LOCATION = 'https://api.fly.io/aaa/v1';
-const SPRITES_TOKEN = 'alvis-tang/1234/0123abcd/4567cdef';
+const SPRITES_API_KEY = 'alvis-tang/1234/0123abcd/4567cdef';
 
 /**
  * renders a decoding as `fly tokens debug` prints it
@@ -135,7 +135,7 @@ describe('fn:preflightFlyMachine', () => {
 
     expect(problems.map(({ subject }) => subject)).toEqual([
       'fly',
-      'FLY_API_TOKEN',
+      'FLY_API_KEY',
     ]);
   });
 
@@ -147,7 +147,7 @@ describe('fn:preflightFlyMachine', () => {
         ...tools,
         readVersion: async () => 'fly v0.4.107 darwin/arm64',
         credential: 'FlyV1 fm2_org',
-        credentialSource: 'FLY_API_TOKEN',
+        credentialSource: 'FLY_API_KEY',
       },
       NOW,
     );
@@ -167,15 +167,15 @@ describe('fn:preflightFlyMachine', () => {
     const problems = await preflightFlyMachine(
       {
         ...tools,
-        credential: SPRITES_TOKEN,
-        credentialSource: 'FLY_API_TOKEN',
+        credential: SPRITES_API_KEY,
+        credentialSource: 'FLY_API_KEY',
       },
       NOW,
     );
 
     expect(problems).toEqual([
       expect.objectContaining({
-        subject: 'FLY_API_TOKEN',
+        subject: 'FLY_API_KEY',
         problem: expect.stringContaining('holds a Sprites API token'),
       }),
     ]);
@@ -193,16 +193,16 @@ describe('fn:preflightFlyMachine', () => {
       {
         ...tools,
         credential: 'FlyV1 fm2_deploy',
-        credentialSource: 'FLY_API_TOKEN',
+        credentialSource: 'FLY_API_KEY',
       },
       NOW,
     );
 
     expect(problems).toEqual([
       {
-        subject: 'FLY_API_TOKEN',
+        subject: 'FLY_API_KEY',
         problem: expect.stringContaining(
-          'FLY_API_TOKEN is narrowed by its Apps caveat',
+          'FLY_API_KEY is narrowed by its Apps caveat',
         ),
         fix: expect.stringContaining('fly tokens create org'),
       },
@@ -216,7 +216,7 @@ describe('fn:preflightFlyMachine', () => {
       {
         ...tools,
         credential: 'FlyV1 fm2_org',
-        credentialSource: 'FLY_API_TOKEN',
+        credentialSource: 'FLY_API_KEY',
       },
       NOW,
     );
@@ -234,7 +234,7 @@ describe('fn:preflightFlyMachine', () => {
 
     expect(problems).toEqual([
       expect.objectContaining({
-        subject: 'FLY_API_TOKEN',
+        subject: 'FLY_API_KEY',
         problem: expect.stringContaining(
           'The entered value is not a Fly API token',
         ),

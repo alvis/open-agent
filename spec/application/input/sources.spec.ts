@@ -18,7 +18,7 @@ describe('fn:readInputSources', () => {
   it('should parse the selected dotenv file and keep only non-secret profile inputs', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'open-agent-input-'));
     vi.stubEnv('HOME', directory);
-    vi.stubEnv('SPRITES_TOKEN', 'process-secret-for-source-test');
+    vi.stubEnv('SPRITES_API_KEY', 'process-secret-for-source-test');
     const profileDirectory = join(directory, '.config', 'open-agent');
     const envPath = join(directory, 'chosen.env');
     await mkdir(profileDirectory, { recursive: true });
@@ -28,7 +28,7 @@ describe('fn:readInputSources', () => {
         TAILSCALE_TAILNET: 'profile-tailnet',
         TAILSCALE_EXIT_NODE: 'profile-exit',
         CLIPROXYAPI_BASE_URL: 'https://profile.example.test',
-        SPRITES_TOKEN: 'profile-secret-must-be-ignored',
+        SPRITES_API_KEY: 'profile-secret-must-be-ignored',
         GH_TOKEN: 'profile-github-must-be-ignored',
         GIT_AUTHOR_NAME: 'profile-identity-must-be-ignored',
         EXTRA: 'profile-runtime-must-be-ignored',
@@ -37,7 +37,7 @@ describe('fn:readInputSources', () => {
     );
     await writeFile(
       envPath,
-      'export SPRITES_TOKEN="file secret"\nRUNTIME_VALUE="value # retained" # comment\nMULTILINE="first\\nsecond"\n',
+      'export SPRITES_API_KEY="file secret"\nRUNTIME_VALUE="value # retained" # comment\nMULTILINE="first\\nsecond"\n',
     );
 
     try {
@@ -48,10 +48,10 @@ describe('fn:readInputSources', () => {
       expect({
         fileEnv: sources.fileEnv,
         profile: sources.profile,
-        token: sources.processEnv.SPRITES_TOKEN,
+        token: sources.processEnv.SPRITES_API_KEY,
       }).toEqual({
         fileEnv: {
-          SPRITES_TOKEN: 'file secret',
+          SPRITES_API_KEY: 'file secret',
           RUNTIME_VALUE: 'value # retained',
           MULTILINE: 'first\nsecond',
         },
@@ -106,8 +106,8 @@ describe('fn:readInputSources', () => {
 describe('fn:runtimeEnvironment', () => {
   it('should forward dotenv runtime inputs while retaining management and CLI inputs locally', () => {
     const runtime = runtimeEnvironment(dependencies, {
-      SPRITES_TOKEN: 'sprites-management',
-      TAILSCALE_API_KEY: 'tailscale-management',
+      SPRITES_API_KEY: 'sprites-management',
+      TAILSCALE_API_TOKEN: 'tailscale-management',
       TAILSCALE_AUTH_KEY: 'transient-enrollment',
       OPEN_AGENT_NETWORK: 'tailscale',
       OPEN_AGENT_IDLE_MINUTES: '0',

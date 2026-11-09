@@ -43,14 +43,14 @@ describe('fn:resolveBaseInputs', () => {
 
     expect(resolved.input).toMatchObject({
       networkKey: 'stored-network-key',
-      sources: { TAILSCALE_API_KEY: 'local credential store' },
+      sources: { TAILSCALE_API_TOKEN: 'local credential store' },
     });
   });
 
   it('should retain a completed sibling secret when another Promise.all source rejects', async () => {
     const secret = 'saf08-partial-sibling-secret';
     const sources = {
-      processEnv: { SPRITES_TOKEN: secret },
+      processEnv: { SPRITES_API_KEY: secret },
       fileEnv: {},
       profile: {},
     };
@@ -86,13 +86,13 @@ describe('fn:resolveBaseInputs', () => {
       },
       sources: {
         processEnv: {
-          SPRITES_TOKEN: 'process-management-token',
-          TAILSCALE_API_KEY: 'process-tailnet-token',
+          SPRITES_API_KEY: 'process-management-token',
+          TAILSCALE_API_TOKEN: 'process-tailnet-token',
           CLIPROXYAPI_BASE_URL: 'https://process.example.test',
           GH_TOKEN: 'process-github-token',
         },
         fileEnv: {
-          SPRITES_TOKEN: 'file-management-token',
+          SPRITES_API_KEY: 'file-management-token',
           TAILSCALE_EXIT_NODE: 'file-exit',
           CLIPROXYAPI_BASE_URL: 'https://file.example.test',
           CREDENTIAL_ONLY: 'credential-file-value',
@@ -120,8 +120,8 @@ describe('fn:resolveBaseInputs', () => {
         profile: networkOnly,
         runtimeEnv: { APP_TOKEN: 'runtime-secret-value' },
         sources: {
-          SPRITES_TOKEN: 'SPRITES_TOKEN in selected.env',
-          TAILSCALE_API_KEY: 'process environment',
+          SPRITES_API_KEY: 'SPRITES_API_KEY in selected.env',
+          TAILSCALE_API_TOKEN: 'process environment',
           GH_TOKEN: 'process environment',
           TAILSCALE_TAILNET: 'flag',
           TAILSCALE_EXIT_NODE: 'selected.env',
@@ -179,9 +179,9 @@ describe('fn:resolveBaseInputs', () => {
           proxyUrl: 'https://profile.example.test',
           runtimeEnv: {},
           sources: {
-            SPRITES_TOKEN:
+            SPRITES_API_KEY:
               '--provider-token-source env:OPEN_AGENT_BASE_SPRITES',
-            TAILSCALE_API_KEY: 'explicit secret reference',
+            TAILSCALE_API_TOKEN: 'explicit secret reference',
             CLIPROXYAPI_API_KEY: 'explicit secret reference',
             GH_TOKEN: 'explicit secret reference',
             TAILSCALE_AUTH_KEY: 'credential file',

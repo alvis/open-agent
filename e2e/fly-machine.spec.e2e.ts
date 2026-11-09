@@ -1896,7 +1896,7 @@ describe('Fly Machine provider probe', () => {
               /fly is not on PATH.*fly\.io\/docs\/flyctl\/install/u,
             ),
             expect.stringMatching(
-              /Fly organization token is not set.*FLY_API_TOKEN/u,
+              /Fly organization token is not set.*FLY_API_KEY/u,
             ),
           ],
         });
@@ -1912,7 +1912,7 @@ describe('Fly Machine provider probe', () => {
           ...refused,
           details: [
             expect.stringMatching(
-              /Fly organization token is not set.*FLY_API_TOKEN/u,
+              /Fly organization token is not set.*FLY_API_KEY/u,
             ),
           ],
         });
@@ -1920,7 +1920,7 @@ describe('Fly Machine provider probe', () => {
           ...refused,
           details: [
             expect.stringMatching(
-              /FLY_API_TOKEN.* is narrowed by its \w+ caveat.*fly tokens create org/u,
+              /FLY_API_KEY.* is narrowed by its \w+ caveat.*fly tokens create org/u,
             ),
           ],
         });

@@ -114,7 +114,7 @@ const REQUEST = {
 
 describe('fn:createWorkstation', () => {
   it('should create a private workstation and expose it only after ready setup', async () => {
-    vi.stubEnv('SPRITES_TOKEN', TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', TOKEN);
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-create-workflow-'),
     );
@@ -225,7 +225,7 @@ describe('fn:createWorkstation', () => {
   });
 
   it('should report retained identity after provider creation rejects', async () => {
-    vi.stubEnv('SPRITES_TOKEN', TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', TOKEN);
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-create-provider-failure-'),
     );
@@ -266,7 +266,7 @@ describe('fn:createWorkstation', () => {
   });
 
   it('should retain a private workstation after guest opening fails', async () => {
-    vi.stubEnv('SPRITES_TOKEN', TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', TOKEN);
     await using directory = await mkdtempDisposable(
       join(tmpdir(), 'open-agent-create-guest-failure-'),
     );

@@ -156,11 +156,11 @@ describe('mt:SpriteProvider.preflight', () => {
     });
 
     expect(missing).toEqual([
-      expect.objectContaining({ subject: 'SPRITES_TOKEN' }),
+      expect.objectContaining({ subject: 'SPRITES_API_KEY' }),
     ]);
     expect(refused).toEqual([
       expect.objectContaining({
-        subject: 'SPRITES_TOKEN',
+        subject: 'SPRITES_API_KEY',
         problem: expect.stringContaining('Fly API token'),
       }),
     ]);
@@ -202,7 +202,7 @@ describe('mt:SpriteProvider.list', () => {
   it('should reject every call before a credential is bound', async () => {
     await expect(unboundProvider.list()).rejects.toMatchObject({
       code: 'authentication',
-      message: 'SPRITES_TOKEN is required.',
+      message: 'SPRITES_API_KEY is required.',
     });
   });
 });

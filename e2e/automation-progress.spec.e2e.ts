@@ -144,11 +144,11 @@ describe('installed CLI automation reporting', () => {
       expect(human.stdout).toBe('');
       expect(human.stderr).toContain('environment: started');
       expect(human.stderr).toContain('command: failed');
-      expect(human.stderr).toContain('Set SPRITES_TOKEN');
+      expect(human.stderr).toContain('Set SPRITES_API_KEY');
       expect(human.stderr).not.toContain(secret);
       expect(quietHuman.exitCode).toBe(1);
       expect(quietHuman.stdout).toBe('');
-      expect(quietHuman.stderr).toContain('Set SPRITES_TOKEN');
+      expect(quietHuman.stderr).toContain('Set SPRITES_API_KEY');
       expect(quietHuman.stderr).not.toContain('environment: started');
     } finally {
       await rm(cwd, { recursive: true, force: true });

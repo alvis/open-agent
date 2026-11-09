@@ -27,7 +27,7 @@ export const FLY_MACHINE_PREREQUISITES: ProviderPrerequisites = {
   ],
   credential: {
     label: 'Fly organization token',
-    environment: 'FLY_API_TOKEN',
+    environment: 'FLY_API_KEY',
     store: 'fly-machine',
     scope: TOKEN_SCOPE,
     obtain: OBTAIN_TOKEN,

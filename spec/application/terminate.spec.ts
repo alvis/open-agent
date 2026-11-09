@@ -69,7 +69,7 @@ async function createTerminationBoundary(root: string): Promise<{
     envPath,
     ['OPEN_AGENT_NETWORK=none', 'CLIPROXYAPI_ENABLED=false', ''].join('\n'),
   );
-  vi.stubEnv('TAILSCALE_API_KEY', '');
+  vi.stubEnv('TAILSCALE_API_TOKEN', '');
   const request = {
     command: 'terminate',
     machine: sprite.name,
@@ -445,7 +445,7 @@ describe('fn:terminateWorkstation', () => {
       async () => new Response(null, { status: 204 }),
     );
     vi.stubGlobal('fetch', fetch);
-    vi.stubEnv('TAILSCALE_API_KEY', 'generated-management-key');
+    vi.stubEnv('TAILSCALE_API_TOKEN', 'generated-management-key');
     await sprite.filesystem().mkdir('/opt/open-agent', { recursive: true });
     await sprite.filesystem().writeJSON('/opt/open-agent/environment.json', {
       ...environment,
@@ -487,7 +487,7 @@ describe('fn:terminateWorkstation', () => {
     const { sprite, client, request } = await createTerminationBoundary(
       directory.path,
     );
-    vi.stubEnv('TAILSCALE_API_KEY', 'generated-management-key');
+    vi.stubEnv('TAILSCALE_API_TOKEN', 'generated-management-key');
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof globalThis.fetch>(

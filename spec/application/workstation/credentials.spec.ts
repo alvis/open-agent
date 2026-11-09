@@ -181,7 +181,7 @@ describe('fn:resolveCommandCredential', () => {
         ...dependencies.host,
         environment: {
           ...dependencies.host.environment,
-          variables: () => ({ SPRITES_TOKEN: 'supplied-provider-token' }),
+          variables: () => ({ SPRITES_API_KEY: 'supplied-provider-token' }),
         },
       },
     };
@@ -195,7 +195,7 @@ describe('fn:resolveCommandCredential', () => {
 
     expect(credential).toEqual({
       token: 'supplied-provider-token',
-      source: 'SPRITES_TOKEN in the process environment',
+      source: 'SPRITES_API_KEY in the process environment',
     });
     expect(interaction.secret).not.toHaveBeenCalled();
   });

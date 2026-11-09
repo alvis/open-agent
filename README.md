@@ -35,10 +35,10 @@ Use **Node.js 24 or newer**. Install the CLI from npm, or run it once with `npx`
 npm install -g open-agent
 ```
 
-Get a Sprites organization token in `SPRITES_TOKEN` for the default Fly Sprite provider, or a Fly organization token in `FLY_API_TOKEN` for `--provider fly-machine` (see [Prerequisites](#-prerequisites)); each token is needed only by its own provider. Then put an agent on a machine and pair your client with it:
+Get a Sprites organization token in `SPRITES_API_KEY` for the default Fly Sprite provider, or a Fly organization token in `FLY_API_KEY` for `--provider fly-machine` (see [Prerequisites](#-prerequisites)); each token is needed only by its own provider. Then put an agent on a machine and pair your client with it:
 
 ```bash
-export SPRITES_TOKEN=…   # or let the interactive run prompt for it and save it on this computer
+export SPRITES_API_KEY=…   # or let the interactive run prompt for it and save it on this computer
 open-agent create --name my-agent --with-pair-code
 ```
 
@@ -200,7 +200,7 @@ Interactive `create` asks for the minimum storage after the minimum memory and, 
 
 With `--network tailscale`, the workstation joins your tailnet as its own device, named after the workstation. The agent can then reach your other machines (a home server, a database, a build box) over Tailscale without exposing them to the internet, and the only public service on the workstation stays the agent itself.
 
-- **Tailnet access**: supply the tailnet (`TAILSCALE_TAILNET` or `--network-account`) and either a management API key (`TAILSCALE_API_KEY`) or an enrollment key (`TAILSCALE_AUTH_KEY`). The API key stays on your computer; an enrollment key reaches the guest only for enrollment and is then discarded
+- **Tailnet access**: supply the tailnet (`TAILSCALE_TAILNET` or `--network-account`) and either a management API key (`TAILSCALE_API_TOKEN`) or an enrollment key (`TAILSCALE_AUTH_KEY`). The API key stays on your computer; an enrollment key reaches the guest only for enrollment and is then discarded
 - **Exit node**: add `--use-exit-node --exit-node NAME` to send the workstation's outbound traffic through an approved exit node, such as one at home, so services see your own address
 - **Private model proxy**: add `--proxy` with `CLIPROXYAPI_BASE_URL` and `CLIPROXYAPI_API_KEY` to route both harnesses to an existing CLIProxyAPI hub; a hub inside your tailnet is checked only after the workstation has joined
 - **Persistent enrollment**: Tailscale's node state survives sleep and, on a Fly Machine, cold boots; `setup --section network` re-enrolls a daemon that has logged out, and `terminate` removes the device when the API key authorizes it
@@ -210,7 +210,7 @@ open-agent create --name my-agent --credential-file .env \
   --network tailscale --use-exit-node --exit-node home-server --proxy
 ```
 
-Here `.env` holds `SPRITES_TOKEN`, `TAILSCALE_TAILNET`, `TAILSCALE_API_KEY`, `CLIPROXYAPI_BASE_URL` and `CLIPROXYAPI_API_KEY`. Switch an existing workstation onto or off the tailnet with `setup --section all --network tailscale` or `--network none`. [Optional Integrations and Preflight](#optional-integrations-and-preflight) covers tailnet names, exit-node matching and preflight in detail.
+Here `.env` holds `SPRITES_API_KEY`, `TAILSCALE_TAILNET`, `TAILSCALE_API_TOKEN`, `CLIPROXYAPI_BASE_URL` and `CLIPROXYAPI_API_KEY`. Switch an existing workstation onto or off the tailnet with `setup --section all --network tailscale` or `--network none`. [Optional Integrations and Preflight](#optional-integrations-and-preflight) covers tailnet names, exit-node matching and preflight in detail.
 
 ---
 
@@ -221,14 +221,14 @@ Each provider declares the host tools and the management credential it needs. `c
 ### Fly Sprite (`--provider sprite`)
 
 - **Host tools**: none; the provider uses the Sprites SDK
-- **Credential**: `SPRITES_TOKEN`, a Sprites organization token for the organization that owns the workstations. Get one at [sprites.dev/account](https://sprites.dev/account): sign in with Fly and select the intended organization. `--provider-token-source env:NAME|file:PATH|keychain:SERVICE/ACCOUNT` selects another source; an interactive run can also prompt for it and save it on this computer
+- **Credential**: `SPRITES_API_KEY`, a Sprites organization token for the organization that owns the workstations. Get one at [sprites.dev/account](https://sprites.dev/account): sign in with Fly and select the intended organization. `--provider-token-source env:NAME|file:PATH|keychain:SERVICE/ACCOUNT` selects another source; an interactive run can also prompt for it and save it on this computer
 - **Scope check**: a Fly API token (`FlyV1 …`, `fm2_…`, `fo1_…`) is refused offline, before any provider call, with the fix above and the source it came from. Any other value goes to the provider; one it rejects fails with `AUTH` and is never saved on this computer
 - **Learn more**: [Sprites CLI authentication](https://docs.fly.io/sprites/cli/authentication), [Sprites quickstart](https://docs.fly.io/sprites/quickstart)
 
 ### Fly Machine (`--provider fly-machine`)
 
 - **Host tools**: `fly` (flyctl) 0.4.108 or newer on `PATH`; [install or upgrade it](https://fly.io/docs/flyctl/install/). open-agent runs it with its own configuration directory, `$XDG_CONFIG_HOME/open-agent/flyctl`, so your own flyctl login, WireGuard peers and agent are never read or changed
-- **Credential**: `FLY_API_TOKEN`, a Fly organization token able to create apps, machines and volumes: `fly tokens create org -o <organization>`. The organization it names owns the workstations. `--provider-token-source` selects another source, as for Sprites
+- **Credential**: `FLY_API_KEY`, a Fly organization token able to create apps, machines and volumes: `fly tokens create org -o <organization>`. The organization it names owns the workstations. `--provider-token-source` selects another source, as for Sprites
 - **Scope check**: before any provider call, flyctl decodes the token offline (`fly tokens debug`); a deploy, SSH or other narrowed token, an expired token, or a value that is not a Fly token is refused with its fix. A Sprites token is refused by its shape without being decoded
 - **Placement**: each workstation is one app named after it, holding one machine and one volume, in `OPEN_AGENT_FLY_REGION` or, when unset, the region nearest this computer. Its URL is `https://<name>.fly.dev`, routed only after setup makes it ready
 - **Cold boot**: the machine runs `debian:bookworm-slim` with a persistent root filesystem, so a restart keeps its installed packages, and a volume holds both accounts' homes, Homebrew and an apt cache. The machine's init runs a small stub that runs a boot hook kept on the volume. The hook binds the volume back, recreates the `agent` and `linuxbrew` accounts under their original ids, restores the recorded tool links into `/usr/local/bin` and starts `runit`. If the root filesystem was wiped, for example by a move to another host, it first reinstalls the recorded apt packages from the cache. Tailscale keeps its node state on the volume, so a cold-booted workstation stays enrolled; a daemon that has logged out anyway re-joins with `setup --section network`. It logs each step to `/opt/open-agent/boot.log` and `fly logs`, and records the last boot in `/opt/open-agent/boot-status.json`
@@ -260,11 +260,11 @@ Pass `--credential-file FILE` for dotenv input. The order is: explicit flags, cr
 | `OPEN_AGENT_HOLD_MAX_MINUTES`                              | Turn-hold lifetime after its last refresh; never prompted                                                                                                                                     |
 | `OPEN_AGENT_UPDATE_DUE_DAYS`                               | Days after the last update before another is due, `1` to `365`; never prompted                                                                                                                |
 | `OPEN_AGENT_USE_EXIT_NODE`                                 | Route egress through an exit node on the selected network                                                                                                                                     |
-| `SPRITES_TOKEN`                                            | Fly Sprite provider credential; see [Prerequisites](#-prerequisites)                                                                                                                          |
-| `FLY_API_TOKEN`                                            | Fly Machine provider credential; see [Prerequisites](#-prerequisites)                                                                                                                         |
+| `SPRITES_API_KEY`                                          | Fly Sprite provider credential; see [Prerequisites](#-prerequisites)                                                                                                                          |
+| `FLY_API_KEY`                                              | Fly Machine provider credential; see [Prerequisites](#-prerequisites)                                                                                                                         |
 | `OPEN_AGENT_FLY_REGION`                                    | Fly region of new Fly Machine workstations; the nearest region when unset                                                                                                                     |
 | `TAILSCALE_TAILNET`                                        | Tailnet API ID, full DNS domain, or bare DNS subdomain; required with `--network tailscale`                                                                                                   |
-| `TAILSCALE_API_KEY`                                        | Local management key for enrollment and authorized device cleanup                                                                                                                             |
+| `TAILSCALE_API_TOKEN`                                      | Local management key for enrollment and authorized device cleanup                                                                                                                             |
 | `TAILSCALE_AUTH_KEY`                                       | Optional enrollment key; an auth key alone cannot authorize device deletion                                                                                                                   |
 | `TAILSCALE_EXIT_NODE`                                      | Existing approved exit-node identity                                                                                                                                                          |
 | `CLIPROXYAPI_ENABLED`                                      | Enable or disable direct proxy routing for the selected harnesses                                                                                                                             |
@@ -287,7 +287,7 @@ Pass `--credential-file FILE` for dotenv input. The order is: explicit flags, cr
 
 Interactive creation asks unresolved selection questions. Non-interactive creation infers the network and options from supplied inputs unless an explicit flag or `OPEN_AGENT_*` value overrides them. Setup preserves the recorded profile when omitted; `setup --section all` can change the release channel, harnesses, network and options, and `setup --section agent --release CHANNEL` changes only the release channel, while a different provider or ACP agent is refused because it needs a new workstation. `setup --cpu N --mem GB` (either flag, in any section) resizes the machine to the smallest size meeting the minimums and records them; an omitted one keeps its recorded value. Fly restarts the machine to apply a size, so setup warns that "Resizing NAME to SIZE restarts the machine to take effect; running sessions and processes stop", asks (default no) when interactive, proceeds with `--yes`, and otherwise fails with a usage error before changing anything. `setup --storage GB`, in any section, grows the storage to that size before any resize, where the provider can grow it on request; only the flag grows storage, and the growth policy flags are refused on setup because the policy applies to new workstations.
 
-Preflight aggregates determinable issues before provisioning and reminds users about routing, DNS, policy, enrollment expiry, GitHub/Git identity, proxy access, and disruptive updates. Every adapter declares the credentials and tools it needs: the provider's token and host tools, the network's keys and account, the CLIProxyAPI base URL and key, and setup's GitHub token and Git identity. Each command checks the ones it uses, setup included, before it changes anything, and reports every absent input at once, for example `Set SPRITES_TOKEN or pass --credential-file FILE containing SPRITES_TOKEN; use --provider-token-source env:NAME, file:PATH, or keychain:SERVICE/ACCOUNT; or run in a TTY to enter it when prompted.` Passing preflight does not replace guest readiness checks.
+Preflight aggregates determinable issues before provisioning and reminds users about routing, DNS, policy, enrollment expiry, GitHub/Git identity, proxy access, and disruptive updates. Every adapter declares the credentials and tools it needs: the provider's token and host tools, the network's keys and account, the CLIProxyAPI base URL and key, and setup's GitHub token and Git identity. Each command checks the ones it uses, setup included, before it changes anything, and reports every absent input at once, for example `Set SPRITES_API_KEY or pass --credential-file FILE containing SPRITES_API_KEY; use --provider-token-source env:NAME, file:PATH, or keychain:SERVICE/ACCOUNT; or run in a TTY to enter it when prompted.` Passing preflight does not replace guest readiness checks.
 
 ---
 

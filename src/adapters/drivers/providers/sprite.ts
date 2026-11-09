@@ -301,7 +301,7 @@ export class SpriteProvider implements ProviderDriver<'sprite'> {
     if (!this.#session) {
       throw new ProviderFault({
         code: 'authentication',
-        message: 'SPRITES_TOKEN is required.',
+        message: 'SPRITES_API_KEY is required.',
       });
     }
 

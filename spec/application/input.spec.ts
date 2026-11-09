@@ -238,7 +238,7 @@ describe('fn:resolveInputs', () => {
     expect([input.missing, defaults.missing]).toEqual([
       [
         expect.stringContaining('--name'),
-        'Tailscale management API key is not set. Set TAILSCALE_API_KEY or pass --credential-file FILE containing TAILSCALE_API_KEY; ' +
+        'Tailscale management API key is not set. Set TAILSCALE_API_TOKEN or pass --credential-file FILE containing TAILSCALE_API_TOKEN; ' +
           'use --network-key-source env:NAME, file:PATH, or keychain:SERVICE/ACCOUNT; or run in a TTY to enter it when prompted. ' +
           'Or set TAILSCALE_AUTH_KEY (--network-auth-key-source SOURCE) to enrol with a single-use key.',
         expect.stringMatching(
@@ -358,7 +358,7 @@ describe('fn:resolveInputs', () => {
   });
 
   it('should include missing Git identity both before and after mandatory input resolution', async () => {
-    vi.stubEnv('SPRITES_TOKEN', undefined);
+    vi.stubEnv('SPRITES_API_KEY', undefined);
     vi.stubEnv('GIT_AUTHOR_NAME', undefined);
     vi.stubEnv('GIT_AUTHOR_EMAIL', undefined);
     const directory = await mkdtemp(
@@ -420,8 +420,8 @@ describe('fn:resolveInputs', () => {
 
   it('should derive create preflight requirements from the selected integrations', async () => {
     for (const name of [
-      'SPRITES_TOKEN',
-      'TAILSCALE_API_KEY',
+      'SPRITES_API_KEY',
+      'TAILSCALE_API_TOKEN',
       'TAILSCALE_AUTH_KEY',
       'TAILSCALE_TAILNET',
       'TAILSCALE_EXIT_NODE',
@@ -456,7 +456,7 @@ describe('fn:resolveInputs', () => {
         }),
         missing: [
           expect.stringContaining('--name'),
-          expect.stringContaining('TAILSCALE_API_KEY'),
+          expect.stringContaining('TAILSCALE_API_TOKEN'),
           expect.stringContaining('TAILSCALE_TAILNET'),
           expect.stringContaining('TAILSCALE_EXIT_NODE'),
           expect.stringContaining('CLIPROXYAPI_BASE_URL'),
@@ -469,7 +469,7 @@ describe('fn:resolveInputs', () => {
   });
 
   it('should resolve a read-only provider token from the selected file or explicit reference', async () => {
-    vi.stubEnv('SPRITES_TOKEN', undefined);
+    vi.stubEnv('SPRITES_API_KEY', undefined);
     const directory = await mkdtemp(
       join(tmpdir(), 'open-agent-provider-token-'),
     );
@@ -486,9 +486,9 @@ describe('fn:resolveInputs', () => {
     await writeFile(
       path,
       [
-        'SPRITES_TOKEN=file-provider-secret',
+        'SPRITES_API_KEY=file-provider-secret',
         'GH_TOKEN=unused',
-        'TAILSCALE_API_KEY=unused',
+        'TAILSCALE_API_TOKEN=unused',
         '',
       ].join('\n'),
     );
@@ -514,7 +514,7 @@ describe('fn:resolveInputs', () => {
       expect(values).toEqual([
         {
           token: 'file-provider-secret',
-          source: `SPRITES_TOKEN in ${path}`,
+          source: `SPRITES_API_KEY in ${path}`,
         },
         {
           token: 'explicit-provider-secret',

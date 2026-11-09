@@ -41,7 +41,7 @@ describe('fn:management credential precedence', () => {
       await chmod(path, mode);
       await writeFile(secretPath, 'file-selected-token\n', { mode: 0o600 });
       vi.stubEnv('OPEN_AGENT_CREDENTIAL_REFERENCE', 'env-selected-token');
-      vi.stubEnv('SPRITES_TOKEN', undefined);
+      vi.stubEnv('SPRITES_API_KEY', undefined);
 
       await expect(readLocalCredential('sprites', location)).rejects.toEqual(
         expect.objectContaining({ code: 'INPUT' }),
@@ -90,7 +90,7 @@ describe('fn:management credential precedence', () => {
           })
         ).token,
       ).toBe('file-selected-token');
-      vi.stubEnv('SPRITES_TOKEN', 'process-selected-token');
+      vi.stubEnv('SPRITES_API_KEY', 'process-selected-token');
       expect(
         await resolveProviderCredential(dependencies, {
           options: {},
@@ -101,14 +101,14 @@ describe('fn:management credential precedence', () => {
         }),
       ).toEqual({
         token: 'process-selected-token',
-        source: 'SPRITES_TOKEN in the process environment',
+        source: 'SPRITES_API_KEY in the process environment',
       });
 
       const direct = await resolveBaseInputs(dependencies, {
         options: {},
         sources: {
           ...emptySources,
-          processEnv: { SPRITES_TOKEN: 'process-selected-token' },
+          processEnv: { SPRITES_API_KEY: 'process-selected-token' },
         },
         selection: { credentialStore: location },
       });
@@ -126,11 +126,11 @@ describe('fn:management credential precedence', () => {
     const sources = {
       ...emptySources,
       processEnv: {
-        SPRITES_TOKEN: 'process-selected-token',
+        SPRITES_API_KEY: 'process-selected-token',
         CLIPROXYAPI_BASE_URL: 'https://process.example.test',
       },
       fileEnv: {
-        SPRITES_TOKEN: 'file-selected-token',
+        SPRITES_API_KEY: 'file-selected-token',
         CLIPROXYAPI_BASE_URL: 'https://file.example.test',
       },
     };
@@ -151,7 +151,7 @@ describe('fn:management credential precedence', () => {
 
     expect(credential).toEqual({
       token: 'file-selected-token',
-      source: 'SPRITES_TOKEN in selected.env',
+      source: 'SPRITES_API_KEY in selected.env',
     });
     expect(input).toMatchObject({
       providerToken: 'file-selected-token',
@@ -175,7 +175,7 @@ describe('fn:management credential precedence', () => {
       options: { github: false },
       sources: {
         ...emptySources,
-        processEnv: { SPRITES_TOKEN: 'provider-token' },
+        processEnv: { SPRITES_API_KEY: 'provider-token' },
       },
       selection: { networkEnrollment: false, credentialStore: location },
     });
@@ -186,8 +186,8 @@ describe('fn:management credential precedence', () => {
       sources: {
         ...emptySources,
         processEnv: {
-          SPRITES_TOKEN: 'provider-token',
-          TAILSCALE_API_KEY: 'selected-key',
+          SPRITES_API_KEY: 'provider-token',
+          TAILSCALE_API_TOKEN: 'selected-key',
         },
       },
       selection: {
@@ -203,7 +203,7 @@ describe('fn:management credential precedence', () => {
         options: { github: false },
         sources: {
           ...emptySources,
-          processEnv: { SPRITES_TOKEN: 'provider-token' },
+          processEnv: { SPRITES_API_KEY: 'provider-token' },
         },
         selection: {
           profile: TAILSCALE_PROFILE,

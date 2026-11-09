@@ -35,7 +35,7 @@ export const tailscale: NetworkDriver<'tailscale', TailnetStatus> = {
       flag: '--network-account ACCOUNT',
     },
     management: {
-      environment: 'TAILSCALE_API_KEY',
+      environment: 'TAILSCALE_API_TOKEN',
       prompt: 'Tailscale management API key',
       flag: '--network-key-source env:NAME, file:PATH, or keychain:SERVICE/ACCOUNT',
       store: 'tailscale',
