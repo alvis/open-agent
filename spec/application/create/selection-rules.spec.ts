@@ -52,7 +52,7 @@ const providerCalls = vi.fn();
 
 /** fails every provider boundary if selection reaches it */
 function guardProviderBoundary(): void {
-  vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+  vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
   vi.spyOn(registry.providers.sprite, 'authenticate').mockImplementation(
     (binding) => {
       providerCalls('authenticate', binding.restorableServices);

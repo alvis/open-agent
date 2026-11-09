@@ -19,8 +19,8 @@ const parse = vi.mocked(parseApplication);
 
 describe('fn:cli', () => {
   it('should emit a successful JSON list without contacting a provider service', async () => {
-    vi.stubEnv('SPRITES_TOKEN', 'test-org/1/0abc/0def');
-    vi.stubEnv('FLY_API_TOKEN', '');
+    vi.stubEnv('SPRITES_API_KEY', 'test-org/1/0abc/0def');
+    vi.stubEnv('FLY_API_KEY', '');
     const originalExitCode = process.exitCode;
     const signalListeners = {
       sigint: process.listenerCount('SIGINT'),
@@ -134,7 +134,7 @@ describe('fn:cli', () => {
 
     expect(stdout).toContain('ENVIRONMENT');
     expect(stdout).toContain('LEARN MORE');
-    expect(stdout).toContain('SPRITES_TOKEN');
+    expect(stdout).toContain('SPRITES_API_KEY');
     expect(stderr).toBe('');
     expect(exitCode).toBe(0);
   });

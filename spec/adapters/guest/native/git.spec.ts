@@ -361,7 +361,7 @@ describe('fn:configureRuntimeEnv', () => {
     });
     await expect(
       configureRuntimeEnv(registry, sessionGuestOf(sprite), {
-        environment: { SPRITES_TOKEN: 'private', HOME: '/malicious' },
+        environment: { SPRITES_API_KEY: 'private', HOME: '/malicious' },
         shellAccounts: [],
       }),
     ).rejects.toEqual(expect.objectContaining({ code: 'INPUT' }));

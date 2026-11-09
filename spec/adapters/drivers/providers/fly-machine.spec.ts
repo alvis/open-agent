@@ -487,14 +487,14 @@ describe('cl:FlyMachineProvider', () => {
 
     expect(result.map(({ subject }) => subject)).toEqual([
       'fly',
-      'FLY_API_TOKEN',
+      'FLY_API_KEY',
     ]);
   });
 
   it('should refuse a provider operation before a management token is bound', async () => {
     await expect(flyMachine.get('alpha')).rejects.toMatchObject({
       code: 'authentication',
-      message: 'FLY_API_TOKEN is required.',
+      message: 'FLY_API_KEY is required.',
     });
   });
 

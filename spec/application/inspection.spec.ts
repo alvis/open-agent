@@ -213,7 +213,7 @@ describe('cmd:show', () => {
   it('should serialize a non-Error SDK rejection as one redacted JSON failure', async () => {
     const privateRejection = 'sdk-private-rejection';
     rememberSecret(privateRejection);
-    vi.stubEnv('SPRITES_TOKEN', 'test-org/1/0abc/0def');
+    vi.stubEnv('SPRITES_API_KEY', 'test-org/1/0abc/0def');
     vi.spyOn(SpritesClient.prototype, 'getSprite').mockRejectedValueOnce(
       privateRejection,
     );
@@ -566,7 +566,7 @@ describe('cmd:show', () => {
       Promise.withResolvers<Awaited<ReturnType<Sprite['listServices']>>>();
     vi.mocked(sprite.listServices).mockReturnValue(pending.promise);
     vi.spyOn(SpritesClient.prototype, 'getSprite').mockResolvedValue(sprite);
-    vi.stubEnv('SPRITES_TOKEN', 'test-org/1/0abc/0def');
+    vi.stubEnv('SPRITES_API_KEY', 'test-org/1/0abc/0def');
     const controller = new AbortController();
     const context = new OperationContext({ signal: controller.signal });
     try {
@@ -1004,8 +1004,8 @@ describe('provider choice on an existing workstation', () => {
   it.each(['show', 'doctor', 'terminate'] as const)(
     'should answer %s from the provider --provider names without searching the others',
     async (command) => {
-      vi.stubEnv('SPRITES_TOKEN', 'test-org/1/0abc/0def');
-      vi.stubEnv('FLY_API_TOKEN', undefined);
+      vi.stubEnv('SPRITES_API_KEY', 'test-org/1/0abc/0def');
+      vi.stubEnv('FLY_API_KEY', undefined);
       const getSprite = vi.spyOn(SpritesClient.prototype, 'getSprite');
       const listAllSprites = vi.spyOn(
         SpritesClient.prototype,
@@ -1031,7 +1031,7 @@ describe('provider choice on an existing workstation', () => {
           code: 'INPUT',
           message: 'Provider prerequisites are missing or misconfigured',
           details: expect.arrayContaining([
-            expect.stringContaining('FLY_API_TOKEN'),
+            expect.stringContaining('FLY_API_KEY'),
           ]),
         },
       });
@@ -1042,8 +1042,8 @@ describe('provider choice on an existing workstation', () => {
 
   it('should answer with sprite when only a provider token source is given', async () => {
     vi.stubEnv('OPEN_AGENT_TEST_SOURCE', 'FlyV1 fm2_generated-macaroon');
-    vi.stubEnv('SPRITES_TOKEN', undefined);
-    vi.stubEnv('FLY_API_TOKEN', undefined);
+    vi.stubEnv('SPRITES_API_KEY', undefined);
+    vi.stubEnv('FLY_API_KEY', undefined);
 
     const result = await runCommand(dependencies, {
       command: 'show',

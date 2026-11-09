@@ -103,8 +103,8 @@ function inventoriesOf(
       environment: {
         ...dependencies.host.environment,
         variables: () => ({
-          SPRITES_TOKEN: 'organization/1234/0123abcd/4567ef89',
-          FLY_API_TOKEN: 'FlyV1 fm2_test',
+          SPRITES_API_KEY: 'organization/1234/0123abcd/4567ef89',
+          FLY_API_KEY: 'FlyV1 fm2_test',
         }),
       },
       tools: {

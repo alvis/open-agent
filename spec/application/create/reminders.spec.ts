@@ -37,7 +37,7 @@ describe('fn:createPreflightSummary', () => {
       expect.arrayContaining([expect.stringMatching(/3 days have passed/)]),
     );
     expect(summary.reminders.join(' ')).not.toMatch(
-      /supplied.*enrolment key|Without TAILSCALE_API_KEY/,
+      /supplied.*enrolment key|Without TAILSCALE_API_TOKEN/,
     );
   });
 

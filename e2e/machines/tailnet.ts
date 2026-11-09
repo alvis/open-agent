@@ -25,7 +25,7 @@ export interface Tailnet {
 /** management API credential and tailnet identity of the e2e run */
 export interface TailnetAccess {
   /** Tailscale management API key */
-  apiKey: string;
+  token: string;
   /** tailnet API id, DNS domain, or bare DNS subdomain */
   tailnet: string;
 }
@@ -60,7 +60,7 @@ export function connectTailnet(access: TailnetAccess): Tailnet {
     async listDevices() {
       for (const candidate of candidates) {
         const response = await request(
-          access.apiKey,
+          access.token,
           `/tailnet/${encodeURIComponent(candidate)}/devices`,
         );
         if (response.status === NOT_FOUND_STATUS) {
@@ -89,7 +89,7 @@ export function connectTailnet(access: TailnetAccess): Tailnet {
      */
     async deleteDevice(id) {
       const response = await request(
-        access.apiKey,
+        access.token,
         `/device/${encodeURIComponent(id)}`,
         'DELETE',
       );
@@ -115,19 +115,19 @@ export function isWorkstationDevice(
 
 /**
  * sends one bounded management API request
- * @param apiKey management API key
+ * @param token management API key
  * @param path API path below the v2 base
  * @param method HTTP method
  * @returns raw response
  */
 async function request(
-  apiKey: string,
+  token: string,
   path: string,
   method = 'GET',
 ): Promise<Response> {
   return fetch(`${API_BASE}${path}`, {
     method,
-    headers: { Authorization: `Bearer ${apiKey}` },
+    headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 }

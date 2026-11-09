@@ -119,9 +119,9 @@ describe('cmd:open-agent output', () => {
             TMPDIR: home,
             XDG_CONFIG_HOME: join(home, '.config'),
             NO_COLOR: '1',
-            SPRITES_TOKEN: '',
-            FLY_API_TOKEN: '',
-            TAILSCALE_API_KEY: '',
+            SPRITES_API_KEY: '',
+            FLY_API_KEY: '',
+            TAILSCALE_API_TOKEN: '',
             GH_TOKEN: '',
           },
         });

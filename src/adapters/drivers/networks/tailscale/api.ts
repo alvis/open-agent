@@ -59,7 +59,7 @@ class TailnetApiError extends CommandFault {
   constructor({ method, path, status }: TailnetApiErrorParams) {
     const action =
       status === UNAUTHENTICATED_STATUS
-        ? 'Check TAILSCALE_API_KEY validity and expiry.'
+        ? 'Check TAILSCALE_API_TOKEN validity and expiry.'
         : status === ACCESS_DENIED_STATUS
           ? 'Grant the selected Tailscale API key the management permissions required by this operation.'
           : status === NOT_FOUND_STATUS && path.startsWith('/tailnet/')

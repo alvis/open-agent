@@ -37,13 +37,13 @@ const TOKEN = 'workflow-org/1234/0123abcd/4567ef89';
 const options = { nonInteractive: true, localCredentials: false } as const;
 
 function withoutProviderCredentials(): void {
-  vi.stubEnv('SPRITES_TOKEN', undefined);
-  vi.stubEnv('FLY_API_TOKEN', undefined);
+  vi.stubEnv('SPRITES_API_KEY', undefined);
+  vi.stubEnv('FLY_API_KEY', undefined);
 }
 
 function spriteCredential(): void {
-  vi.stubEnv('SPRITES_TOKEN', TOKEN);
-  vi.stubEnv('FLY_API_TOKEN', undefined);
+  vi.stubEnv('SPRITES_API_KEY', TOKEN);
+  vi.stubEnv('FLY_API_KEY', undefined);
 }
 
 async function managedSprite(root: string): Promise<Sprite> {

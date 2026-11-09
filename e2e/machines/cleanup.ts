@@ -107,7 +107,7 @@ export function connectRunAccounts(redact: Redactor): RunAccounts | undefined {
     ? {
         inventories,
         tailnet: connectTailnet({
-          apiKey: requireValue('TAILSCALE_API_KEY'),
+          token: requireValue('TAILSCALE_API_TOKEN'),
           tailnet: requireValue('TAILSCALE_TAILNET'),
         }),
       }

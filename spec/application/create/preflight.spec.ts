@@ -38,7 +38,7 @@ const ORGANIZATION_TOKEN = 'saf07-org/1234/0123abcd/4567ef89';
 
 describe('fn:prepareCreate consent', () => {
   it('should report rejected provider authentication without creating a workstation', async () => {
-    vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
     vi.spyOn(SpritesClient.prototype, 'listAllSprites').mockRejectedValueOnce(
       new Error('Provider unavailable'),
     );
@@ -58,7 +58,7 @@ describe('fn:prepareCreate consent', () => {
   });
 
   it('should report a rejected network probe as a provisioning blocker', async () => {
-    vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
     vi.spyOn(SpritesClient.prototype, 'listAllSprites').mockResolvedValue([]);
     const preflight = vi.fn(async () => {
       throw new Error('network probe rejected');
@@ -89,7 +89,7 @@ describe('fn:prepareCreate consent', () => {
   });
 
   it('should preserve a name collision as a conflict', async () => {
-    vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
     const sprite = Object.assign(
       new Sprite('saf07-generated', new SpritesClient(ORGANIZATION_TOKEN)),
       { id: 'existing-id' },
@@ -113,7 +113,7 @@ describe('fn:prepareCreate consent', () => {
   });
 
   it('should return cancellation when consent is interrupted before provisioning', async () => {
-    vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
     vi.spyOn(SpritesClient.prototype, 'listAllSprites').mockImplementation(
       async () => [],
     );
@@ -146,10 +146,10 @@ describe('fn:prepareCreate consent', () => {
   ])(
     'should carry network enrollment and the available exit route into provisioning: %j',
     async ({ usesExitNode, management, effectiveExitNode }) => {
-      vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+      vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
       vi.stubEnv('TAILSCALE_AUTH_KEY', 'supplied-enrollment-key');
       vi.stubEnv(
-        'TAILSCALE_API_KEY',
+        'TAILSCALE_API_TOKEN',
         management ? 'network-management-key' : undefined,
       );
       vi.stubEnv('TAILSCALE_TAILNET', 'example.ts.net');
@@ -195,9 +195,9 @@ describe('fn:prepareCreate consent', () => {
   );
 
   it('should report network preflight problems before provisioning', async () => {
-    vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
     vi.stubEnv('TAILSCALE_AUTH_KEY', 'supplied-enrollment-key');
-    vi.stubEnv('TAILSCALE_API_KEY', 'network-management-key');
+    vi.stubEnv('TAILSCALE_API_TOKEN', 'network-management-key');
     vi.stubEnv('TAILSCALE_TAILNET', 'example.ts.net');
     vi.spyOn(SpritesClient.prototype, 'listAllSprites').mockImplementation(
       async () => [],
@@ -232,7 +232,7 @@ describe('fn:prepareCreate consent', () => {
   it('should aggregate a missing name and token with every local token recovery route before provider access', async () => {
     const home = await mkdtemp(join(tmpdir(), 'open-agent-cor07-create-'));
     vi.stubEnv('HOME', home);
-    vi.stubEnv('SPRITES_TOKEN', undefined);
+    vi.stubEnv('SPRITES_API_KEY', undefined);
 
     try {
       const prepared = await prepareCreate(dependencies, {
@@ -255,7 +255,7 @@ describe('fn:prepareCreate consent', () => {
       const details = prepared.result.error.details ?? [];
       expect(details).toEqual([
         expect.stringContaining('--name'),
-        expect.stringContaining('SPRITES_TOKEN'),
+        expect.stringContaining('SPRITES_API_KEY'),
       ]);
       for (const route of [
         '--credential-file FILE',
@@ -272,7 +272,7 @@ describe('fn:prepareCreate consent', () => {
   });
 
   it('should require real Ink consent before provisioning a selected workstation', async () => {
-    vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
     const list = vi.fn<SpritesClient['listAllSprites']>(async () => []);
     vi.spyOn(SpritesClient.prototype, 'listAllSprites').mockImplementation(
       list,
@@ -296,7 +296,7 @@ describe('fn:prepareCreate consent', () => {
   });
 
   it('should bypass only the selected provision consent under --yes', async () => {
-    vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
     const list = vi.fn<SpritesClient['listAllSprites']>(async () => []);
     vi.spyOn(SpritesClient.prototype, 'listAllSprites').mockImplementation(
       list,
@@ -320,7 +320,7 @@ describe('fn:prepareCreate consent', () => {
   });
 
   it('should still collects a missing workstation name under --yes', async () => {
-    vi.stubEnv('SPRITES_TOKEN', ORGANIZATION_TOKEN);
+    vi.stubEnv('SPRITES_API_KEY', ORGANIZATION_TOKEN);
     const list = vi.fn<SpritesClient['listAllSprites']>(async () => []);
     vi.spyOn(SpritesClient.prototype, 'listAllSprites').mockImplementation(
       list,
@@ -352,7 +352,7 @@ describe('fn:prepareCreate consent', () => {
   });
 
   it('should refuse a Fly API token offline with its fix before any provider call', async () => {
-    vi.stubEnv('SPRITES_TOKEN', 'FlyV1 fm2_generated-macaroon');
+    vi.stubEnv('SPRITES_API_KEY', 'FlyV1 fm2_generated-macaroon');
     const list = vi.spyOn(SpritesClient.prototype, 'listAllSprites');
 
     const prepared = await prepareCreate(dependencies, {

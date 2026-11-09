@@ -349,7 +349,7 @@ describe('installed CLI', () => {
         code: 'INPUT',
         details: expect.arrayContaining([
           expect.stringContaining(
-            'SPRITES_TOKEN or pass --credential-file FILE',
+            'SPRITES_API_KEY or pass --credential-file FILE',
           ),
           expect.stringContaining(
             'env:NAME, file:PATH, or keychain:SERVICE/ACCOUNT',
@@ -675,7 +675,7 @@ describe('installed CLI', () => {
     const { result, attempts } = await withIsolatedCli(async (cwd, env) =>
       runOffline(packedBin, ['list', '--json', '--no-local-credentials'], {
         cwd,
-        env: { ...env, SPRITES_TOKEN: 'offline-placeholder' },
+        env: { ...env, SPRITES_API_KEY: 'offline-placeholder' },
       }),
     );
 
@@ -709,7 +709,9 @@ describe('installed CLI', () => {
       },
     });
     expect(
-      parsed.error.details.filter((detail) => detail.includes('SPRITES_TOKEN')),
+      parsed.error.details.filter((detail) =>
+        detail.includes('SPRITES_API_KEY'),
+      ),
     ).toEqual([
       expect.stringMatching(
         /Sprites API token is not set.*https:\/\/sprites\.dev\/account/u,
@@ -727,7 +729,7 @@ describe('installed CLI', () => {
         ['create', '--name', 'wrong-scope', ...OFFLINE_CREATE_FLAGS],
         {
           cwd,
-          env: { ...env, SPRITES_TOKEN: 'FlyV1 fm2_generated-macaroon' },
+          env: { ...env, SPRITES_API_KEY: 'FlyV1 fm2_generated-macaroon' },
         },
       ),
     );
@@ -760,7 +762,10 @@ describe('installed CLI', () => {
         ],
         {
           cwd,
-          env: { ...env, SPRITES_TOKEN: 'control-org/1234/0123abcd/4567ef89' },
+          env: {
+            ...env,
+            SPRITES_API_KEY: 'control-org/1234/0123abcd/4567ef89',
+          },
         },
       ),
     );
@@ -793,7 +798,10 @@ describe('installed CLI', () => {
         ['create', '--name', 'valid-shape', ...OFFLINE_CREATE_FLAGS],
         {
           cwd,
-          env: { ...env, SPRITES_TOKEN: 'control-org/1234/0123abcd/4567ef89' },
+          env: {
+            ...env,
+            SPRITES_API_KEY: 'control-org/1234/0123abcd/4567ef89',
+          },
         },
       ),
     );
@@ -911,7 +919,7 @@ describe('installed CLI', () => {
           /fly is not on PATH.*fly\.io\/docs\/flyctl\/install/u,
         ),
         expect.stringMatching(
-          /Fly organization token is not set.*FLY_API_TOKEN/u,
+          /Fly organization token is not set.*FLY_API_KEY/u,
         ),
       ]);
       expect(result.stderr).not.toContain('stage=create.provider');
@@ -920,7 +928,7 @@ describe('installed CLI', () => {
 
     it('should report a missing flyctl even when the Fly token is set, before any provider call', async () => {
       const { result, attempts } = await createOnFly('fly-no-flyctl', {
-        FLY_API_TOKEN: 'FlyV1 fm2_org-macaroon',
+        FLY_API_KEY: 'FlyV1 fm2_org-macaroon',
       });
 
       expect(result.exitCode).toBe(1);
@@ -937,7 +945,7 @@ describe('installed CLI', () => {
     it('should refuse a flyctl older than 0.4.108 before decoding the token or calling the provider', async () => {
       const { result, attempts } = await createOnFly(
         'fly-old-flyctl',
-        { FLY_API_TOKEN: 'FlyV1 fm2_org-macaroon' },
+        { FLY_API_KEY: 'FlyV1 fm2_org-macaroon' },
         { decoding: ORGANIZATION_DECODING, version: '0.4.107' },
       );
 
@@ -953,14 +961,14 @@ describe('installed CLI', () => {
     it('should refuse a Fly token flyctl decodes as narrower than an organization before any provider call', async () => {
       const { result, attempts } = await createOnFly(
         'fly-deploy-token',
-        { FLY_API_TOKEN: 'FlyV1 fm2_deploy-macaroon' },
+        { FLY_API_KEY: 'FlyV1 fm2_deploy-macaroon' },
         { decoding: DEPLOY_DECODING },
       );
 
       expect(result.exitCode).toBe(1);
       expect(prerequisiteDetails(result)).toEqual([
         expect.stringMatching(
-          /FLY_API_TOKEN.* is narrowed by its Apps caveat.*fly tokens create org/u,
+          /FLY_API_KEY.* is narrowed by its Apps caveat.*fly tokens create org/u,
         ),
       ]);
       expect(result.stdout).not.toContain('deploy-macaroon');
@@ -971,7 +979,7 @@ describe('installed CLI', () => {
     it('should refuse a Sprites token given as the Fly token without decoding it', async () => {
       const { result, attempts } = await createOnFly(
         'fly-sprites-token',
-        { FLY_API_TOKEN: 'control-org/1234/0123abcd/4567ef89' },
+        { FLY_API_KEY: 'control-org/1234/0123abcd/4567ef89' },
         { decoding: 'never decoded' },
       );
 
@@ -986,7 +994,7 @@ describe('installed CLI', () => {
     it('should pass the offline check with an organization token and only then call the Machines API', async () => {
       const { result, attempts } = await createOnFly(
         'fly-org-token',
-        { FLY_API_TOKEN: 'FlyV1 fm2_org-macaroon' },
+        { FLY_API_KEY: 'FlyV1 fm2_org-macaroon' },
         { decoding: ORGANIZATION_DECODING },
       );
 
@@ -1057,7 +1065,7 @@ describe('installed CLI', () => {
             env: {
               ...env,
               ...selection,
-              SPRITES_TOKEN: 'selection-org/1234/0123abcd/4567ef89',
+              SPRITES_API_KEY: 'selection-org/1234/0123abcd/4567ef89',
             },
           },
         ),
@@ -1188,7 +1196,7 @@ describe('installed CLI', () => {
         code: 'INPUT',
         details: [
           expect.stringMatching(/^fly-machine: .*is not a Fly API token/u),
-          'sprite: workstation status unknown, no Sprites API token was found; supply one in SPRITES_TOKEN, or with --provider sprite --provider-token-source, to list its workstations',
+          'sprite: workstation status unknown, no Sprites API token was found; supply one in SPRITES_API_KEY, or with --provider sprite --provider-token-source, to list its workstations',
         ],
       },
     });
@@ -1237,7 +1245,7 @@ describe('installed CLI', () => {
             '--non-interactive',
             '--no-local-credentials',
           ],
-          { cwd, env: { ...env, SPRITES_TOKEN: 'test-org/1/0abc/0def' } },
+          { cwd, env: { ...env, SPRITES_API_KEY: 'test-org/1/0abc/0def' } },
         ),
       );
 
@@ -1249,7 +1257,7 @@ describe('installed CLI', () => {
           code: 'INPUT',
           message: 'Provider prerequisites are missing or misconfigured',
           details: expect.arrayContaining([
-            expect.stringContaining('FLY_API_TOKEN'),
+            expect.stringContaining('FLY_API_KEY'),
           ]),
         },
       });
@@ -1529,7 +1537,7 @@ describe('installed CLI', () => {
       const { result, attempts } = await withIsolatedCli(async (cwd, env) =>
         runOffline(packedBin, [...OFFLINE_SETUP_ARGUMENTS, ...flags], {
           cwd,
-          env: { ...env, SPRITES_TOKEN: 'offline-placeholder' },
+          env: { ...env, SPRITES_API_KEY: 'offline-placeholder' },
         }),
       );
 
@@ -1548,7 +1556,7 @@ describe('installed CLI', () => {
       runOffline(
         packedBin,
         [...OFFLINE_SETUP_ARGUMENTS, '--idle-minutes', '0'],
-        { cwd, env: { ...env, SPRITES_TOKEN: 'offline-placeholder' } },
+        { cwd, env: { ...env, SPRITES_API_KEY: 'offline-placeholder' } },
       ),
     );
     const parsed = JSON.parse(result.stdout) as {
@@ -1579,7 +1587,7 @@ describe('installed CLI', () => {
           '--non-interactive',
           '--no-local-credentials',
         ],
-        { cwd, env: { ...env, SPRITES_TOKEN: 'offline-placeholder' } },
+        { cwd, env: { ...env, SPRITES_API_KEY: 'offline-placeholder' } },
       ),
     );
     const parsed = JSON.parse(result.stdout) as {
@@ -1610,7 +1618,7 @@ describe('installed CLI', () => {
           '--non-interactive',
           '--no-local-credentials',
         ],
-        { cwd, env: { ...env, SPRITES_TOKEN: 'offline-placeholder' } },
+        { cwd, env: { ...env, SPRITES_API_KEY: 'offline-placeholder' } },
       ),
     );
 
@@ -1638,7 +1646,7 @@ describe('installed CLI', () => {
           '--non-interactive',
           '--no-local-credentials',
         ],
-        { cwd, env: { ...env, SPRITES_TOKEN: 'offline-placeholder' } },
+        { cwd, env: { ...env, SPRITES_API_KEY: 'offline-placeholder' } },
       ),
     );
     const parsed = JSON.parse(result.stdout) as {
@@ -1671,7 +1679,7 @@ describe('installed CLI', () => {
           '--non-interactive',
           '--no-local-credentials',
         ],
-        { cwd, env: { ...env, SPRITES_TOKEN: 'offline-placeholder' } },
+        { cwd, env: { ...env, SPRITES_API_KEY: 'offline-placeholder' } },
       ),
     );
     const parsed = JSON.parse(result.stdout) as {
@@ -1702,7 +1710,7 @@ describe('installed CLI', () => {
           '--non-interactive',
           '--no-local-credentials',
         ],
-        { cwd, env: { ...env, SPRITES_TOKEN: 'offline-placeholder' } },
+        { cwd, env: { ...env, SPRITES_API_KEY: 'offline-placeholder' } },
       ),
     );
 
@@ -2320,7 +2328,7 @@ describe('installed CLI', () => {
           ],
           {
             cwd,
-            env: { ...env, SPRITES_TOKEN: 'offline-placeholder' },
+            env: { ...env, SPRITES_API_KEY: 'offline-placeholder' },
             extendEnv: false,
             reject: false,
             timeout: 30_000,
@@ -2367,7 +2375,7 @@ describe('installed CLI', () => {
         ],
         {
           cwd,
-          env: { ...env, SPRITES_TOKEN: 'offline-placeholder' },
+          env: { ...env, SPRITES_API_KEY: 'offline-placeholder' },
           extendEnv: false,
           reject: false,
           timeout: 30_000,
