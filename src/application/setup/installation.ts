@@ -9,7 +9,8 @@ import type { SetupContext } from './context';
 
 /**
  * runs the workstation's setup plan for the profile this run applies,
- * carrying over the device identity and services the guest recorded; the
+ * carrying over the device identity, services and storage growth policy the
+ * guest recorded; the
  * record stays `incomplete` until the caller marks the installation ready
  * @param dependencies the guest mechanics
  * @param context provider, setup session, profile, prompts and mutation state

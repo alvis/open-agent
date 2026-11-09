@@ -11,6 +11,7 @@ import {
 } from './inspection';
 import { projectMachine } from './machine';
 import { projectProbeFailure } from './readiness';
+import { projectStorageReport } from './storage';
 
 import type { CurrentReadiness, DoctorData } from '#application/data';
 
@@ -26,6 +27,7 @@ import type {
 } from './inspection';
 import type { MachineOutput } from './machine';
 import type { ProbeFailureOutput } from './readiness';
+import type { StorageReportOutput } from './storage';
 
 /** readiness evidence retained even when the workstation is not ready */
 export interface CurrentReadinessOutput {
@@ -41,6 +43,8 @@ export interface CurrentReadinessOutput {
   updates?: UpdateStatusOutput;
   governor: GovernorOutput;
   boot?: BootOutput;
+  storage?: StorageReportOutput;
+  warnings: readonly string[];
 }
 
 /** the bounded doctor inspection */
@@ -70,6 +74,8 @@ function projectCurrentReadiness(
     updates: projectUpdates,
     governor: projectGovernor,
     boot: projectBoot,
+    storage: projectStorageReport,
+    warnings: same,
   });
 }
 

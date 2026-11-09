@@ -15,6 +15,7 @@ import type { ReadinessAssessment } from '#application/readiness';
 import type { CommandResult } from '#application/result';
 import type { GovernorState } from '#domain/observations/governor';
 import type { GuestInspection } from '#domain/observations/inspection';
+import type { StorageReport } from '#domain/observations/storage';
 import type { UpdateStatus } from '#domain/observations/updates';
 import type { WorkstationProfile } from '#domain/profile';
 import type { CommandErrorCode } from '#kernel/faults';
@@ -27,6 +28,8 @@ export interface CorpusCase {
   result: CommandResult;
   /** output controls other than `json`, which each variant decides */
   options: CommandOptions;
+  /** lines the human output shows, whitespace collapsed, when the case pins a supported wording */
+  humanLines?: readonly string[];
 }
 
 /** a workstation of any provider as the list command reports it */
@@ -230,6 +233,20 @@ const BOOT = {
   log: ['step services ok', 'step link-tools failed'],
 } as const;
 
+/** a Fly Machine volume grown once, two thirds full, growing by the defaults */
+const GROWING_STORAGE: StorageReport = {
+  sizeGb: 20,
+  usedGb: 13.1,
+  usedPercent: 66,
+  policy: {
+    state: 'on',
+    thresholdPercent: 80,
+    stepGb: 10,
+    limitGb: 100,
+    mechanisms: ['provider-auto'],
+  },
+};
+
 const ERROR_CODES: readonly CommandErrorCode[] = [
   'USAGE',
   'INPUT',
@@ -253,6 +270,7 @@ export const CORPUS: readonly CorpusCase[] = [
       },
       preflight: PREFLIGHT,
       profile: DISABLED_NETWORK_PROFILE,
+      storage: { sizeGb: 100, policy: { state: 'unsupported' } },
       readiness: PASSING_READINESS,
       network: INSPECTION.network,
       hub: INSPECTION.hub,
@@ -282,6 +300,16 @@ export const CORPUS: readonly CorpusCase[] = [
         machine: FLY_MACHINE,
         preflight: PREFLIGHT,
         profile: TAILSCALE_PROFILE_WITH_EXIT,
+        storage: {
+          sizeGb: 10,
+          policy: {
+            state: 'on',
+            thresholdPercent: 80,
+            stepGb: 10,
+            limitGb: 100,
+            mechanisms: ['provider-auto'],
+          },
+        },
         readiness: PASSING_READINESS,
         network: ONLINE_NETWORK,
         hub: REACHABLE_HUB,
@@ -299,6 +327,7 @@ export const CORPUS: readonly CorpusCase[] = [
       machine: MACHINE,
       preflight: { checks: [], reminders: [] },
       profile: TAILSCALE_PROFILE,
+      storage: { sizeGb: 40, policy: { state: 'off' } },
       readiness: PASSING_READINESS,
       network: INSPECTION.network,
       hub: INSPECTION.hub,
@@ -408,6 +437,7 @@ export const CORPUS: readonly CorpusCase[] = [
       network: { status: 'disabled', readiness: 'skipped' },
       proxy: { status: 'disabled' },
       tools: 'unchanged',
+      storage: { sizeGb: 60, needsRestart: true },
     },
   }),
   corpusCase('setup-agent-pairing', {
@@ -811,6 +841,71 @@ export const CORPUS: readonly CorpusCase[] = [
       },
     },
   }),
+  pinnedCase(
+    'show-storage-growing',
+    {
+      command: 'show',
+      ok: true,
+      data: {
+        machine: FLY_MACHINE,
+        inspection: {
+          ...INSPECTION,
+          storage: {
+            ...GROWING_STORAGE,
+            lastGrowth: {
+              at: '2026-10-09T00:05:00.000Z',
+              targetGb: 20,
+              outcome: 'grown',
+              detail: 'the provider reports 20 GB',
+            },
+          },
+        },
+      },
+    },
+    [
+      'Storage: 13.1 of 20 GB used (66%); grows by 10 GB at 80% up to 100 GB; last growth to 20 GB succeeded at 2026-10-09T00:05:00.000Z: the provider reports 20 GB',
+    ],
+  ),
+  ...(
+    [
+      [{ state: 'off' }, 'automatic growth off'],
+      [{ state: 'unsupported' }, 'fixed'],
+      [{ state: 'not-recorded' }, 'policy not recorded'],
+    ] as const
+  ).map(([policy, wording]) =>
+    pinnedCase(
+      `show-storage-${policy.state}`,
+      {
+        command: 'show',
+        ok: true,
+        data: {
+          machine: MACHINE,
+          inspection: {
+            ...INSPECTION,
+            storage: { ...GROWING_STORAGE, policy },
+          },
+        },
+      },
+      [`Storage: 13.1 of 20 GB used (66%); ${wording}`],
+    ),
+  ),
+  corpusCase('show-storage-probe-failure', {
+    command: 'show',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      inspection: {
+        ...INSPECTION,
+        probeFailures: [
+          {
+            probe: 'storage',
+            reason: 'The storage at / could not be measured',
+          },
+        ],
+        readiness: PASSING_READINESS,
+      },
+    },
+  }),
   corpusCase('show-guest-control-characters', {
     command: 'show',
     ok: true,
@@ -988,6 +1083,51 @@ export const CORPUS: readonly CorpusCase[] = [
         updates: UPDATES,
         boot: BOOT,
         skipped: sdkObservation<string[]>(['first', undefined, 'third']),
+      }),
+    },
+  }),
+  pinnedCase(
+    'doctor-storage-warnings',
+    {
+      command: 'doctor',
+      ok: true,
+      data: {
+        machine: FLY_MACHINE,
+        currentReadiness: currentReadiness({
+          storage: {
+            ...GROWING_STORAGE,
+            sizeGb: 98,
+            usedGb: 95,
+            usedPercent: 97,
+            provisionedGb: 100,
+            lastGrowth: {
+              at: '2026-10-09T00:05:00.000Z',
+              targetGb: 100,
+              outcome: 'failed',
+              detail: 'the provider refused the size',
+            },
+          },
+          warnings: [
+            'Storage is 97% full: 95 of 98 GB used',
+            'Storage is 97% full at its growth limit of 100 GB and no longer grows automatically',
+            'The last storage growth to 100 GB at 2026-10-09T00:05:00.000Z failed: the provider refused the size',
+          ],
+        }),
+      },
+    },
+    [
+      'Storage is 97% full: 95 of 98 GB used',
+      'Storage: 95 of 98 GB used (97%); grows by 10 GB at 80% up to 100 GB; last growth to 100 GB failed at 2026-10-09T00:05:00.000Z: the provider refused the size',
+    ],
+  ),
+  corpusCase('doctor-storage-probe-failure', {
+    command: 'doctor',
+    ok: true,
+    data: {
+      machine: MACHINE,
+      currentReadiness: currentReadiness({
+        probeFailures: [{ probe: 'storage', reason: 'df timed out' }],
+        warnings: ['storage inspection unavailable: df timed out'],
       }),
     },
   }),
@@ -1180,6 +1320,21 @@ function corpusCase(
 }
 
 /**
+ * names one characterized result whose human output pins a supported wording
+ * @param name unique kebab-case identity
+ * @param result completed result
+ * @param humanLines lines the human output must show
+ * @returns the corpus entry, with the default output controls
+ */
+function pinnedCase(
+  name: string,
+  result: CommandResult,
+  humanLines: readonly string[],
+): CorpusCase {
+  return { name, result, options: {}, humanLines };
+}
+
+/**
  * passes a runtime value the types forbid, as an SDK observation can
  * @param value the observed value
  * @returns the value typed as the contract claims it is
@@ -1213,6 +1368,7 @@ function currentReadiness(
     services: [],
     environment: INSPECTION.environment,
     governor: INSPECTION.governor,
+    warnings: [],
     ...overrides,
   };
 }

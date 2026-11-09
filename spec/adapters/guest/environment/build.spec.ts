@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildEnvironment } from '#adapters/guest/environment/build';
 import { registry } from '#composition/registry';
+import { ROOT_ONLY_MODE } from '#domain/guest';
 
 import { DISABLED_NETWORK_PROFILE } from '../../../fixtures/profile';
 
@@ -92,5 +93,52 @@ describe('fn:buildEnvironment', () => {
     expect(environment.provider).toEqual(
       expect.objectContaining({ id, awakeAdapter: null }),
     );
+  });
+
+  it('should record the storage path and no storage adapter for a provider without one', () => {
+    const environment = buildEnvironment(registry, params);
+
+    expect(environment.provider).toEqual(
+      expect.objectContaining({ storagePath: '/', storageAdapter: null }),
+    );
+  });
+
+  it('should record where the provider installs its storage adapter', () => {
+    const provider = {
+      ...registry.providers.sprite,
+      storageAsset: {
+        path: 'drivers/providers/fixture/storage.sh',
+        mode: ROOT_ONLY_MODE,
+        installAs: '/opt/open-agent/providers/fixture/storage.sh',
+      },
+    } satisfies Parameters<typeof buildEnvironment>[1]['provider'];
+
+    const environment = buildEnvironment(registry, { ...params, provider });
+
+    expect(environment.provider).toEqual(
+      expect.objectContaining({
+        storageAdapter: '/opt/open-agent/providers/fixture/storage.sh',
+      }),
+    );
+  });
+
+  it('should record the given storage growth policy', () => {
+    const storage = {
+      state: 'on',
+      thresholdPercent: 80,
+      stepGb: 10,
+      limitGb: 100,
+      mechanisms: ['provider-auto'],
+    } as const;
+
+    const environment = buildEnvironment(registry, { ...params, storage });
+
+    expect(environment.storage).toEqual(storage);
+  });
+
+  it('should record no storage growth policy when none is given', () => {
+    const environment = buildEnvironment(registry, params);
+
+    expect(environment).not.toHaveProperty('storage');
   });
 });

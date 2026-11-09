@@ -57,6 +57,16 @@ interface EnvironmentReader {
     environment: string,
   ): Resolved<boolean | undefined>;
   /**
+   * reads a boolean whose environment value is exactly true or false
+   * @param flag explicit flag value
+   * @param environment environment variable
+   * @returns the boolean when supplied, and why a supplied value is not true or false
+   */
+  literalFlag(
+    flag: boolean | undefined,
+    environment: string,
+  ): Resolved<boolean | undefined>;
+  /**
    * reads a whole number
    * @param flag explicit flag value
    * @param environment environment variable
@@ -73,7 +83,7 @@ interface EnvironmentReader {
  * @param sources process and credential file values
  * @param scope whether environment values apply to this run
  * @param scope.isEnabled false when only flags apply
- * @returns accessors for ids, lists, booleans and whole numbers
+ * @returns accessors for ids, lists, booleans, literal booleans and whole numbers
  */
 export function environmentReader(
   sources: InputSources,
@@ -96,6 +106,10 @@ export function environmentReader(
     flag: (flag, environment) =>
       flag === undefined
         ? parseBoolean(environment, raw(environment))
+        : { value: flag, problems: [] },
+    literalFlag: (flag, environment) =>
+      flag === undefined
+        ? parseLiteralBoolean(environment, raw(environment))
         : { value: flag, problems: [] },
     number: (flag, environment) =>
       flag === undefined
@@ -128,6 +142,26 @@ function parseBoolean(
     value: undefined,
     problems: [`${name} must be a boolean value (true or false)`],
   };
+}
+
+/**
+ * parses an environment boolean spelled exactly true or false
+ * @param name environment variable
+ * @param value raw value
+ * @returns the boolean, or undefined with a problem for any other spelling
+ */
+function parseLiteralBoolean(
+  name: string,
+  value: string | undefined,
+): Resolved<boolean | undefined> {
+  if (value === undefined) {
+    return { value: undefined, problems: [] };
+  }
+  if (value === 'true' || value === 'false') {
+    return { value: value === 'true', problems: [] };
+  }
+
+  return { value: undefined, problems: [`${name} must be true or false`] };
 }
 
 /**

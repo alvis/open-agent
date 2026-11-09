@@ -49,6 +49,7 @@ type OptionalBooleanKey =
   | 'withPairCode'
   | 'proxy'
   | 'useExitNode'
+  | 'autoExtend'
   | 'github'
   | 'gitIdentity'
   | 'plugins'

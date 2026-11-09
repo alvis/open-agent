@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { FLY_MACHINE_AWAKE } from '#adapters/drivers/providers/fly-machine/capabilities';
 import { guestAsset, readAsset } from '#adapters/guest/platform/assets';
+import { AWAKE_ASSET } from '#adapters/guest/platform/awake';
 
 describe('fn:readAsset', () => {
   it('should reject a guest asset that escapes the package tree', () => {
@@ -18,6 +19,14 @@ describe('fn:readAsset', () => {
     expect(awake).toContain("\nOA_FLY_API='/.fly/api'\n");
     expect(plain).toContain("\nOA_GUEST_ROOT='/opt/open-agent'\n");
     expect(plain).not.toContain('OA_FLY_API=');
+  });
+
+  it('should name the storage watcher the governor sources in its header', async () => {
+    const awake = await readAsset(AWAKE_ASSET);
+
+    expect(awake).toContain(
+      "\nOA_STORAGE_WATCHER='/opt/open-agent/governor/storage.sh'\n",
+    );
   });
 
   it('should refuse an added variable that is not an OA_ name or redefines the layout', async () => {

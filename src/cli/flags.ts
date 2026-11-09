@@ -6,6 +6,7 @@ import { AGENT_IDS, PROVIDER_IDS, releaseChannelIds } from '#domain/ids';
 import { networkIds } from '#domain/networks';
 
 import { machineFlags } from './machine-flags';
+import { storageFlags } from './storage-flags';
 import { parseWholeNumber } from './whole-number';
 
 /** local provider credential selection shared by every operation */
@@ -122,6 +123,7 @@ export const providerFlags = {
 export const selectionFlags = {
   ...providerFlags,
   ...machineFlags,
+  ...storageFlags,
   agent: {
     kind: 'parsed',
     parse: buildChoiceParser(AGENT_IDS),

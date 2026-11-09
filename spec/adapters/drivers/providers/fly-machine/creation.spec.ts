@@ -7,7 +7,7 @@ import { OperationContext, withOperation } from '#kernel/operation';
 
 import { DISABLED_NETWORK_PROFILE } from '../../../../fixtures/profile';
 
-import type { WorkstationProfile } from '#domain/profile';
+import type { ProfileOptions, WorkstationProfile } from '#domain/profile';
 
 interface Request {
   method: string;
@@ -53,6 +53,26 @@ function useReplies(
   );
 
   return seen;
+}
+
+/**
+ * reads the JSON bodies the stubbed fetch sent to one path
+ * @param path request path
+ * @returns decoded bodies in request order
+ */
+function sentBodies(path: string): unknown[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.filter(
+      ([input]) =>
+        new URL(input instanceof globalThis.Request ? input.url : input)
+          .pathname === path,
+    )
+    .map(([, init]) =>
+      typeof init?.body === 'string'
+        ? (JSON.parse(init.body) as unknown)
+        : undefined,
+    );
 }
 
 async function create(profile: WorkstationProfile = PROFILE): Promise<unknown> {
@@ -225,4 +245,81 @@ describe('Fly machine selection before creation', () => {
     });
     expect(seen).toEqual([]);
   });
+});
+
+describe('Fly storage at creation', () => {
+  it.each<{
+    storage: string;
+    options: Partial<ProfileOptions>;
+    sizeGb: number;
+    growth: Record<string, number>;
+  }>([
+    {
+      storage: 'default size, growing by the default policy',
+      options: {},
+      sizeGb: 10,
+      growth: {
+        extend_threshold_percent: 80,
+        add_size_gb: 10,
+        size_gb_limit: 100,
+      },
+    },
+    {
+      storage: 'requested minimum, growing by the requested policy',
+      options: {
+        minStorageGb: 40,
+        autoExtendThresholdPercent: 85,
+        autoExtendStepGb: 5,
+        storageLimitGb: 200,
+      },
+      sizeGb: 40,
+      growth: {
+        extend_threshold_percent: 85,
+        add_size_gb: 5,
+        size_gb_limit: 200,
+      },
+    },
+    {
+      storage: 'requested minimum, growing up to a limit raised to that size',
+      options: { minStorageGb: 150 },
+      sizeGb: 150,
+      growth: {
+        extend_threshold_percent: 80,
+        add_size_gb: 10,
+        size_gb_limit: 150,
+      },
+    },
+    {
+      storage: 'default size, never growing when automatic growth is off',
+      options: { autoExtend: false },
+      sizeGb: 10,
+      growth: {},
+    },
+  ])(
+    'should create the volume at the $storage',
+    async ({ options, sizeGb, growth }) => {
+      useReplies([
+        reply(undefined, 204),
+        reply({ id: 'volume-1' }),
+        reply({ id: 'machine-1', state: 'created' }),
+        reply(undefined, 204),
+      ]);
+
+      await create({ ...PROFILE, options: { ...PROFILE.options, ...options } });
+
+      expect({
+        volumes: sentBodies('/v1/apps/alpha/volumes'),
+        machines: sentBodies('/v1/apps/alpha/machines'),
+      }).toEqual({
+        volumes: [{ name: 'open_agent', region: 'lhr', size_gb: sizeGb }],
+        machines: [
+          expect.objectContaining({
+            config: expect.objectContaining({
+              mounts: [{ volume: 'volume-1', path: '/data', ...growth }],
+            }),
+          }),
+        ],
+      });
+    },
+  );
 });

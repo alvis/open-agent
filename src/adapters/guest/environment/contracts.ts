@@ -2,6 +2,7 @@
 // programs (updater, links, service backend, launchers, governor, boot hook)
 // read it with jq, and the host reads it back to inspect, update and destroy
 
+import { parseProfile } from '#domain/profile';
 import { CommandFault } from '#kernel/faults';
 import { isRecord } from '#kernel/guards';
 
@@ -32,7 +33,7 @@ export function serializeEnvironment(environment: GuestEnvironment): string {
  * reads the record back and validates it field by field
  * @param declarations the data every registered driver declares
  * @param text the file's contents
- * @returns the record
+ * @returns the record, its profile with each option an earlier release did not record set to its default
  * @throws {CommandFault} when the record has a format version this release does not know
  * @throws {Error} when the record is not JSON or is malformed
  */
@@ -54,10 +55,11 @@ export function parseEnvironment(
   if (!isRecord(value) || value.schema !== ENVIRONMENT_SCHEMA) {
     throw new Error('The guest environment is malformed: it has no schema');
   }
-  if (!isGuestEnvironment(declarations, value)) {
+  const profile = parseProfile({ declarations, value: value.profile });
+  if (!profile.isValid || !isGuestEnvironment(declarations, value)) {
     const problem = environmentProblem(declarations, value);
     throw new Error(`The guest environment is malformed: ${problem}`);
   }
 
-  return value;
+  return { ...value, profile: profile.profile };
 }

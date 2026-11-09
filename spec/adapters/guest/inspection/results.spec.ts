@@ -25,6 +25,7 @@ describe('fn:settleInspectionResults', () => {
       rejected,
       rejected,
       rejected,
+      rejected,
     ]);
 
     expect(result).toEqual({
@@ -44,7 +45,7 @@ describe('fn:settleInspectionResults', () => {
         skipped: false,
         reason: 'proxy probe unavailable',
       },
-      probeFailures: ['services', 'network', 'native', 'proxy'].map(
+      probeFailures: ['services', 'network', 'native', 'proxy', 'storage'].map(
         (probe) => ({ probe, reason: `${probe} probe unavailable` }),
       ),
     });
@@ -61,6 +62,7 @@ describe('fn:settleInspectionResults', () => {
 
     expect(() =>
       settleInspectionResults(RECORDED, [
+        rejected,
         rejected,
         rejected,
         rejected,

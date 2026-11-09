@@ -181,6 +181,7 @@ function expectSuccessJson(result: CommandSuccess, output: unknown): void {
       expect(output).toMatchObject({
         data: {
           preflight: { checks: result.data.preflight.checks },
+          storage: result.data.storage,
           readiness: {
             ready: result.data.readiness.ready,
             failures: result.data.readiness.failures,
@@ -191,6 +192,16 @@ function expectSuccessJson(result: CommandSuccess, output: unknown): void {
       break;
     case 'doctor':
       expectReadinessJson(result.data.currentReadiness, output);
+      expect(output).toMatchObject({
+        data: {
+          currentReadiness: {
+            warnings: result.data.currentReadiness.warnings,
+            ...(result.data.currentReadiness.storage && {
+              storage: result.data.currentReadiness.storage,
+            }),
+          },
+        },
+      });
       break;
     case 'show':
       expectShowJson(result.data.inspection, output);
@@ -288,6 +299,8 @@ function expectShowJson(
             dnsReady: inspection.network.dnsReady,
           },
           governor: { recorded: inspection.governor.recorded },
+          ...(inspection.storage && { storage: inspection.storage }),
+          probeFailures: inspection.probeFailures,
         },
       },
     });
@@ -315,6 +328,9 @@ function expectSetupJson(
         },
       },
     });
+  }
+  if ('storage' in data && data.storage) {
+    expect(output).toMatchObject({ data: { storage: data.storage } });
   }
   if ('runtimeEnvironment' in data && data.runtimeEnvironment) {
     expect(output).toMatchObject({
@@ -445,6 +461,10 @@ function expectHumanOutput(entry: CorpusCase, prepared: PreparedResult): void {
   }
   if (!entry.result.ok) {
     expectHumanFailure(entry.result.error, prepared.text);
+  }
+  const text = prepared.text.replaceAll(/\s+/gu, ' ');
+  for (const line of entry.humanLines ?? []) {
+    expect(text).toContain(line);
   }
 }
 

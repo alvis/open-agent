@@ -1,5 +1,8 @@
 import { readAsset } from '#adapters/guest/platform/assets';
-import { AWAKE_ASSET } from '#adapters/guest/platform/awake';
+import {
+  AWAKE_ASSET,
+  STORAGE_WATCHER_ASSET,
+} from '#adapters/guest/platform/awake';
 import {
   AGENT_HOME,
   AGENT_ID,
@@ -130,8 +133,9 @@ export async function foundationSteps(
 /**
  * lists the guest programs setup installs before any step sources one: the
  * family's library and update fragment, the tool libraries, the service
- * backend's, the governor and the provider's awake adapter, the update gate
- * and updater, and the agent's and network's launchers
+ * backend's, the governor and its storage watcher, the provider's awake and
+ * storage adapters, the update gate and updater, and the agent's and
+ * network's launchers
  * @param context the provider, the selection and the family
  * @returns each asset once
  */
@@ -153,7 +157,9 @@ function guestAssets(
     VERSIONS_LIBRARY,
     ...backendAssets(provider.serviceBackend),
     AWAKE_ASSET,
+    STORAGE_WATCHER_ASSET,
     ...(provider.awakeAsset ? [provider.awakeAsset] : []),
+    ...(provider.storageAsset ? [provider.storageAsset] : []),
     UPDATE_GATE_ASSET,
     UPDATER_ASSET,
     registry.agents[profile.agent].launcher,

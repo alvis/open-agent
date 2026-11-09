@@ -484,6 +484,23 @@ describe('fn:finalizeCreate READY boundary', () => {
     expect(permittedOutput.stderr).toBe('');
   });
 
+  it('should report the storage the workstation started with and its growth policy in JSON', async () => {
+    const { sprite } = createSprite();
+
+    const result = await finalizeCreate(dependencies, {
+      workstation: toRecord(sprite),
+      guest: guestOf(sprite),
+      observed,
+      context: createContext(sprite),
+    });
+    const output = captureResult(result, { json: true });
+
+    expect(JSON.parse(output.stdout).data.storage).toEqual({
+      sizeGb: 100,
+      policy: { state: 'unsupported' },
+    });
+  });
+
   it('should not mint pairing by default after READY', async () => {
     const { sprite, mutations } = createSprite();
     const pair = vi

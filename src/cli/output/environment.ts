@@ -1,5 +1,6 @@
 import { each, projectFields, same } from './fields';
 import { projectProfile } from './profile';
+import { projectStoragePolicy } from './storage';
 
 import type {
   EnvironmentHarness,
@@ -13,6 +14,7 @@ import type { GuestNetworkIdentity } from '#domain/observations/network';
 import type { PeriodicJob, ServiceDefinition } from '#domain/services';
 
 import type { ProfileOutput } from './profile';
+import type { StoragePolicyOutput } from './storage';
 
 /** a command as a guest declaration records it */
 export interface EnvironmentCommandOutput {
@@ -55,6 +57,8 @@ export interface EnvironmentProviderOutput {
   idleTimeoutMinutes: number;
   holdMaxMinutes: number;
   awakeAdapter: string | null;
+  storagePath?: string;
+  storageAdapter?: string | null;
 }
 
 /** a harness the guest recorded for its agent */
@@ -117,6 +121,7 @@ export interface EnvironmentOutput {
   tools: EnvironmentToolOutput[];
   schedule: { dueDays: number };
   provider: EnvironmentProviderOutput;
+  storage?: StoragePolicyOutput;
   agent: EnvironmentAgentOutput;
   network: EnvironmentNetworkOutput | null;
   services: ServiceDefinitionOutput[];
@@ -159,6 +164,7 @@ export function projectEnvironment(
         dueDays: same,
       }),
     provider: projectProvider,
+    storage: projectStoragePolicy,
     agent: projectAgent,
     network: (network) => (network === null ? null : projectNetwork(network)),
     services: each(projectServiceDefinition),
@@ -281,6 +287,8 @@ function projectProvider(
       idleTimeoutMinutes: same,
       holdMaxMinutes: same,
       awakeAdapter: same,
+      storagePath: same,
+      storageAdapter: same,
     },
   );
 }

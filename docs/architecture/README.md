@@ -30,5 +30,6 @@ The selected ACP agent is the sole public service. Optional integrations use dir
 | [ADR-16: Host-driven guest setup, layered by provider, OS family and tool contract](decisions/workstation/adr-16-host-driven-guest-setup.md) | Setup session, OS family and tool contract, sh self-maintenance and shared preset lint scope | Accepted |
 | [ADR-18: Layer boundaries and runtime output contracts](decisions/workstation/adr-18-layer-boundaries-and-runtime-output-contracts.md)       | Six-layer boundaries, identifier ownership, guest split and tested machine-output semantics  | Accepted |
 | [ADR-19: On-demand upgrade and opt-in restart](decisions/workstation/adr-19-on-demand-upgrade-and-opt-in-restart.md)                         | Selective `upgrade`, install times, `runsOn` and idle-aware host restarts; amends ADR-12     | Accepted |
+| [ADR-20: Storage as a declared provider capability](decisions/workstation/adr-20-storage-capability.md)                                      | Storage capability, growth mechanisms, growth policy and explicit growth                     | Accepted |
 
 Architecture documents describe current structure. Effective ADRs explain accepted choices; historical decision bodies remain unchanged in the superseded archive.

@@ -9,6 +9,7 @@ import type { GuestAccount, GuestCommand } from '#domain/guest-command';
 import type { GuestNetworkIdentity } from '#domain/observations/network';
 import type { WorkstationProfile } from '#domain/profile';
 import type { PeriodicJob, ServiceDefinition } from '#domain/services';
+import type { StoragePolicy } from '#domain/storage';
 import type { ToolOwner, ToolSource } from '#domain/tools';
 
 /** the record's format version */
@@ -43,7 +44,7 @@ export interface SkippedTool {
   reason: string;
 }
 
-/** the provider's facts the idle governor and its awake adapter read */
+/** the provider's facts the idle governor, its awake adapter and the storage watcher read */
 export interface EnvironmentProvider {
   /** provider identifier */
   id: string;
@@ -67,6 +68,10 @@ export interface EnvironmentProvider {
   holdMaxMinutes: number;
   /** where the provider's awake adapter is installed; null when it deploys none */
   awakeAdapter: string | null;
+  /** guest path whose filesystem holds the persistent data; absent in a record an earlier release wrote */
+  storagePath?: string;
+  /** where the provider's storage adapter is installed; null when it deploys none, absent in a record an earlier release wrote */
+  storageAdapter?: string | null;
 }
 
 /** a command recorded for a guest program to run */
@@ -148,6 +153,8 @@ export interface GuestEnvironment {
   };
   /** the provider's facts */
   provider: EnvironmentProvider;
+  /** the storage growth policy recorded at creation; absent, read as not-recorded, for a workstation created before it was recorded */
+  storage?: StoragePolicy;
   /** the agent's launch facts */
   agent: EnvironmentAgent;
   /** the selected network's launch facts; null when it runs no daemon */

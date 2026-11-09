@@ -1,5 +1,7 @@
 import { isRecord } from '#kernel/guards';
 
+import { isRecordedCount, isRecordedInstant, isRecordedText } from './records';
+
 import type { KeepAwakeMode } from '#domain/declarations';
 
 // the governor records its state after every recompute; the host reads it
@@ -10,13 +12,6 @@ import type { KeepAwakeMode } from '#domain/declarations';
 const RECORDED_HOLD_LIMIT = 32;
 /** most diagnostics the record keeps */
 const DIAGNOSTIC_LIMIT = 8;
-/** longest diagnostic the record keeps */
-const DIAGNOSTIC_LENGTH = 240;
-/** longest ISO 8601 instant a record holds */
-const INSTANT_LENGTH = 32;
-
-/** a C0 or C1 control character, which could rewrite a terminal's display */
-const CONTROL_CHARACTER = /\p{Cc}/u;
 /** a harness or managed operation, as `--source` names it */
 const SOURCE_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 /** a hashed session identifier, as the governor records it */
@@ -109,7 +104,7 @@ export function isGovernorReport(value: unknown): value is GovernorReport {
   return (
     isRecord(value) &&
     ((value.recorded === true && isGovernorState(value.state)) ||
-      (value.recorded === false && isText(value.reason)))
+      (value.recorded === false && isRecordedText(value.reason)))
   );
 }
 
@@ -122,20 +117,21 @@ function isGovernorState(value: unknown): value is GovernorState {
   return (
     isRecord(value) &&
     value.version === 1 &&
-    isInstant(value.updatedAt) &&
+    isRecordedInstant(value.updatedAt) &&
     (value.keepAwakeMode === undefined ||
       (typeof value.keepAwakeMode === 'string' &&
         Object.hasOwn(KEEP_AWAKE_MODES, value.keepAwakeMode))) &&
-    isCount(value.idleTimeoutMinutes) &&
-    isCount(value.holdMaxMinutes) &&
-    (value.lastHeartbeat === undefined || isInstant(value.lastHeartbeat)) &&
+    isRecordedCount(value.idleTimeoutMinutes) &&
+    isRecordedCount(value.holdMaxMinutes) &&
+    (value.lastHeartbeat === undefined ||
+      isRecordedInstant(value.lastHeartbeat)) &&
     hasRecordedHolds(value) &&
-    (value.deadline === undefined || isInstant(value.deadline)) &&
+    (value.deadline === undefined || isRecordedInstant(value.deadline)) &&
     typeof value.sleepPermitted === 'boolean' &&
     (value.adapter === undefined || isAdapterResult(value.adapter)) &&
     Array.isArray(value.diagnostics) &&
     value.diagnostics.length <= DIAGNOSTIC_LIMIT &&
-    value.diagnostics.every(isText)
+    value.diagnostics.every(isRecordedText)
   );
 }
 
@@ -150,7 +146,7 @@ function hasRecordedHolds(value: Record<string, unknown>): boolean {
     Array.isArray(value.holds) &&
     value.holds.length <= RECORDED_HOLD_LIMIT &&
     value.holds.every(isRecordedHold) &&
-    isCount(value.openHolds) &&
+    isRecordedCount(value.openHolds) &&
     value.openHolds >= value.holds.length
   );
 }
@@ -167,7 +163,7 @@ function isRecordedHold(value: unknown): value is RecordedHold {
     SOURCE_NAME.test(value.source) &&
     typeof value.session === 'string' &&
     SESSION_HASH.test(value.session) &&
-    isInstant(value.expiresAt)
+    isRecordedInstant(value.expiresAt)
   );
 }
 
@@ -179,47 +175,10 @@ function isRecordedHold(value: unknown): value is RecordedHold {
 function isAdapterResult(value: unknown): value is AdapterResult {
   return (
     isRecord(value) &&
-    isInstant(value.at) &&
+    isRecordedInstant(value.at) &&
     ADAPTER_ACTIONS.includes(value.action) &&
     (value.result === undefined) !== (value.failure === undefined) &&
-    (value.result === undefined || isText(value.result)) &&
-    (value.failure === undefined || isText(value.failure))
-  );
-}
-
-/**
- * validates an ISO 8601 instant
- * @param value untrusted field
- * @returns whether the value is an instant `Date` writes back unchanged
- */
-function isInstant(value: unknown): value is string {
-  if (typeof value !== 'string' || value.length > INSTANT_LENGTH) {
-    return false;
-  }
-  const time = Date.parse(value);
-
-  return Number.isFinite(time) && new Date(time).toISOString() === value;
-}
-
-/**
- * validates a whole-number field
- * @param value untrusted field
- * @returns whether the value is a non-negative safe integer
- */
-function isCount(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-}
-
-/**
- * validates a bounded text field that a terminal shows as it is
- * @param value untrusted field
- * @returns whether the value is a string within the diagnostic length that
- * holds no C0 or C1 control character
- */
-function isText(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length <= DIAGNOSTIC_LENGTH &&
-    !CONTROL_CHARACTER.test(value)
+    (value.result === undefined || isRecordedText(value.result)) &&
+    (value.failure === undefined || isRecordedText(value.failure))
   );
 }

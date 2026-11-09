@@ -282,6 +282,50 @@ describe('fn:assemblePlan', () => {
       }),
     );
   });
+
+  it("should record a Fly workstation's storage growth policy in environment.json and no management credential", async () => {
+    const credential = 'FlyV1 fm2_inv3-management-credential';
+    const provider = registry.providers['fly-machine'].authenticate({
+      credential,
+      restorableServices: [],
+    });
+    const storage = {
+      state: 'on',
+      thresholdPercent: 80,
+      stepGb: 10,
+      limitGb: 100,
+      mechanisms: ['provider-auto'],
+    } as const;
+
+    const assembly = await assemblePlan(registry, {
+      provider,
+      profile: { ...DISABLED_NETWORK_PROFILE, provider: 'fly-machine' },
+      release: RELEASE,
+      version: OPEN_AGENT_VERSION,
+      setupAt: '2026-10-25T00:00:00Z',
+      storage,
+    });
+    const written = assembly.steps.find(({ id }) => id === 'environment')?.apply
+      .input;
+    const recorded = written?.kind === 'text' ? written.value : '';
+    const values = JSON.stringify(JSON.parse(recorded), (key, value) =>
+      /token|credential|secret|password/iu.test(key) ? '<credential>' : value,
+    );
+
+    expect(JSON.parse(recorded)).toEqual(
+      expect.objectContaining({
+        provider: expect.objectContaining({
+          storagePath:
+            registry.providers['fly-machine'].capabilities.storage.path,
+          storageAdapter: null,
+        }),
+        storage,
+      }),
+    );
+    expect(values).not.toContain('<credential>');
+    expect(values).not.toContain(credential);
+    expect(values).not.toContain('fm2_inv3');
+  });
 });
 
 describe('fn:assertImageTools', () => {

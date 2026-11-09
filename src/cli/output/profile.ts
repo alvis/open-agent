@@ -23,6 +23,11 @@ export interface ProfileOptionsOutput {
   updateDueIntervalDays: number;
   minCpus: number;
   minMemoryGb: number;
+  minStorageGb: number;
+  autoExtend?: boolean;
+  autoExtendThresholdPercent: number;
+  autoExtendStepGb: number;
+  storageLimitGb: number;
   agentRelease?: string;
 }
 
@@ -78,6 +83,11 @@ export function projectProfileOptions(
     updateDueIntervalDays: same,
     minCpus: same,
     minMemoryGb: same,
+    minStorageGb: same,
+    autoExtend: same,
+    autoExtendThresholdPercent: same,
+    autoExtendStepGb: same,
+    storageLimitGb: same,
     agentRelease: same,
   });
 }

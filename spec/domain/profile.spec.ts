@@ -35,7 +35,14 @@ vi.mock('#composition/registry', async (importOriginal) => {
       wakeMode: 'url-traffic',
       supportsCliWakeSleep: false,
       maxAwakeDeadlineMinutes: 60,
-      persistence: 'provider-disk',
+      storage: {
+        persistence: 'provider-disk',
+        defaultGb: 100,
+        maxGb: 100,
+        path: '/',
+        growth: [],
+        hostExtend: false,
+      },
       exposure: 'provider-url',
       discovery: 'provider-metadata',
       resizeRestarts: false,
@@ -236,6 +243,10 @@ describe('fn:defaultProfile', () => {
         idleTimeoutMinutes: 5,
         holdMaxMinutes: 60,
         updateDueIntervalDays: 1,
+        minStorageGb: 10,
+        autoExtendThresholdPercent: 80,
+        autoExtendStepGb: 10,
+        storageLimitGb: 100,
       },
     });
     expect(defaultProfile(defaults, 'none').network).toBe('none');
@@ -387,6 +398,187 @@ describe('fn:validateProfile', () => {
           code: 'undeclared-capability',
           fields: ['provider', 'minCpus', 'minMemoryGb'],
         },
+      ],
+    });
+  });
+
+  it.each([
+    {
+      field: 'minStorageGb',
+      value: 0,
+      message: /--storage \(OPEN_AGENT_STORAGE\).*GB of at least 1/,
+    },
+    {
+      field: 'autoExtendThresholdPercent',
+      value: 49,
+      message: /--auto-extend-at .*percent from 50 to 95/,
+    },
+    {
+      field: 'autoExtendThresholdPercent',
+      value: 96,
+      message: /--auto-extend-at .*percent from 50 to 95/,
+    },
+    {
+      field: 'autoExtendStepGb',
+      value: 0,
+      message: /--auto-extend-step .*GB of at least 1/,
+    },
+  ])(
+    'should refuse a $field of $value outside its bounds',
+    ({ field, value, message }) => {
+      const result = validateProfile({
+        declarations: registry,
+        candidate: {
+          ...valid,
+          provider: 'fly-machine',
+          options: { ...valid.options, [field]: value },
+        },
+      });
+
+      expect(result).toEqual({
+        isValid: false,
+        violations: [
+          {
+            code: 'invalid-option',
+            message: expect.stringMatching(message),
+            fields: [field],
+          },
+        ],
+      });
+    },
+  );
+
+  it('should refuse a growth limit below 1 GB by its bound alone when the limit was not supplied', () => {
+    const result = validateProfile({
+      declarations: registry,
+      candidate: {
+        ...valid,
+        provider: 'fly-machine',
+        options: { ...valid.options, storageLimitGb: 0 },
+      },
+    });
+
+    expect(result).toEqual({
+      isValid: false,
+      violations: [
+        {
+          code: 'invalid-option',
+          message: expect.stringMatching(/--storage-limit .*GB of at least 1/),
+          fields: ['storageLimitGb'],
+        },
+      ],
+    });
+  });
+
+  it('should accept the storage bounds’ extremes on a provider whose storage grows', () => {
+    const result = validateProfile({
+      declarations: registry,
+      candidate: {
+        ...valid,
+        provider: 'fly-machine',
+        options: {
+          ...valid.options,
+          minStorageGb: 1,
+          autoExtend: true,
+          autoExtendThresholdPercent: 50,
+          autoExtendStepGb: 1,
+          storageLimitGb: 500,
+        },
+      },
+      options: {
+        isStorageLimitRequested: true,
+        storagePolicyFlags: [
+          'autoExtendThresholdPercent',
+          'autoExtendStepGb',
+          'storageLimitGb',
+        ],
+      },
+    });
+
+    expect(result).toMatchObject({ isValid: true });
+  });
+
+  it('should accept a large disk with growth off and no supplied limit', () => {
+    const result = validateProfile({
+      declarations: registry,
+      candidate: {
+        ...valid,
+        provider: 'fly-machine',
+        options: { ...valid.options, minStorageGb: 200, autoExtend: false },
+      },
+    });
+
+    expect(result).toMatchObject({ isValid: true });
+  });
+
+  it('should refuse a supplied growth limit below the starting size', () => {
+    const result = validateProfile({
+      declarations: registry,
+      candidate: {
+        ...valid,
+        provider: 'fly-machine',
+        options: { ...valid.options, minStorageGb: 10, storageLimitGb: 5 },
+      },
+      options: { isStorageLimitRequested: true },
+    });
+
+    expect(result).toEqual({
+      isValid: false,
+      violations: [
+        {
+          code: 'invalid-option',
+          message: expect.stringContaining('below the starting size of 10 GB'),
+          fields: ['minStorageGb', 'storageLimitGb'],
+        },
+      ],
+    });
+  });
+
+  it('should aggregate every storage violation on a fixed-storage provider with the other option bounds', () => {
+    const result = validateProfile({
+      declarations: registry,
+      candidate: {
+        ...valid,
+        options: {
+          ...valid.options,
+          minStorageGb: 200,
+          autoExtend: true,
+          autoExtendThresholdPercent: 99,
+          autoExtendStepGb: 0,
+        },
+      },
+      options: {
+        storagePolicyFlags: ['autoExtendThresholdPercent', 'autoExtendStepGb'],
+      },
+    });
+
+    expect(result).toEqual({
+      isValid: false,
+      violations: [
+        expect.objectContaining({
+          code: 'undeclared-capability',
+          fields: ['provider', 'minStorageGb'],
+        }),
+        expect.objectContaining({
+          code: 'undeclared-capability',
+          fields: ['provider', 'autoExtend'],
+        }),
+        expect.objectContaining({
+          code: 'undeclared-capability',
+          fields: ['provider', 'autoExtendThresholdPercent'],
+        }),
+        expect.objectContaining({
+          code: 'undeclared-capability',
+          fields: ['provider', 'autoExtendStepGb'],
+        }),
+        expect.objectContaining({
+          code: 'invalid-option',
+          fields: ['autoExtendThresholdPercent'],
+        }),
+        expect.objectContaining({
+          code: 'invalid-option',
+          fields: ['autoExtendStepGb'],
+        }),
       ],
     });
   });
@@ -552,6 +744,54 @@ describe('fn:parseProfile', () => {
     });
   });
 
+  it('should fill the storage options a profile recorded before they existed', () => {
+    // the options an environment.json recorded before storage growth existed
+    const earlierOptions = {
+      isExitNodeEnabled: false,
+      isProxyEnabled: false,
+      idleTimeoutMinutes: 5,
+      holdMaxMinutes: 60,
+      updateDueIntervalDays: 1,
+      minCpus: 2,
+      minMemoryGb: 2,
+    };
+    const value = { ...valid, options: earlierOptions };
+
+    expect(parseProfile({ declarations: registry, value })).toEqual({
+      isValid: true,
+      profile: {
+        ...valid,
+        options: {
+          ...earlierOptions,
+          minStorageGb: 10,
+          autoExtendThresholdPercent: 80,
+          autoExtendStepGb: 10,
+          storageLimitGb: 100,
+        },
+      },
+    });
+  });
+
+  it('should keep recorded storage options over their defaults', () => {
+    const value = {
+      ...valid,
+      provider: 'fly-machine',
+      options: {
+        ...valid.options,
+        minStorageGb: 40,
+        autoExtend: false,
+        autoExtendThresholdPercent: 90,
+        autoExtendStepGb: 5,
+        storageLimitGb: 200,
+      },
+    };
+
+    expect(parseProfile({ declarations: registry, value })).toEqual({
+      isValid: true,
+      profile: value,
+    });
+  });
+
   it('should reject a stored value without the profile structure', () => {
     expect(
       parseProfile({ declarations: registry, value: { provider: 'sprite' } }),
@@ -581,6 +821,14 @@ describe('fn:parseProfile', () => {
     {
       field: 'numeric option',
       value: { ...valid, options: { ...valid.options, minCpus: 'many' } },
+    },
+    {
+      field: 'storage option',
+      value: { ...valid, options: { ...valid.options, minStorageGb: '10' } },
+    },
+    {
+      field: 'optional automatic growth',
+      value: { ...valid, options: { ...valid.options, autoExtend: 'yes' } },
     },
     {
       field: 'optional release channel',

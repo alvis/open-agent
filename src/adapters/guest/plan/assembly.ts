@@ -179,7 +179,7 @@ export async function assemblePlan(
 /**
  * builds the environment the plan writes, its setup still incomplete
  * @param registry every registered driver
- * @param params the provider, profile, version and retained identity
+ * @param params the provider, profile, version, retained identity and growth policy
  * @param resolved the tools setup resolved and the source picked for each
  * @param resolved.tools every tool setup resolved
  * @param resolved.resolutions the source picked for each tool
@@ -219,8 +219,9 @@ function assembleEnvironment(
     }),
     network: environmentNetwork(network),
     services: guestServices(agent, provider, network.daemon),
-    jobs: guestJobs(provider.capabilities),
+    jobs: guestJobs(provider.capabilities, params.storage),
     ...(params.networkIdentity && { networkIdentity: params.networkIdentity }),
+    ...(params.storage && { storage: params.storage }),
   });
 }
 

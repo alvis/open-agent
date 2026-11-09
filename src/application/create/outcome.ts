@@ -2,6 +2,8 @@ import { summarizeMachine } from '#application/machine';
 import { assessReadiness } from '#application/readiness';
 import { PairingSecret } from '#kernel/pairing-secret';
 
+import { summarizeStorage } from './storage';
+
 import type { ApplicationDependencies } from '#application/ports/dependencies';
 import type { CommandResult } from '#application/result';
 import type {
@@ -66,6 +68,7 @@ export function createResult(
       preflight,
       retainedCredentials,
       profile: observed.environment.profile,
+      storage: summarizeStorage(dependencies, observed.environment.profile),
       readiness: assessReadiness(dependencies, observed),
       network: {
         deviceId: observed.network.deviceId,

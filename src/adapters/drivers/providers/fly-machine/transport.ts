@@ -9,7 +9,7 @@ import { diagnostic, FlyApiFault, statusFailureCode } from './status';
 /** one Machines API request */
 export interface FlyRequest {
   /** HTTP method */
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** path relative to the API base, starting with a slash */
   path: string;
   /** JSON body, when the request carries one */

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { familyOf } from '#adapters/guest/os/families';
 import { foundationSteps } from '#adapters/guest/plan/foundation';
 import { registry } from '#composition/registry';
+import { ROOT_ONLY_MODE } from '#domain/guest';
 
 import { DISABLED_NETWORK_PROFILE } from '../../../fixtures/profile';
 
@@ -74,6 +75,77 @@ describe('fn:foundationSteps', () => {
     expect(steps.find((step) => step.id === 'homebrew')).toBeUndefined();
     expect(steps.find((step) => step.id === 'bootstrap')).toEqual(
       expect.objectContaining({ critical: true, retry: 'transport' }),
+    );
+  });
+
+  it('should install the storage watcher root-only beside the governor', async () => {
+    const steps = await foundationSteps({
+      registry,
+      provider: registry.providers.sprite,
+      profile: DISABLED_NETWORK_PROFILE,
+      release,
+      family: familyOf(release),
+      tools: [],
+      resolutions: [],
+    });
+
+    expect(
+      steps.find(({ id }) => id === 'asset:governor/storage.sh')?.apply,
+    ).toEqual({
+      argv: [
+        familyOf(release).shell,
+        '-c',
+        expect.any(String),
+        'oa-file',
+        '/opt/open-agent/governor/storage.sh',
+        '700',
+      ],
+      input: { kind: 'text', value: 'contents of governor/storage.sh' },
+    });
+  });
+
+  it("should install a provider's storage adapter root-only with the guest programs", async () => {
+    const provider = {
+      ...registry.providers['fly-machine'],
+      storageAsset: {
+        path: 'drivers/providers/fixture/storage.sh',
+        mode: ROOT_ONLY_MODE,
+        installAs: '/opt/open-agent/providers/fixture/storage.sh',
+      },
+    } satisfies PlanProvider;
+
+    const steps = await foundationSteps({
+      registry,
+      provider,
+      profile: DISABLED_NETWORK_PROFILE,
+      release,
+      family: familyOf(release),
+      tools: [],
+      resolutions: [],
+    });
+
+    expect(
+      steps.find(
+        ({ id }) => id === 'asset:drivers/providers/fixture/storage.sh',
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        account: 'root',
+        apply: {
+          argv: [
+            familyOf(release).shell,
+            '-c',
+            expect.any(String),
+            'oa-file',
+            '/opt/open-agent/providers/fixture/storage.sh',
+            '700',
+          ],
+          input: {
+            kind: 'text',
+            value: 'contents of drivers/providers/fixture/storage.sh',
+          },
+        },
+      }),
     );
   });
 });

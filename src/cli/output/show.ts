@@ -12,6 +12,7 @@ import {
 import { projectMachine } from './machine';
 import { projectPairing } from './pairing';
 import { projectProbeFailure, projectReadiness } from './readiness';
+import { projectStorageReport } from './storage';
 
 import type { ShowData } from '#application/data';
 
@@ -53,6 +54,7 @@ function projectShownInspection(
     probeFailures: each(projectProbeFailure),
     governor: projectGovernor,
     boot: projectBoot,
+    storage: projectStorageReport,
     readiness: projectReadiness,
   });
 }

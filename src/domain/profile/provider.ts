@@ -1,5 +1,6 @@
 import { largestMachine, pickMachine } from '#domain/machine-sizes';
 import { selectionLabel } from '#domain/selection-inputs';
+import { storageViolations } from '#domain/storage';
 
 import type { ProductDeclarations } from '#domain/declarations';
 import type { ProviderId } from '#domain/ids';
@@ -56,6 +57,12 @@ export function providerViolations({
       declarations,
       provider,
       options: candidateOptions,
+    }),
+    ...storageViolations({
+      declarations,
+      provider,
+      options: candidateOptions,
+      requests: options,
     }),
     ...(maxAwakeDeadlineMinutes === null
       ? []

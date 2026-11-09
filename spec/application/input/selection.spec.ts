@@ -12,7 +12,7 @@ import { defaultProfile, MAX_UPDATE_DUE_DAYS } from '#domain/profile';
 
 import { dependencies } from '../../mocks/dependencies';
 
-import type { SetupSection } from '#application/contracts';
+import type { CommandOptions, SetupSection } from '#application/contracts';
 import type { SelectionContext } from '#application/input/selection/sources';
 import type { InputSources } from '#application/input/sources';
 import type {
@@ -20,7 +20,7 @@ import type {
   InteractionChoice,
   InteractionPrompt,
 } from '#application/ports/interaction';
-import type { WorkstationProfile } from '#domain/profile';
+import type { ProfileOptions, WorkstationProfile } from '#domain/profile';
 
 const empty: InputSources = { processEnv: {}, fileEnv: {}, profile: {} };
 
@@ -108,6 +108,7 @@ describe('fn:resolveCreateSelection', () => {
       'Provider',
       'Minimum CPUs',
       'Minimum memory (GB)',
+      'Minimum storage (GB)',
       'Release channel',
       'Harnesses',
       'Network',
@@ -142,6 +143,7 @@ describe('fn:resolveCreateSelection', () => {
         provider: 'sprite',
         cpu: 4,
         mem: 8,
+        storage: 20,
         release: 'stable',
         harness: ['codex'],
         network: 'tailscale',
@@ -277,6 +279,328 @@ describe('fn:resolveCreateSelection', () => {
     });
 
     expect(candidate.options.isExitNodeEnabled).toBe(true);
+  });
+});
+
+describe('fn:resolveCreateSelection storage', () => {
+  it.each([
+    {
+      option: 'minStorageGb',
+      flag: { storage: 40 },
+      environment: 'OPEN_AGENT_STORAGE',
+      fromFile: '30',
+      fromProcess: '20',
+      expected: [40, 30, 20, 10],
+    },
+    {
+      option: 'autoExtend',
+      flag: { autoExtend: true },
+      environment: 'OPEN_AGENT_AUTO_EXTEND',
+      fromFile: 'false',
+      fromProcess: 'true',
+      expected: [true, false, true, undefined],
+    },
+    {
+      option: 'autoExtendThresholdPercent',
+      flag: { autoExtendAt: 85 },
+      environment: 'OPEN_AGENT_AUTO_EXTEND_AT',
+      fromFile: '70',
+      fromProcess: '60',
+      expected: [85, 70, 60, 80],
+    },
+    {
+      option: 'autoExtendStepGb',
+      flag: { autoExtendStep: 5 },
+      environment: 'OPEN_AGENT_AUTO_EXTEND_STEP',
+      fromFile: '7',
+      fromProcess: '9',
+      expected: [5, 7, 9, 10],
+    },
+    {
+      option: 'storageLimitGb',
+      flag: { storageLimit: 200 },
+      environment: 'OPEN_AGENT_STORAGE_LIMIT',
+      fromFile: '150',
+      fromProcess: '120',
+      expected: [200, 150, 120, 100],
+    },
+  ] satisfies Array<{
+    option: keyof ProfileOptions;
+    flag: CommandOptions;
+    environment: string;
+    fromFile: string;
+    fromProcess: string;
+    expected: unknown[];
+  }>)(
+    'should take $option from the flag, then the credential file, then the process environment, then the default',
+    async ({ option, flag, environment, fromFile, fromProcess, expected }) => {
+      const options = {
+        nonInteractive: true,
+        provider: 'fly-machine' as const,
+      };
+      const both = {
+        processEnv: { [environment]: fromProcess },
+        fileEnv: { [environment]: fromFile },
+        profile: {},
+      };
+
+      const resolved = await Promise.all(
+        [
+          { options: { ...options, ...flag }, sources: both },
+          { options, sources: both },
+          { options, sources: { ...both, fileEnv: {} } },
+          { options, sources: empty },
+        ].map(async (context) => resolveCreateSelection(dependencies, context)),
+      );
+
+      expect(
+        resolved.map(({ candidate }) => candidate.options[option]),
+      ).toEqual(expected);
+    },
+  );
+
+  it('should ask for storage after memory, then for growth and its limit where the provider grows storage', async () => {
+    const { interaction, asked } = recordingInteraction();
+
+    const resolution = await resolveCreateSelection(dependencies, {
+      options: { provider: 'fly-machine' },
+      sources: empty,
+      interaction,
+    });
+
+    expect(asked.slice(0, 5)).toEqual([
+      'Minimum CPUs',
+      'Minimum memory (GB)',
+      'Minimum storage (GB)',
+      'Grow storage automatically?',
+      'Grow up to (GB)',
+    ]);
+    expect(resolution).toMatchObject({
+      candidate: {
+        options: {
+          minStorageGb: 10,
+          autoExtend: true,
+          autoExtendThresholdPercent: 80,
+          autoExtendStepGb: 10,
+          storageLimitGb: 100,
+        },
+      },
+      isStorageLimitRequested: true,
+      storagePolicyFlags: [],
+    });
+  });
+
+  it('should offer the default limit raised to the starting size', async () => {
+    const { interaction } = recordingInteraction();
+
+    const { candidate } = await resolveCreateSelection(dependencies, {
+      options: { provider: 'fly-machine', storage: 150 },
+      sources: empty,
+      interaction,
+    });
+
+    expect(candidate.options.storageLimitGb).toBe(150);
+  });
+
+  it('should ask only for the minimum storage where the provider cannot grow it', async () => {
+    const { interaction, asked } = recordingInteraction();
+
+    const { candidate } = await resolveCreateSelection(dependencies, {
+      options: { provider: 'sprite' },
+      sources: empty,
+      interaction,
+    });
+
+    expect(asked.filter((message) => /storage|Grow/u.test(message))).toEqual([
+      'Minimum storage (GB)',
+    ]);
+    expect(candidate.options).not.toHaveProperty('autoExtend');
+  });
+
+  it('should skip the limit prompt when growth is declined', async () => {
+    const { interaction, asked } = recordingInteraction();
+    const declining: Interaction = {
+      ...interaction,
+      // decline growth, answering every other question with its default
+      confirm: async (prompt) =>
+        (await interaction.confirm(prompt)) &&
+        prompt.message !== 'Grow storage automatically?',
+    };
+
+    const resolution = await resolveCreateSelection(dependencies, {
+      options: { provider: 'fly-machine' },
+      sources: empty,
+      interaction: declining,
+    });
+
+    expect(asked).toContain('Grow storage automatically?');
+    expect(asked).not.toContain('Grow up to (GB)');
+    expect(resolution).toMatchObject({
+      candidate: { options: { autoExtend: false, storageLimitGb: 100 } },
+      isStorageLimitRequested: false,
+    });
+  });
+
+  it('should not ask for storage a flag or the environment already answers', async () => {
+    const { interaction, asked } = recordingInteraction();
+
+    await resolveCreateSelection(dependencies, {
+      options: { provider: 'fly-machine', storage: 20 },
+      sources: {
+        processEnv: {
+          OPEN_AGENT_AUTO_EXTEND: 'true',
+          OPEN_AGENT_STORAGE_LIMIT: '50',
+        },
+        fileEnv: {},
+        profile: {},
+      },
+      interaction,
+    });
+
+    expect(asked.filter((message) => /storage|Grow/u.test(message))).toEqual(
+      [],
+    );
+  });
+
+  it.each([
+    { provider: 'fly-machine', autoExtend: false },
+    { provider: 'sprite' },
+  ] satisfies CommandOptions[])(
+    'should drop policy values from the environment while growth is not on, yet keep explicit flags for validation: %j',
+    async (choice) => {
+      const sources: InputSources = {
+        processEnv: { OPEN_AGENT_AUTO_EXTEND_AT: '30' },
+        fileEnv: {
+          OPEN_AGENT_AUTO_EXTEND_STEP: '0',
+          OPEN_AGENT_STORAGE_LIMIT: '5',
+        },
+        profile: {},
+      };
+
+      const fromEnvironment = await resolveCreateSelection(dependencies, {
+        options: { nonInteractive: true, ...choice },
+        sources,
+      });
+      const fromFlags = await resolveCreateSelection(dependencies, {
+        options: {
+          nonInteractive: true,
+          ...choice,
+          autoExtendAt: 85,
+          storageLimit: 50,
+        },
+        sources,
+      });
+
+      expect(fromEnvironment).toMatchObject({
+        candidate: {
+          options: {
+            autoExtendThresholdPercent: 80,
+            autoExtendStepGb: 10,
+            storageLimitGb: 100,
+          },
+        },
+        isStorageLimitRequested: false,
+        storagePolicyFlags: [],
+      });
+      expect(fromFlags).toMatchObject({
+        candidate: {
+          options: {
+            autoExtendThresholdPercent: 85,
+            autoExtendStepGb: 10,
+            storageLimitGb: 50,
+          },
+        },
+        isStorageLimitRequested: true,
+        storagePolicyFlags: ['autoExtendThresholdPercent', 'storageLimitGb'],
+      });
+    },
+  );
+
+  it('should keep environment policy values for an unknown provider choice so validation reports them', async () => {
+    const { candidate } = await resolveCreateSelection(dependencies, {
+      options: { nonInteractive: true },
+      sources: {
+        processEnv: {
+          OPEN_AGENT_PROVIDER: 'unregistered-provider',
+          OPEN_AGENT_AUTO_EXTEND_AT: '30',
+        },
+        fileEnv: {},
+        profile: {},
+      },
+    });
+
+    expect(candidate.options.autoExtendThresholdPercent).toBe(30);
+  });
+
+  it('should refuse an automatic growth value other than true or false', async () => {
+    const { problems } = await resolveCreateSelection(dependencies, {
+      options: { nonInteractive: true },
+      sources: {
+        processEnv: { OPEN_AGENT_AUTO_EXTEND: 'yes' },
+        fileEnv: {},
+        profile: {},
+      },
+    });
+
+    expect(problems).toEqual(['OPEN_AGENT_AUTO_EXTEND must be true or false']);
+  });
+});
+
+describe('fn:readSetupSelection storage', () => {
+  it('should read the storage size from its flag alone and ignore every storage variable', () => {
+    const sources: InputSources = {
+      processEnv: {
+        OPEN_AGENT_STORAGE: '80',
+        OPEN_AGENT_AUTO_EXTEND: 'maybe',
+        OPEN_AGENT_STORAGE_LIMIT: 'lots',
+      },
+      fileEnv: { OPEN_AGENT_AUTO_EXTEND_AT: '90' },
+      profile: {},
+    };
+
+    const flagged = readSetupSelection(dependencies, {
+      options: { storage: 60 },
+      sources,
+      section: 'all',
+    });
+    const unflagged = readSetupSelection(dependencies, {
+      options: {},
+      sources,
+      section: 'all',
+    });
+
+    expect(flagged.problems).toEqual([]);
+    expect(flagged.value.options).toEqual(
+      expect.objectContaining({ minStorageGb: 60 }),
+    );
+    expect(
+      [flagged, unflagged].map(({ value: { options } }) => [
+        options.autoExtend,
+        options.autoExtendThresholdPercent,
+        options.storageLimitGb,
+      ]),
+    ).toEqual([
+      [undefined, undefined, undefined],
+      [undefined, undefined, undefined],
+    ]);
+    expect(unflagged.value.options.minStorageGb).toBeUndefined();
+  });
+
+  it('should keep the recorded storage options when setup supplies a size to grow to', async () => {
+    const recorded = defaultProfile(defaults, 'none');
+
+    const resolution = await resolveSetup({
+      options: { nonInteractive: true, storage: 60 },
+      sources: empty,
+      recorded,
+      section: 'all',
+    });
+
+    expect(resolution).toMatchObject({
+      candidate: { options: recorded.options },
+      isStorageLimitRequested: false,
+      storagePolicyFlags: [],
+    });
   });
 });
 

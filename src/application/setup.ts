@@ -24,6 +24,7 @@ import {
   setupSystem,
 } from './setup/sections';
 import { selectSetupSection } from './setup/selection';
+import { requireGrowableStorage } from './setup/storage';
 import { setupTools } from './setup/tools';
 
 import type {
@@ -120,11 +121,11 @@ async function setupSelection(
       options: request.options,
     });
   }
-  const { sources, supplied } = await readStaticSetupInputs(
-    dependencies,
-    request.options,
+  const { sources, supplied } = await readStaticSetupInputs(dependencies, {
+    provider,
+    options: request.options,
     section,
-  );
+  });
   const workstation = await selectManagedMachine(dependencies, {
     provider,
     requestedName: request.machine,
@@ -214,19 +215,29 @@ async function setupGuestSection(
   }
 }
 
+/** what the static setup inputs are read for */
+interface StaticSetupInputsParams {
+  /** the provider hosting the workstation, read for its declaration alone */
+  provider: ProviderDriver;
+  /** parsed setup flags */
+  options: CommandOptions;
+  /** targeted setup area */
+  section: SetupSection;
+}
+
 /**
  * reads and validates every static setup input before any provider or guest
- * call: integration flags, catalog ids, option bounds and determined capabilities
+ * call: integration flags, catalog ids, option bounds, determined
+ * capabilities and a storage size the provider cannot grow to
  * @param dependencies the registered drivers, the profile defaults, what this computer provides
- * @param options parsed setup flags
- * @param section targeted setup area
+ * @param params the provider, parsed setup flags and targeted setup area
  * @returns the input sources and the validated supplied values
  */
 async function readStaticSetupInputs(
   dependencies: Pick<ApplicationDependencies, 'registry' | 'defaults' | 'host'>,
-  options: CommandOptions,
-  section: SetupSection,
+  params: StaticSetupInputsParams,
 ): Promise<{ sources: InputSources; supplied: SuppliedSelection }> {
+  const { provider, options, section } = params;
   validateSetupIntegrationOptions(options, section);
   const sources = await readInputSources(dependencies, options);
   const supplied = readSetupSelection(dependencies, {
@@ -235,6 +246,7 @@ async function readStaticSetupInputs(
     section,
   });
   requireValidSuppliedSelection(dependencies, supplied, options);
+  requireGrowableStorage(provider, supplied.value);
 
   return { sources, supplied: supplied.value };
 }
@@ -245,7 +257,7 @@ interface SetupSuccessParams {
   workstation: WorkstationRecord;
   /** non-secret section outcome */
   result: AppliedSetupSection;
-  /** setup inputs carrying retained credential outcomes */
+  /** setup inputs carrying retained credential outcomes and the storage the run grew */
   context: SetupContext;
 }
 
@@ -271,6 +283,7 @@ function setupSuccess(
         'pairing' in result ? result.pairing?.token : undefined,
       ),
       retainedCredentials: context.input.retainedCredentials,
+      ...(context.storage && { storage: context.storage }),
       ...result,
     },
   };

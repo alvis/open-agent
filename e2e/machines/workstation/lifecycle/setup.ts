@@ -1,6 +1,11 @@
 import { t3Service } from '#adapters/drivers/agents/t3/service';
 import { tailscaleDaemon } from '#adapters/drivers/networks/tailscale/service';
 import { registry } from '#composition/registry';
+import {
+  effectiveStoragePolicy,
+  initialStorageGb,
+  supportsAutoGrowth,
+} from '#domain/storage';
 
 import { successData } from '../../cli';
 import {
@@ -20,10 +25,16 @@ import {
   READ_TIMEOUT_MS,
 } from '../limits';
 
+import type { StorageReport } from '#domain/observations/storage';
+
 import type { ServiceProcess } from '../../providers';
 import type { CreatedLifecycle, LifecycleContext } from '../context';
 
 const UPDATE_DUE_DAYS = 3;
+/** the least share of its provisioned size a filesystem shows, its own metadata taking the rest */
+const FILESYSTEM_SHARE = 0.9;
+/** inspection rounds the measured size to a tenth of a GB, and a provider may provision a little more */
+const SIZE_ALLOWANCE_GB = 1;
 
 /**
  * creates and checks the ready workstation
@@ -66,6 +77,18 @@ export async function createWorkstation(
     readiness: { ready: true, failures: [] },
     pairing: { status: 'not requested' },
   });
+
+  // with no storage flags, growth is on wherever the provider's storage grows
+  // automatically and unsupported elsewhere, at the provider's default size
+  const { storage } = registry.providers[type].capabilities;
+
+  expect(create.storage).toEqual({
+    sizeGb: initialStorageGb(storage, create.profile.options),
+    policy: effectiveStoragePolicy(storage, create.profile.options),
+  });
+  expect(create.storage.policy.state).toBe(
+    supportsAutoGrowth(storage) ? 'on' : 'unsupported',
+  );
 
   return create;
 }
@@ -231,6 +254,35 @@ export async function checkAwakeInstallation(
 }
 
 /**
+ * checks the storage an inspection measured against what create reported:
+ * the policy recorded at creation, and a filesystem showing nearly all of the
+ * size the provider gave it
+ * @param context run drivers and the create payload
+ * @param storage the storage the inspection reported
+ */
+function checkInspectedStorage(
+  context: CreatedLifecycle,
+  storage: StorageReport | undefined,
+): void {
+  const { expect, create } = context;
+
+  expect(storage).toEqual(
+    expect.objectContaining({
+      sizeGb: expect.any(Number),
+      usedGb: expect.any(Number),
+      usedPercent: expect.any(Number),
+      policy: create.storage.policy,
+    }),
+  );
+  expect(storage?.sizeGb).toBeGreaterThanOrEqual(
+    create.storage.sizeGb * FILESYSTEM_SHARE,
+  );
+  expect(storage?.sizeGb).toBeLessThanOrEqual(
+    create.storage.sizeGb + SIZE_ALLOWANCE_GB,
+  );
+}
+
+/**
  * checks the inspected workstation and running services
  * @param context run drivers and prior observations
  * @returns the original service snapshot
@@ -264,6 +316,8 @@ export async function inspectServices(
       },
     },
   });
+
+  checkInspectedStorage(context, inspected.inspection?.storage);
 
   expect(foreignIdentifiers(await provider.inspectIdentity(name))).toEqual([]);
 

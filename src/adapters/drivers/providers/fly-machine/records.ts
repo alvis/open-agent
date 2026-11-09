@@ -5,7 +5,7 @@ import { isManagedMetadata, readMetadata } from './metadata';
 
 import type { WorkstationRecord } from '#domain/workstation';
 
-import type { FlyMachine } from './wire';
+import type { FlyMachine, FlyOrgMachine } from './wire';
 
 /**
  * names the public URL the Fly proxy serves an app at
@@ -84,4 +84,26 @@ export function workstationMachine(
   }
 
   return machine;
+}
+
+/**
+ * keeps one record per app whose live machines are exactly one managed
+ * machine, as get verifies
+ * @param organization organization slug owning the apps
+ * @param machines every machine of the organization with its app
+ * @returns the managed workstations
+ */
+export function managedRecords(
+  organization: string,
+  machines: readonly FlyOrgMachine[],
+): WorkstationRecord[] {
+  const byApp = Map.groupBy(machines.filter(isLive), ({ app }) => app);
+
+  return [...byApp].flatMap(([app, held]) => {
+    const [machine, ...others] = held;
+
+    return machine && others.length === 0 && isManaged(machine)
+      ? [toRecord(app, organization, machine)]
+      : [];
+  });
 }

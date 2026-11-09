@@ -15,6 +15,23 @@ const SELECTION_INPUTS = {
   agentRelease: { flag: '--release', environment: 'OPEN_AGENT_RELEASE' },
   minCpus: { flag: '--cpu', environment: 'OPEN_AGENT_CPU' },
   minMemoryGb: { flag: '--mem', environment: 'OPEN_AGENT_MEM' },
+  minStorageGb: { flag: '--storage', environment: 'OPEN_AGENT_STORAGE' },
+  autoExtend: {
+    flag: '--auto-extend',
+    environment: 'OPEN_AGENT_AUTO_EXTEND',
+  },
+  autoExtendThresholdPercent: {
+    flag: '--auto-extend-at',
+    environment: 'OPEN_AGENT_AUTO_EXTEND_AT',
+  },
+  autoExtendStepGb: {
+    flag: '--auto-extend-step',
+    environment: 'OPEN_AGENT_AUTO_EXTEND_STEP',
+  },
+  storageLimitGb: {
+    flag: '--storage-limit',
+    environment: 'OPEN_AGENT_STORAGE_LIMIT',
+  },
   harnesses: { flag: '--harness', environment: 'OPEN_AGENT_HARNESSES' },
   network: { flag: '--network', environment: 'OPEN_AGENT_NETWORK' },
   isExitNodeEnabled: {
@@ -65,6 +82,15 @@ export function selectionInputs(
  */
 export function selectionLabel(field: FixedSelectionField): string {
   return labelOf(SELECTION_INPUTS[field]);
+}
+
+/**
+ * names the flag that selects a profile field
+ * @param field selectable profile field whose flag the product fixes
+ * @returns the command-line flag
+ */
+export function selectionFlag(field: FixedSelectionField): string {
+  return SELECTION_INPUTS[field].flag;
 }
 
 /**

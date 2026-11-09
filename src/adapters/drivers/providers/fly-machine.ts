@@ -25,18 +25,19 @@ import {
   preflightFlyMachine,
 } from './fly-machine/prerequisites';
 import {
-  isLive,
-  isManaged,
+  managedRecords,
   toRecord,
   workstationMachine,
 } from './fly-machine/records';
 import { configuredRegion } from './fly-machine/region';
 import { resizeMachine } from './fly-machine/resize';
 import { isAccessDenied } from './fly-machine/status';
+import { growVolume } from './fly-machine/storage';
 
 import type {
   ProviderBinding,
   ProviderDriver,
+  StorageExtension,
 } from '#application/ports/drivers';
 import type { GuestProcess } from '#application/ports/guest-channel';
 import type {
@@ -149,15 +150,8 @@ class FlyMachineProvider implements ProviderDriver<'fly-machine'> {
     const { api } = this.#bound();
     const organization = await this.#organization();
     const machines = await api.listOrganizationMachines(organization);
-    const byApp = Map.groupBy(machines.filter(isLive), ({ app }) => app);
 
-    return [...byApp].flatMap(([app, held]) => {
-      const [machine, ...others] = held;
-
-      return machine && others.length === 0 && isManaged(machine)
-        ? [toRecord(app, organization, machine)]
-        : [];
-    });
+    return managedRecords(organization, machines);
   }
 
   /**
@@ -280,6 +274,23 @@ class FlyMachineProvider implements ProviderDriver<'fly-machine'> {
     }
 
     return toRecord(workstation.name, organization, resized);
+  }
+
+  /**
+   * grows the volume the machine mounts to a size, which Fly applies online;
+   * a size at or below the current one is left alone
+   * @param workstation managed workstation
+   * @param sizeGb size to grow the storage to, in whole GB
+   * @returns the size now provisioned and whether the space needs a restart to be usable
+   */
+  public async extendStorage(
+    workstation: WorkstationRecord,
+    sizeGb: number,
+  ): Promise<StorageExtension> {
+    const { api } = this.#bound();
+    const { machine } = await this.#fetchMatching(workstation);
+
+    return growVolume({ api, app: workstation.name, machine, sizeGb });
   }
 
   /**

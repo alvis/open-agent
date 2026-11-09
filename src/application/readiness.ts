@@ -1,6 +1,7 @@
 import { harnessDrivers } from '#application/catalog/harnesses';
 import { networkDriver } from '#application/catalog/networks';
 import { finding, gatedFinding } from '#domain/findings';
+import { storageWarnings } from '#domain/observations/storage';
 import { CRON_SERVICE_NAME } from '#domain/services';
 
 import { CommandFault } from '#kernel/faults';
@@ -20,6 +21,11 @@ export interface ReadinessAssessment {
   probeFailures: InspectionProbeFailure[];
 }
 
+/** the probes whose failure is a warning, never a readiness failure */
+const WARNING_PROBES: ReadonlySet<InspectionProbeFailure['probe']> = new Set([
+  'storage',
+]);
+
 /** failed readiness retains the observed checks rather than just their prose */
 export class ReadinessFault extends CommandFault {
   public readonly readiness: ReadinessAssessment;
@@ -38,7 +44,8 @@ export class ReadinessFault extends CommandFault {
 }
 
 /**
- * evaluates current routing, service, gateway, and native harness evidence
+ * evaluates current routing, service, gateway, and native harness evidence;
+ * storage findings, its failed probe included, never fail readiness
  * @param dependencies the registered drivers
  * @param inspection fresh guest inspection, including native plugin loading
  * @returns readiness and named checks that could not be verified
@@ -52,9 +59,9 @@ export function assessReadiness(
     .filter(({ status }) => status === 'failed')
     .map(({ name }) => name);
   failures.push(
-    ...inspection.probeFailures.map(
-      ({ probe }) => `${probe} inspection unavailable`,
-    ),
+    ...inspection.probeFailures
+      .filter(({ probe }) => !WARNING_PROBES.has(probe))
+      .map(({ probe }) => `${probe} inspection unavailable`),
   );
 
   return {
@@ -65,6 +72,21 @@ export function assessReadiness(
       .map(({ name }) => name),
     probeFailures: inspection.probeFailures,
   };
+}
+
+/**
+ * words what needs attention without failing readiness: the storage findings,
+ * or why storage could not be measured
+ * @param inspection fresh guest inspection
+ * @returns the warnings, in reporting order; empty when nothing needs attention
+ */
+export function readinessWarnings(inspection: GuestInspection): string[] {
+  return [
+    ...(inspection.storage ? storageWarnings(inspection.storage) : []),
+    ...inspection.probeFailures
+      .filter(({ probe }) => WARNING_PROBES.has(probe))
+      .map(({ probe, reason }) => `${probe} inspection unavailable: ${reason}`),
+  ];
 }
 
 /**

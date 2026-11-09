@@ -20,6 +20,7 @@ import {
 } from './recorded';
 import { isAgentReleaseChanged } from './release';
 import { resizeWhenRequested } from './resize';
+import { growStorageWhenRequested } from './storage';
 
 import type { CommandOptions, SetupSection } from '#application/contracts';
 import type { SuppliedSelection } from '#application/input/selection/supplied';
@@ -82,6 +83,8 @@ interface SetupContextParts {
   connection: SetupSession;
   /** the exit node the network section verified, if any */
   verifiedExitNode: SetupContext['verifiedExitNode'];
+  /** the storage this run grew, when it supplied a size */
+  storage: SetupContext['storage'];
 }
 
 /** the named inputs of reconnect */
@@ -161,6 +164,8 @@ export async function prepareSetupContext(
   const resolved = await resolveSetup(dependencies, params);
   const { profile, input, targeted } = resolved;
   const exitNode = await verifySetupExitNode(dependencies, input, targeted);
+  // storage grows before a resize, so every storage refusal precedes a restart
+  const storage = await growStorageWhenRequested(params);
   const resized = await resizeWhenRequested({
     provider,
     workstation,
@@ -197,6 +202,7 @@ export async function prepareSetupContext(
         resized,
         connection,
         verifiedExitNode: exitNode,
+        storage,
       }),
     };
   } catch (error) {
@@ -253,7 +259,7 @@ function setupContextOf(
   params: SetupPreparationParams,
   parts: SetupContextParts,
 ): SetupContext {
-  const { resolved, resized, connection, verifiedExitNode } = parts;
+  const { resolved, resized, connection, verifiedExitNode, storage } = parts;
   const { profile, input } = resolved;
 
   return {
@@ -268,6 +274,7 @@ function setupContextOf(
     isReleaseChanged: resolved.isReleaseChanged,
     networkEnrolled: resolved.networkEnrolled,
     verifiedExitNode,
+    storage,
     mutation: params.mutation,
   };
 }

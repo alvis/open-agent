@@ -19,6 +19,7 @@ import {
   PROFILE_PATH,
   ROOTFS_RESTORED,
   VOLUME_LAYOUT,
+  VOLUME_PATH,
 } from '#adapters/drivers/providers/fly-machine/boot';
 import {
   decodeToken,
@@ -44,9 +45,11 @@ import {
   createFlyInventory,
   flyAddresses,
   flyMachineMemory,
+  flyMachineMounts,
   flyMachineState,
   flyResourceStatus,
   flyVolumeIds,
+  flyVolumeSize,
   flyVolumeState,
   setFlyMachineMemory,
   stopFlyMachine,
@@ -61,8 +64,10 @@ import { credentialVariable } from './machines/providers';
 import { createRedactor } from './machines/redaction';
 import { describeWorkstationSuite } from './machines/workstation';
 
+import type { CommandData } from '#application/data';
 import type { GuestChannel } from '#application/ports/guest-channel';
 import type { HarnessId } from '#domain/ids';
+import type { StorageReport } from '#domain/observations/storage';
 import type { WorkstationProfile } from '#domain/profile';
 import type { WorkstationRecord } from '#domain/workstation';
 
@@ -87,6 +92,16 @@ interface BootFacts {
   owners: string[];
 }
 
+/** a filesystem's size, used and available space, as `df -P -k` reports them */
+interface FilesystemMeasure {
+  /** size in KB */
+  sizeKb: number;
+  /** used KB */
+  usedKb: number;
+  /** available KB */
+  availableKb: number;
+}
+
 /** what a boot recorded about itself on the volume */
 interface BootStatus {
   /** the kernel's id of the boot */
@@ -108,6 +123,19 @@ const DOTTED_VERSION = /\b\d{1,4}\.\d{1,4}/u;
 const MINUTE_MS = 60_000;
 // a create installs the whole tool set
 const CREATE_TIMEOUT_MS = 60 * MINUTE_MS;
+/**
+ * the growth case's create, which may run longer: on the default
+ * shared-cpu-2x, Fly's CPU quota held three live runs on 2026-11-08 to an
+ * eighth of a core, and none finished the tool set within 85 minutes; the
+ * case's checks after the create need under 15 more
+ */
+const GROWTH_CREATE_TIMEOUT_MS = 85 * MINUTE_MS;
+/**
+ * the growth case runs on shared-cpu-8x with 8 GB, whose CPU quota of half a
+ * core is four times the default size's, since the case checks storage and
+ * not the machine size
+ */
+const GROWTH_MACHINE_FLAGS = ['--cpu', '8', '--mem', '8'] as const;
 const COMMAND_TIMEOUT_MS = 8 * MINUTE_MS;
 const LIFECYCLE_TIMEOUT_MS = 100 * MINUTE_MS;
 const PREFLIGHT_TIMEOUT_MS = 2 * MINUTE_MS;
@@ -196,6 +224,26 @@ const STOPPED_OBSERVATION_MS = 15_000;
 const SERVING_RESOLVER = 'https://cloudflare-dns.com/dns-query';
 const A_RECORD = 1;
 const VOLUME_FILE = '/data/open-agent-probe.txt';
+/** the volume size the growth case starts with, in GB */
+const STORAGE_GB = 10;
+/** the usage, in percent, past which Fly grows the growth case's volume */
+const AUTO_EXTEND_PERCENT = 70;
+/** what each automatic growth adds, in GB */
+const AUTO_EXTEND_STEP_GB = 1;
+/** the size automatic growth never exceeds, in GB */
+const STORAGE_LIMIT_GB = 12;
+/** the size setup grows the volume to on request, past the limit, which governs automatic growth alone */
+const REQUESTED_STORAGE_GB = 15;
+/** a file that fills the volume past its growth threshold */
+const FILL_FILE = `${VOLUME_PATH}/oa-fill`;
+/** the usage, in percent, the fill brings the volume to */
+const FILL_PERCENT = 80;
+const PERCENT = 100;
+/** df -k and fallocate's M both count binary units */
+const KB_PER_MB = 1024;
+/** Fly checks a volume's usage against its threshold every few minutes */
+const GROWTH_TIMEOUT_MS = 5 * MINUTE_MS;
+const GROWTH_POLL_MS = 15_000;
 // a Socket-only HTTP listener, since the stock image carries perl-base alone
 const LISTENER = [
   'use Socket;',
@@ -302,11 +350,13 @@ async function fetchAt(
  * polls until a condition holds or a deadline passes
  * @param timeoutMs upper bound
  * @param probe returns a value once the condition holds
+ * @param intervalMs pause between probes
  * @returns the first value the probe returned
  */
 async function waitFor<T>(
   timeoutMs: number,
   probe: () => Promise<T | undefined>,
+  intervalMs = POLL_MS,
 ): Promise<T | undefined> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -314,7 +364,7 @@ async function waitFor<T>(
     if (value !== undefined || Date.now() >= deadline) {
       return value;
     }
-    await delay(POLL_MS);
+    await delay(intervalMs);
   }
 }
 
@@ -433,6 +483,71 @@ async function readBootFacts(channel: GuestChannel): Promise<BootFacts> {
 }
 
 /**
+ * reads the kernel's id of the current boot
+ * @param channel guest channel
+ * @returns the id, which changes with every restart
+ */
+async function readBootId(channel: GuestChannel): Promise<string> {
+  return (await asRoot(channel, 'cat /proc/sys/kernel/random/boot_id')).trim();
+}
+
+/**
+ * measures the filesystem holding a path, as root
+ * @param channel guest channel
+ * @param path a path on the filesystem
+ * @returns its size, used and available KB; NaN for a field df did not print
+ */
+async function measureFilesystem(
+  channel: GuestChannel,
+  path: string,
+): Promise<FilesystemMeasure> {
+  const [sizeKb, usedKb, availableKb] = (
+    await asRoot(channel, `df -P -k ${path} | tail -n 1`)
+  )
+    .trim()
+    .split(/\s+/u)
+    .slice(1, 4)
+    .map(Number);
+
+  return {
+    sizeKb: sizeKb ?? Number.NaN,
+    usedKb: usedKb ?? Number.NaN,
+    availableKb: availableKb ?? Number.NaN,
+  };
+}
+
+/**
+ * tells a filesystem's used share as df rounds it
+ * @param measure the filesystem's measure
+ * @returns used percent, rounded up
+ */
+function usedPercent(measure: FilesystemMeasure): number {
+  return Math.ceil(
+    (measure.usedKb * PERCENT) / (measure.usedKb + measure.availableKb),
+  );
+}
+
+/**
+ * reads the storage a workstation's inspection reports
+ * @param cli CLI driver
+ * @param name workstation name
+ * @param signal aborts the inspection early
+ * @returns the reported storage, absent when inspection could not measure it
+ */
+async function inspectStorage(
+  cli: MachineCli,
+  name: string,
+  signal: AbortSignal,
+): Promise<StorageReport | undefined> {
+  const { inspection } = successData(
+    await cli.json(['show', name, '--inspect'], COMMAND_TIMEOUT_MS, signal),
+    'show',
+  );
+
+  return inspection?.storage;
+}
+
+/**
  * reads the last boot's status and its lines in the boot log
  * @param channel guest channel
  * @param bootId the boot to read the log lines of
@@ -516,9 +631,14 @@ function flyProvider(): ReturnType<
  * network, proxy, GitHub access, plugins or Git identity
  * @param name name the workstation takes
  * @param idleMinutes suspend-after-idle minutes; 0 never suspends
+ * @param flags further create flags, such as the storage options
  * @returns CLI arguments
  */
-function flyCreateArguments(name: string, idleMinutes: number): string[] {
+function flyCreateArguments(
+  name: string,
+  idleMinutes: number,
+  flags: readonly string[] = [],
+): string[] {
   return [
     'create',
     '--name',
@@ -535,6 +655,7 @@ function flyCreateArguments(name: string, idleMinutes: number): string[] {
     'claude',
     '--idle-minutes',
     String(idleMinutes),
+    ...flags,
   ];
 }
 
@@ -545,17 +666,24 @@ function flyCreateArguments(name: string, idleMinutes: number): string[] {
  * @param run how the create runs
  * @param run.cli CLI driver to run it with
  * @param run.signal aborts the create early
- * @returns the created workstation's record
+ * @param run.flags further create flags, such as the storage options
+ * @param run.timeoutMs how long the create may take, an hour unless given
+ * @returns the created workstation's record and what create reported
  */
 async function createFlyWorkstation(
   name: string,
   idleMinutes: number,
-  run: { cli: MachineCli; signal: AbortSignal },
-): Promise<WorkstationRecord> {
+  run: {
+    cli: MachineCli;
+    signal: AbortSignal;
+    flags?: readonly string[];
+    timeoutMs?: number;
+  },
+): Promise<{ record: WorkstationRecord; created: CommandData['create'] }> {
   for (let attempt = 1; ; attempt += 1) {
     const outcome = await run.cli.json(
-      flyCreateArguments(name, idleMinutes),
-      CREATE_TIMEOUT_MS,
+      flyCreateArguments(name, idleMinutes, run.flags),
+      run.timeoutMs ?? CREATE_TIMEOUT_MS,
       run.signal,
     );
     // Fly may have no room for a machine beside the new volume at that moment;
@@ -564,9 +692,9 @@ async function createFlyWorkstation(
       !outcome.envelope.ok &&
       JSON.stringify(outcome.envelope.error).includes('insufficient resources');
     if (!hasNoRoom || attempt >= CAPACITY_ATTEMPTS) {
-      successData(outcome, 'create');
+      const created = successData(outcome, 'create');
 
-      return flyProvider().get(name);
+      return { record: await flyProvider().get(name), created };
     }
     await delay(CAPACITY_RETRY_MS, undefined, { signal: run.signal });
   }
@@ -1363,7 +1491,7 @@ describe('Fly Machine provider probe', () => {
       const cli = await harness.isolatedCli('b');
 
       await harness.withWorkstation(name, async () => {
-        const record = await createFlyWorkstation(name, IDLE_MINUTES, {
+        const { record } = await createFlyWorkstation(name, IDLE_MINUTES, {
           cli,
           signal,
         });
@@ -1420,7 +1548,10 @@ describe('Fly Machine provider probe', () => {
       const cli = await harness.isolatedCli('z');
 
       await harness.withWorkstation(name, async () => {
-        const record = await createFlyWorkstation(name, 0, { cli, signal });
+        const { record } = await createFlyWorkstation(name, 0, {
+          cli,
+          signal,
+        });
         const volumes = await flyVolumeIds(token, name);
         const governor = await readGovernor(
           await flyProvider().openGuest(record),
@@ -1465,6 +1596,193 @@ describe('Fly Machine provider probe', () => {
           },
           states: volumes.map(() => undefined),
         });
+      });
+    },
+    LIFECYCLE_TIMEOUT_MS,
+  );
+
+  it.concurrent(
+    'should grow a volume past its threshold on the same boot, and on request beyond its growth limit',
+    async ({ expect, signal, annotate }) => {
+      const name = harness.workstationName('grow');
+      const cli = await harness.isolatedCli('g');
+      const policy = {
+        state: 'on',
+        thresholdPercent: AUTO_EXTEND_PERCENT,
+        stepGb: AUTO_EXTEND_STEP_GB,
+        limitGb: STORAGE_LIMIT_GB,
+        mechanisms: ['provider-auto'],
+      };
+
+      await harness.withWorkstation(name, async () => {
+        // an idle timeout of 0 keeps the machine on one boot throughout
+        const { record, created } = await createFlyWorkstation(name, 0, {
+          cli,
+          signal,
+          timeoutMs: GROWTH_CREATE_TIMEOUT_MS,
+          flags: [
+            ...GROWTH_MACHINE_FLAGS,
+            '--storage',
+            String(STORAGE_GB),
+            '--auto-extend-at',
+            String(AUTO_EXTEND_PERCENT),
+            '--auto-extend-step',
+            String(AUTO_EXTEND_STEP_GB),
+            '--storage-limit',
+            String(STORAGE_LIMIT_GB),
+          ],
+        });
+        const mounts = await flyMachineMounts(token, {
+          app: name,
+          machine: record.id,
+        });
+
+        // the machine's own mount carries the policy Fly grows the volume by
+        expect({ storage: created.storage, mounts }).toEqual({
+          storage: { sizeGb: STORAGE_GB, policy },
+          mounts: [
+            expect.objectContaining({
+              volume: expect.any(String) as string,
+              path: VOLUME_PATH,
+              extend_threshold_percent: AUTO_EXTEND_PERCENT,
+              add_size_gb: AUTO_EXTEND_STEP_GB,
+              size_gb_limit: STORAGE_LIMIT_GB,
+            }),
+          ],
+        });
+
+        const volume = mounts[0]?.volume ?? '';
+        const channel = await flyProvider().openGuest(record);
+        const bootId = await readBootId(channel);
+        const before = await measureFilesystem(channel, VOLUME_PATH);
+        const inspected = await inspectStorage(cli, name, signal);
+
+        // the full install lives on the volume, so record what it left before the fill
+        await annotate(
+          `after create ${VOLUME_PATH} held ${before.usedKb} of ${before.sizeKb} KB (${usedPercent(before)}%), and Fly reported ${await flyVolumeSize(token, name, volume)} GB`,
+        );
+
+        expect({
+          volumeGb: await flyVolumeSize(token, name, volume),
+          inspected,
+        }).toEqual({
+          volumeGb: STORAGE_GB,
+          inspected: expect.objectContaining({
+            sizeGb: expect.any(Number) as number,
+            policy,
+          }),
+        });
+        expect(inspected?.sizeGb).toBeLessThanOrEqual(STORAGE_GB);
+
+        try {
+          // fill the volume to about 80%, past its threshold of 70%
+          const targetKb =
+            ((before.usedKb + before.availableKb) * FILL_PERCENT) / PERCENT;
+          const fillMb = Math.max(
+            1,
+            Math.ceil((targetKb - before.usedKb) / KB_PER_MB),
+          );
+          await asRoot(channel, `fallocate -l ${fillMb}M ${FILL_FILE}`);
+          const filled = await measureFilesystem(channel, VOLUME_PATH);
+          const filledAt = Date.now();
+          // Fly grows the volume and its filesystem while the machine runs,
+          // which the provider's size and inspection both show
+          const grown = await waitFor(
+            GROWTH_TIMEOUT_MS,
+            async () => {
+              signal.throwIfAborted();
+              const volumeGb = await flyVolumeSize(token, name, volume).catch(
+                () => 0,
+              );
+              if (volumeGb <= STORAGE_GB) {
+                return undefined;
+              }
+              const storage = await inspectStorage(cli, name, signal).catch(
+                () => undefined,
+              );
+
+              return storage && storage.sizeGb > (inspected?.sizeGb ?? 0)
+                ? { volumeGb, storage }
+                : undefined;
+            },
+            GROWTH_POLL_MS,
+          );
+          const grownAfterMs = Date.now() - filledAt;
+          const after = await measureFilesystem(channel, VOLUME_PATH);
+
+          await annotate(
+            `a fill of ${fillMb} MB brought ${VOLUME_PATH} to ${usedPercent(filled)}%; ${grownAfterMs} ms later Fly reported ${grown?.volumeGb ?? STORAGE_GB} GB and inspection ${grown?.storage.sizeGb ?? inspected?.sizeGb} GB (from ${inspected?.sizeGb} GB); df size ${before.sizeKb} KB before, ${after.sizeKb} KB after`,
+          );
+          expect({
+            filledPastThreshold: usedPercent(filled) > AUTO_EXTEND_PERCENT,
+            grown: grown !== undefined,
+            policy: grown?.storage.policy,
+            withinLimit:
+              (await flyVolumeSize(token, name, volume)) <= STORAGE_LIMIT_GB,
+            filesystemGrown: after.sizeKb > before.sizeKb,
+            sameBoot: (await readBootId(channel)) === bootId,
+          }).toEqual({
+            filledPastThreshold: true,
+            grown: true,
+            policy,
+            withinLimit: true,
+            filesystemGrown: true,
+            sameBoot: true,
+          });
+
+          // the limit governs automatic growth alone: setup grows past it
+          const setup = successData(
+            await cli.json(
+              [
+                'setup',
+                name,
+                '--section',
+                'system',
+                '--storage',
+                String(REQUESTED_STORAGE_GB),
+              ],
+              COMMAND_TIMEOUT_MS,
+              signal,
+            ),
+            'setup',
+          );
+          // a filesystem above the limit is one only the request grew to
+          const requested = await waitFor(
+            GROWTH_TIMEOUT_MS,
+            async () => {
+              signal.throwIfAborted();
+              const storage = await inspectStorage(cli, name, signal).catch(
+                () => undefined,
+              );
+
+              return storage && storage.sizeGb > STORAGE_LIMIT_GB
+                ? storage
+                : undefined;
+            },
+            GROWTH_POLL_MS,
+          );
+
+          await annotate(
+            `setup --storage ${REQUESTED_STORAGE_GB}: ${JSON.stringify('storage' in setup ? setup.storage : undefined)}; inspection then reported ${requested?.sizeGb} GB`,
+          );
+          expect(setup).toMatchObject({
+            section: 'system',
+            storage: { sizeGb: REQUESTED_STORAGE_GB },
+          });
+          expect({
+            volumeGb: await flyVolumeSize(token, name, volume),
+            requested,
+          }).toEqual({
+            volumeGb: REQUESTED_STORAGE_GB,
+            requested: expect.objectContaining({
+              sizeGb: expect.any(Number) as number,
+              policy,
+            }),
+          });
+        } finally {
+          // terminating deletes the volume anyway, so a failed removal is moot
+          await asRoot(channel, `rm -f ${FILL_FILE}`).catch(() => undefined);
+        }
       });
     },
     LIFECYCLE_TIMEOUT_MS,

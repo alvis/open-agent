@@ -66,4 +66,24 @@ describe('fn:projectEnvironment', () => {
       ...launchFacts,
     });
   });
+
+  it('should retain the recorded storage facts and growth policy', () => {
+    const base = environmentOf(TAILSCALE_PROFILE);
+    const environment = environmentOf(TAILSCALE_PROFILE, {
+      provider: {
+        ...base.provider,
+        storagePath: '/data',
+        storageAdapter: null,
+      },
+      storage: {
+        state: 'on',
+        thresholdPercent: 80,
+        stepGb: 10,
+        limitGb: 100,
+        mechanisms: ['provider-auto'],
+      },
+    });
+
+    expect(projectEnvironment(environment)).toEqual(environment);
+  });
 });

@@ -9,6 +9,7 @@ import type { ProfileOptions } from '#domain/profile';
 import type { SelectionField } from '#domain/selection-inputs';
 
 import type { Prompts } from './sources';
+import type { StorageOptions } from './storage';
 import type { SuppliedSelection } from './supplied';
 
 /** facts the option steps depend on */
@@ -79,6 +80,7 @@ export async function resolveOptions(
       : base.idleTimeoutMinutes,
     minCpus: supplied.minCpus ?? base.minCpus,
     minMemoryGb: supplied.minMemoryGb ?? base.minMemoryGb,
+    ...ownedStorageOptions(context),
     holdMaxMinutes: supplied.holdMaxMinutes ?? base.holdMaxMinutes,
     updateDueIntervalDays:
       supplied.updateDueIntervalDays ?? base.updateDueIntervalDays,
@@ -165,6 +167,32 @@ export async function resolveMachine(
     base.minMemoryGb;
 
   return { minCpus, minMemoryGb };
+}
+
+/**
+ * takes the supplied storage options the run owns, else the base ones; setup
+ * owns none, so a size it grows the storage to never becomes the recorded minimum
+ * @param context fields the run owns, supplied values and base options
+ * @returns the supplied size and growth policy where owned, the base ones otherwise
+ */
+function ownedStorageOptions(
+  context: Pick<OptionContext, 'fields' | 'supplied' | 'base'>,
+): StorageOptions {
+  const { fields, supplied, base } = context;
+  const owned = <K extends keyof StorageOptions>(
+    key: K,
+  ): StorageOptions[K] | undefined =>
+    fields.includes(key) ? supplied[key] : undefined;
+  const autoExtend = owned('autoExtend') ?? base.autoExtend;
+
+  return {
+    minStorageGb: owned('minStorageGb') ?? base.minStorageGb,
+    ...(autoExtend !== undefined && { autoExtend }),
+    autoExtendThresholdPercent:
+      owned('autoExtendThresholdPercent') ?? base.autoExtendThresholdPercent,
+    autoExtendStepGb: owned('autoExtendStepGb') ?? base.autoExtendStepGb,
+    storageLimitGb: owned('storageLimitGb') ?? base.storageLimitGb,
+  };
 }
 
 /**

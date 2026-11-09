@@ -4,7 +4,26 @@ import { agentPort } from '#domain/services';
 import { OPEN_AGENT_VERSION } from '#kernel/version';
 
 import type { GuestEnvironment } from '#domain/observations/environment';
-import type { WorkstationProfile } from '#domain/profile';
+import type { ProfileOptions, WorkstationProfile } from '#domain/profile';
+
+/** the profile options a release before storage growth recorded */
+type EarlierOptions = Omit<
+  ProfileOptions,
+  | 'minStorageGb'
+  | 'autoExtend'
+  | 'autoExtendThresholdPercent'
+  | 'autoExtendStepGb'
+  | 'storageLimitGb'
+>;
+
+/** environment.json as a release before storage growth wrote it */
+export interface EarlierEnvironment extends Omit<
+  GuestEnvironment,
+  'profile' | 'storage'
+> {
+  /** the recorded profile, without the storage options */
+  profile: Omit<WorkstationProfile, 'options'> & { options: EarlierOptions };
+}
 
 /**
  * builds the environment.json a finished setup of a profile records, with no
@@ -50,4 +69,26 @@ export function environmentOf(
     jobs: [],
     ...overrides,
   };
+}
+
+/**
+ * builds the environment.json a release before storage growth recorded: its
+ * profile has no storage options and the record no growth policy
+ * @param profile the recorded profile, whose storage options are dropped
+ * @returns a complete environment record of that release
+ */
+export function earlierEnvironmentOf(
+  profile: WorkstationProfile,
+): EarlierEnvironment {
+  const {
+    minStorageGb: _minStorageGb,
+    autoExtend: _autoExtend,
+    autoExtendThresholdPercent: _autoExtendThresholdPercent,
+    autoExtendStepGb: _autoExtendStepGb,
+    storageLimitGb: _storageLimitGb,
+    ...options
+  } = profile.options;
+  const { storage: _storage, ...environment } = environmentOf(profile);
+
+  return { ...environment, profile: { ...profile, options } };
 }

@@ -183,6 +183,56 @@ describe('fn:validateCommandRequest', () => {
   });
 });
 
+describe('fn:validateCommandRequest storage options', () => {
+  it.each([
+    [{ autoExtend: true }, '--auto-extend applies'],
+    [{ autoExtend: false }, '--no-auto-extend applies'],
+    [{ autoExtendAt: 85 }, '--auto-extend-at applies'],
+    [{ autoExtendStep: 5 }, '--auto-extend-step applies'],
+    [{ storageLimit: 200 }, '--storage-limit applies'],
+    [
+      { autoExtend: false, autoExtendStep: 5, storageLimit: 200 },
+      '--no-auto-extend, --auto-extend-step, --storage-limit apply',
+    ],
+  ] satisfies Array<[CommandOptions, string]>)(
+    'should refuse the growth policy flags on setup, whatever the section: %j',
+    (options, named) => {
+      expect(() =>
+        validateCommandRequest({
+          command: 'setup',
+          options: { ...options, section: 'all' },
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'USAGE',
+          message: `${named} to new workstations; setup grows storage with --storage`,
+        }),
+      );
+    },
+  );
+
+  it('should accept a storage size on setup with any section and the policy flags on create', () => {
+    expect(() =>
+      validateCommandRequest({
+        command: 'setup',
+        options: { section: 'git', storage: 60 },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateCommandRequest({
+        command: 'create',
+        options: {
+          storage: 40,
+          autoExtend: true,
+          autoExtendAt: 85,
+          autoExtendStep: 5,
+          storageLimit: 200,
+        },
+      }),
+    ).not.toThrow();
+  });
+});
+
 describe('fn:validateSetupIntegrationOptions', () => {
   it('should allow network and option switches only in sections that apply them', () => {
     expect(() =>

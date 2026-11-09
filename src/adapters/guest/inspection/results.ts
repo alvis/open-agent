@@ -13,6 +13,7 @@ type InspectionResults = readonly [
   PromiseSettledResult<GuestInspection['network']>,
   PromiseSettledResult<NonNullable<GuestInspection['native']>>,
   PromiseSettledResult<GuestInspection['hub']>,
+  PromiseSettledResult<NonNullable<GuestInspection['storage']>>,
 ];
 
 const DIAGNOSTIC_LIMIT = 512;
@@ -29,7 +30,8 @@ export function settleInspectionResults(
 ): Omit<GuestInspection, 'governor'> {
   const { environment } = recorded;
   checkOperation();
-  const [serviceProbe, networkProbe, nativeProbe, proxyProbe] = results;
+  const [serviceProbe, networkProbe, nativeProbe, proxyProbe, storageProbe] =
+    results;
   const probeFailures: InspectionProbeFailure[] = [];
   const services =
     inspectionValue(serviceProbe, 'services', probeFailures) ?? [];
@@ -48,6 +50,7 @@ export function settleInspectionResults(
     skipped: false,
     reason: probeFailures.find((failure) => failure.probe === 'proxy')?.reason,
   };
+  const storage = inspectionValue(storageProbe, 'storage', probeFailures);
 
   return {
     services,
@@ -55,6 +58,7 @@ export function settleInspectionResults(
     native,
     hub,
     ...recorded,
+    ...(storage ? { storage } : {}),
     probeFailures,
   };
 }

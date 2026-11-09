@@ -9,12 +9,19 @@ export const createDocumentation = {
   brief: 'create one new coding workstation',
   customUsage: ['[--name NAME] [options]'],
   fullDescription: `Creates a private workstation, verifies readiness, then exposes its agent URL.
-Interactive runs ask for the provider, the minimum CPUs and memory, ACP agent,
-its release channel, harnesses, network, then the options those drivers support;
-a step with one choice is skipped. --cpu and --mem set the smallest machine the
-workstation may run on (2 CPUs and 2 GB by default) and the provider picks its
-smallest machine that fits. --release picks the agent's release channel, the
-agent's default when omitted. Flags and
+Interactive runs ask for the provider, the minimum CPUs, memory and storage, ACP
+agent, its release channel, harnesses, network, then the options those drivers
+support; a step with one choice is skipped. --cpu and --mem set the smallest
+machine the workstation may run on (2 CPUs and 2 GB by default) and the provider
+picks its smallest machine that fits. --storage GB sets the least storage it
+starts with (10 GB by default; the provider's default when larger). Where the
+provider grows storage automatically, growth is on unless --no-auto-extend: it
+adds --auto-extend-step GB (10) whenever use reaches --auto-extend-at percent
+(80), up to --storage-limit GB (100, raised to the starting size and lowered to
+the provider's maximum). Interactive runs ask whether to grow and up to what
+size only on such a provider; a policy flag that would have no effect is
+refused. --release picks the agent's release channel, the agent's default when
+omitted. Flags and
 OPEN_AGENT_* environment variables answer the same questions. --with-pair-code
 alone requests a new five-minute pairing code.
 
@@ -23,6 +30,8 @@ EXAMPLES
   open-agent create --name devbox --network none --idle-minutes 30
   open-agent create --name devbox --release nightly
   open-agent create --name devbox --cpu 4 --mem 8
+  open-agent create --name devbox --provider fly-machine --storage 40 --storage-limit 200
+  open-agent create --name devbox --provider fly-machine --no-auto-extend
   open-agent create --name devbox --with-pair-code --json --non-interactive`,
 } as const;
 
@@ -40,6 +49,12 @@ exposes it once ready.
 machine that fits and record the new minimums. A provider that restarts the
 machine to resize it asks first (--yes agrees); without a size flag the machine
 keeps its size.
+--storage GB, with any section, grows the workstation's storage to that size
+now, where the provider can grow it on request; storage never shrinks. Only the
+flag grows storage: OPEN_AGENT_STORAGE and the other storage variables are
+ignored, and the growth policy flags (--auto-extend, --no-auto-extend,
+--auto-extend-at, --auto-extend-step, --storage-limit) apply to new
+workstations only and are refused.
 --with-pair-code selects the agent section when --section is omitted; it also
 works with --section all.
 
@@ -47,6 +62,7 @@ EXAMPLES
   open-agent setup devbox --section agent
   open-agent setup devbox --section agent --release nightly
   open-agent setup devbox --section tools --cpu 4 --mem 8 --yes
+  open-agent setup devbox --section tools --storage 60
   open-agent setup devbox --section all --network none --yes
   open-agent setup devbox --with-pair-code`,
 } as const;

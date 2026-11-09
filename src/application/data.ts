@@ -1,5 +1,6 @@
 import type { CreatePreflight } from '#application/create/context';
 import type { MachineSummary } from '#application/machine';
+import type { StorageExtension } from '#application/ports/drivers';
 import type { ReadinessAssessment } from '#application/readiness';
 import type {
   CredentialSaveResult,
@@ -9,11 +10,13 @@ import type { HarnessId, ProviderId } from '#domain/ids';
 import type { BootReport } from '#domain/observations/boot';
 import type { GuestEnvironment } from '#domain/observations/environment';
 import type { GuestInspection } from '#domain/observations/inspection';
+import type { StorageReport } from '#domain/observations/storage';
 import type {
   UpdateStatus,
   UpdateToolOutcome,
 } from '#domain/observations/updates';
 import type { WorkstationProfile } from '#domain/profile';
+import type { StoragePolicy } from '#domain/storage';
 import type { CommandErrorCode } from '#kernel/faults';
 import type { PairingSecret } from '#kernel/pairing-secret';
 
@@ -32,6 +35,14 @@ export interface ServiceSummary {
   state?: string;
 }
 
+/** the storage a new workstation starts with and the growth policy it runs with */
+export interface StorageSummary {
+  /** starting size, in whole GB */
+  sizeGb: number;
+  /** effective growth policy on the provider */
+  policy: StoragePolicy;
+}
+
 /** successful creation with verified preflight and current guest evidence */
 export interface CreateData {
   retainedCredentials?: Partial<
@@ -41,6 +52,8 @@ export interface CreateData {
   preflight: CreatePreflight;
   /** driver selection and options the workstation recorded */
   profile: WorkstationProfile;
+  /** the storage the workstation started with and how it grows */
+  storage: StorageSummary;
   readiness: ReadinessAssessment;
   network: GuestInspection['network'];
   hub: GuestInspection['hub'];
@@ -90,6 +103,10 @@ export interface CurrentReadiness extends ReadinessAssessment {
   updates?: UpdateStatus;
   governor: GuestInspection['governor'];
   boot?: BootReport;
+  /** the storage size, usage and growth policy; absent when it could not be measured */
+  storage?: StorageReport;
+  /** what needs attention without failing readiness */
+  warnings: string[];
 }
 
 /** bounded doctor inspection result */
@@ -234,6 +251,8 @@ export interface LocalCredentialData {
 export type SetupData =
   | (AppliedSetupSection & {
       machine: MachineSummary;
+      /** the storage `--storage` grew, when given */
+      storage?: StorageExtension;
       retainedCredentials?: Partial<
         Record<ManagementCredentialName, CredentialSaveResult>
       >;

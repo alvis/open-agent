@@ -3,8 +3,6 @@ import { ProviderFault } from '#kernel/provider-fault';
 
 import { PRIVATE_V6_PREFIX } from './private-networks';
 
-import type { MachineSpec } from './machine-config';
-
 /** a Fly app, validated from the Machines API */
 export interface FlyApp {
   /** immutable app identity */
@@ -53,6 +51,8 @@ export interface FlyMachine {
   metadata: Readonly<Record<string, string>>;
   /** services the machine declares */
   routes: readonly FlyServiceRoute[];
+  /** identity of the volume the machine mounts first, when it mounts one */
+  volume?: string;
 }
 
 /** the whole configuration of a machine, as read before an update */
@@ -112,8 +112,6 @@ export interface FlyExecResult {
   stderr: string;
 }
 
-const HTTPS_PORT = 443;
-const HTTP_PORT = 80;
 /** a shell's exit status for a command a signal ended is this plus the signal */
 const SIGNAL_EXIT_BASE = 128;
 
@@ -158,6 +156,8 @@ export function parseMachine(data: unknown): FlyMachine {
   }
   const config = isRecord(data.config) ? data.config : {};
   const guest = parseGuest(config.guest);
+  const [mount] = Array.isArray(config.mounts) ? config.mounts : [];
+  const volume = isRecord(mount) ? mount.volume : undefined;
 
   return {
     id: data.id,
@@ -173,6 +173,7 @@ export function parseMachine(data: unknown): FlyMachine {
     routes: Array.isArray(config.services)
       ? config.services.flatMap(parseRoute)
       : [],
+    ...(typeof volume === 'string' ? { volume } : {}),
   };
 }
 
@@ -356,43 +357,6 @@ export function parseNearestRegion(data: unknown): string | undefined {
 }
 
 /**
- * renders a machine description as the Machines API configuration: HTTPS on
- * 443, and HTTP on 80 redirected to HTTPS, route to the ACP agent port with
- * proxy auto-start on and auto-stop off
- * @param spec machine description
- * @returns the API configuration
- */
-export function wireMachineConfig(spec: MachineSpec): Record<string, unknown> {
-  return {
-    image: spec.image,
-    guest: wireGuest(spec.guest),
-    init: { exec: [...spec.init] },
-    files: spec.files.map((file) => ({
-      guest_path: file.guestPath,
-      raw_value: Buffer.from(file.contents).toString('base64'),
-      mode: file.mode,
-    })),
-    stop_config: { timeout: `${spec.stopSeconds}s` },
-    rootfs: { persist: spec.rootfs },
-    mounts: [{ volume: spec.volume, path: spec.mountPath }],
-    restart: { policy: 'on-failure' },
-    services: [
-      {
-        protocol: 'tcp',
-        internal_port: spec.port,
-        autostart: true,
-        autostop: 'off',
-        ports: [
-          { port: HTTPS_PORT, handlers: ['tls', 'http'] },
-          { port: HTTP_PORT, handlers: ['http'], force_https: true },
-        ],
-      },
-    ],
-    metadata: { ...spec.metadata },
-  };
-}
-
-/**
  * renders a guest as the Machines API configuration
  * @param guest CPUs and memory to run on
  * @returns the API guest
@@ -472,7 +436,7 @@ function parseRoute(data: unknown): FlyServiceRoute[] {
  * @param what resource the response should describe
  * @returns the failure
  */
-function malformed(what: string): ProviderFault {
+export function malformed(what: string): ProviderFault {
   return new ProviderFault({
     code: 'failed',
     message: `The Fly Machines API returned a malformed ${what}`,

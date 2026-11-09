@@ -32,6 +32,12 @@ export interface FlyMachineTarget {
   machine: string;
 }
 
+/** one volume mount of a machine's configuration, with the growth Fly applies to it */
+export type FlyMount = Partial<
+  Record<'volume' | 'path', string> &
+    Record<'extend_threshold_percent' | 'add_size_gb' | 'size_gb_limit', number>
+>;
+
 /** the token's own description */
 interface FlyTokenSummary {
   /** organizations the token is bound to */
@@ -366,6 +372,49 @@ export async function flyMachineMemory(
   const { memory_mb: memoryMb } = config.guest ?? {};
 
   return memoryMb;
+}
+
+/**
+ * reads a machine's volume mounts straight from the Machines API, with the
+ * growth fields Fly applies to each volume
+ * @param token Fly organization token of the e2e run
+ * @param target the machine whose configuration names the mounts
+ * @returns the mounts as the API reports them
+ */
+export async function flyMachineMounts(
+  token: string,
+  target: FlyMachineTarget,
+): Promise<FlyMount[]> {
+  const { config } = await flyJson<{ config: { mounts?: FlyMount[] } }>(
+    token,
+    `/apps/${encodeURIComponent(target.app)}/machines/${encodeURIComponent(target.machine)}`,
+  );
+
+  return config.mounts ?? [];
+}
+
+/**
+ * reads a volume's provisioned size straight from the Machines API
+ * @param token Fly organization token of the e2e run
+ * @param name app name
+ * @param id volume identity
+ * @returns provisioned size in GB
+ * @throws {Error} when the API reports no size
+ */
+export async function flyVolumeSize(
+  token: string,
+  name: string,
+  id: string,
+): Promise<number> {
+  const { size_gb: sizeGb } = await flyJson<Partial<Record<'size_gb', number>>>(
+    token,
+    `/apps/${encodeURIComponent(name)}/volumes/${encodeURIComponent(id)}`,
+  );
+  if (sizeGb === undefined) {
+    throw new Error(`Fly reports no size for volume ${id} of ${name}`);
+  }
+
+  return sizeGb;
 }
 
 /**

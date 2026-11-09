@@ -106,6 +106,24 @@ describe('fn:listWorkstations', () => {
     expect(openGuest).not.toHaveBeenCalled();
   });
 
+  it('should never run the storage probe or any guest inspection, so a sleeping workstation stays asleep (INV-5)', async () => {
+    const { provider } = spritesOf([spriteOf('sleeping')]);
+    const openGuest = vi.spyOn(provider, 'openGuest');
+    const inspect = vi.spyOn(dependencies.guest.inspection, 'inspect');
+
+    const result = await listWorkstations(dependencies, [
+      { id: 'sprite', driver: provider },
+    ]);
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { machines: [{ name: 'sleeping', readiness: 'not inspected' }] },
+    });
+    expect(result).not.toHaveProperty('data.machines.0.storage');
+    expect(inspect).not.toHaveBeenCalled();
+    expect(openGuest).not.toHaveBeenCalled();
+  });
+
   it('should keep an unavailable provider visible when another provider answers with an empty list', async () => {
     const { client, provider } = spritesOf([]);
 
