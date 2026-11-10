@@ -118,4 +118,49 @@ describe('fn:inspectUntilServing', () => {
       inspections: inspect.mock.calls.length,
     }).toEqual({ probes: 1, inspections: 1 });
   });
+
+  it('should inspect again while the inspection is not ready and return the first ready one', async () =>
+    withFakeTimers(async () => {
+      const lapsed = {
+        ...FULL_INSPECTION,
+        network: { online: false, dnsReady: false, skipped: false },
+      } satisfies GuestInspection;
+      const inspections = [lapsed, lapsed, FULL_INSPECTION];
+      const inspect = vi.fn<() => Promise<GuestInspection>>(
+        async () => inspections.shift() ?? lapsed,
+      );
+
+      const pending = inspectUntilServing(
+        async () => ({ ok: true }),
+        inspect,
+        (inspection) => inspection.network.skipped,
+      );
+      await vi.advanceTimersByTimeAsync(MINUTE);
+      const result = await pending;
+
+      expect({ inspections: inspect.mock.calls.length, result }).toEqual({
+        inspections: 3,
+        result: FULL_INSPECTION,
+      });
+    }));
+
+  it('should return the last inspection once a guest stays not ready', async () =>
+    withFakeTimers(async () => {
+      const inspect = vi.fn<() => Promise<GuestInspection>>(
+        async () => FULL_INSPECTION,
+      );
+
+      const pending = inspectUntilServing(
+        async () => ({ ok: true }),
+        inspect,
+        () => false,
+      );
+      await vi.advanceTimersByTimeAsync(10 * MINUTE);
+      const result = await pending;
+
+      expect({ inspections: inspect.mock.calls.length, result }).toEqual({
+        inspections: 4,
+        result: FULL_INSPECTION,
+      });
+    }));
 });

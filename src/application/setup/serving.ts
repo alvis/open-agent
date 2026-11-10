@@ -36,6 +36,7 @@ export async function exposeWhenServing(
             context.profile.agent,
           ),
         async () => dependencies.guest.inspection.inspect(guest),
+        (inspection) => assessReadiness(dependencies, inspection).ready,
       ),
   });
   const readiness = assessReadiness(dependencies, inspection);
