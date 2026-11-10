@@ -23,6 +23,7 @@ import {
   DEVICE_TIMEOUT_MS,
   DEVICE_POLL_MS,
   MACHINE_SIZE_FLAGS,
+  SHARED_IDLE_FLAGS,
   READ_TIMEOUT_MS,
 } from '../limits';
 
@@ -67,6 +68,7 @@ export async function createWorkstation(
         '--provider',
         type,
         ...MACHINE_SIZE_FLAGS[type],
+        ...SHARED_IDLE_FLAGS[type],
       ],
       CREATE_TIMEOUT_MS[type],
       signal,
