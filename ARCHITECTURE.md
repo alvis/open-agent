@@ -224,9 +224,9 @@ Unit specs never mock native file merging, parsers, processes or Ink; they use r
 End-to-end machine runs spend real money and touch real accounts; run them only with the owner's approval.
 
 - **Credentials**: they live in `.env.test`, which is gitignored; `.env.test.example` documents every `TEST_*` variable. Values already in the environment win over the file. The CLI receives each `TEST_X` as `X`, in a minimal environment of its own (`PATH`, an isolated `HOME` and the credentials), so specs pass no `--credential-file`. A machine spec without its provider token fails with the CLI's own preflight message.
-- **Run prefix**: each run gets an id `oa-e2e-<8 hex digits>`, and every workstation it creates carries it. Each run keeps its flyctl configuration in its own directory under the run home, which is removed at the end.
+- **Run prefix**: each run gets an id `oa-e2e-<8 hex digits>`, and every workstation it creates carries it, then its machine type's letter, `f` or `s`. The spec files run side by side on one tailnet, so the cases both machine specs share never create two devices or CLI homes of the same name. Each run keeps its flyctl configuration in its own directory under the run home, which is removed at the end.
 - **Start sweep**: whenever any provider token is set, a run first removes every `oa-e2e-*` workstation and tailnet device its credentials reach, whichever run left it. Use an account whose `oa-e2e-*` workstations all belong to the suite.
-- **Cleanup**: at the end of a run, or on an interrupt, cleanup is best effort. It sends every delete request once, then prints either `cleanup successful` or the workstations to check by hand. Rerunning `pnpm test:e2e cli` with the same credentials sweeps what remains.
+- **Cleanup**: at the end of a run, passed or failed, the teardown deletes the run's own workstations and tailnet devices in two passes and fails the run unless it proves them gone, printing `cleanup successful` or the workstations to check by hand. An interrupt skips the teardown, so its cleanup is best effort: it sends every delete request once, within seconds. Rerunning `pnpm test:e2e cli` with the same credentials sweeps what remains.
 
 ---
 

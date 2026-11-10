@@ -47,7 +47,7 @@ export interface MachineHarness {
    */
   isolatedCli(tag: string): Promise<MachineCli>;
   /**
-   * names a workstation inside the run prefix
+   * names a workstation inside the run prefix and its machine type's letter
    * @param suffix short role suffix
    * @returns workstation name
    */
@@ -65,6 +65,8 @@ interface ConnectedHarness {
   bin: string;
   home: string;
   runId: string;
+  /** the machine type's letter, which its workstation names and CLI homes carry */
+  tag: string;
   cli: MachineCli;
   provider: MachineProvider;
   tailnet: Tailnet;
@@ -74,6 +76,15 @@ interface ConnectedHarness {
 }
 
 const PREFLIGHT_TIMEOUT_MS = 120_000;
+/**
+ * the letter of each machine type: the spec files run side by side on one
+ * tailnet, so the cases they share must not create devices or CLI homes of the
+ * same name
+ */
+const TYPE_TAGS: Readonly<Record<MachineType, string>> = {
+  'sprite': 's',
+  'fly-machine': 'f',
+};
 
 /**
  * builds the harness of one machine type from the values e2e/setup.ts
@@ -129,6 +140,7 @@ export async function createMachineHarness(
     bin,
     home,
     runId,
+    tag: TYPE_TAGS[type],
     cli,
     provider,
     tailnet,
@@ -144,8 +156,18 @@ export async function createMachineHarness(
  * @returns the machine harness used by scenarios
  */
 function harnessForRun(connected: ConnectedHarness): MachineHarness {
-  const { bin, home, runId, cli, provider, tailnet, cleanup, redact, read } =
-    connected;
+  const {
+    bin,
+    home,
+    runId,
+    tag,
+    cli,
+    provider,
+    tailnet,
+    cleanup,
+    redact,
+    read,
+  } = connected;
 
   return {
     runId,
@@ -158,16 +180,16 @@ function harnessForRun(connected: ConnectedHarness): MachineHarness {
     hasValue: (name) => read(name) !== '',
     /**
      * creates a CLI with a separate home inside this run
-     * @param tag isolated home name
+     * @param name isolated home name, after the machine type's letter
      * @returns CLI bound to the isolated home
      */
-    async isolatedCli(tag) {
-      const isolated = join(home, tag);
+    async isolatedCli(name) {
+      const isolated = join(home, `${tag}${name}`);
       await mkdir(isolated, { recursive: true });
 
       return createMachineCli({ bin, home: isolated, redact });
     },
-    workstationName: (suffix) => `${runId}-${suffix}`,
+    workstationName: (suffix) => `${runId}-${tag}-${suffix}`,
     /**
      * runs a workstation scenario and removes its machine afterward
      * @param name exact workstation name

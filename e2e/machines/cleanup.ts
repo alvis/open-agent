@@ -71,14 +71,14 @@ export interface RunAccounts {
   tailnet: Tailnet;
 }
 
-/** what a best-effort cleanup removes, and how long it may take */
+/** what an interrupted run's best-effort cleanup removes, and how long it may take */
 export interface BestEffortCleanup {
   /** the run's `<run id>-` scope */
   scope: string;
   /** milliseconds every request together may take */
   limitMs: number;
-  /** the signal that interrupted the run, announced with the names; absent at teardown */
-  signal?: string;
+  /** the signal that interrupted the run, announced with the names */
+  signal: string;
   /** removes credential values from what the cleanup prints */
   redact: Redactor;
 }
@@ -145,13 +145,11 @@ export async function cleanUpBestEffort(
     scope,
     within,
   });
-  if (signal) {
-    report(
-      names.length > 0
-        ? `${signal} received; trying to terminate ${names.join(', ')}`
-        : `${signal} received; no workstation to terminate`,
-    );
-  }
+  report(
+    names.length > 0
+      ? `${signal} received; trying to terminate ${names.join(', ')}`
+      : `${signal} received; no workstation to terminate`,
+  );
 
   await Promise.all(
     names.flatMap((name) => [
@@ -174,7 +172,10 @@ export async function cleanUpBestEffort(
   while (remaining.length > 0 && Date.now() < deadline) {
     remaining = await stillPresent(accounts, remaining, within);
     if (remaining.length > 0) {
-      await delay(Math.min(CONFIRM_POLL_MS, deadline - Date.now()));
+      // the check above can end after the deadline, and a negative delay warns
+      await delay(
+        Math.max(0, Math.min(CONFIRM_POLL_MS, deadline - Date.now())),
+      );
     }
   }
   if (devices === undefined) {
