@@ -22,6 +22,19 @@ export const MACHINE_SIZE_FLAGS: Readonly<
   'fly-machine': ['--cpu', '8', '--mem', '4'],
 };
 
+/**
+ * the idle timeout the shared cases create their workstation with, by machine
+ * type: a Fly Machine wakes on a URL request but not on the exec the cases
+ * drive it through, so the default 5 minutes stopped one mid-case while a
+ * step waited on the guest; a Sprite wakes on its exec, and keeps its default
+ */
+export const SHARED_IDLE_FLAGS: Readonly<
+  Record<MachineType, readonly string[]>
+> = {
+  'sprite': [],
+  'fly-machine': ['--idle-minutes', '60'],
+};
+
 /** maximum time allowed for workstation commands */
 export const COMMAND_TIMEOUT_MS = 480_000;
 

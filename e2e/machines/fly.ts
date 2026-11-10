@@ -1,3 +1,11 @@
+import {
+  API_URL,
+  authorizationOf,
+  flyJson,
+  GRAPHQL_URL,
+  REQUEST_TIMEOUT_MS,
+  sendFlyRequest,
+} from './fly/request';
 import { isScopedWorkstation } from './ownership';
 
 import type { MachineInventory } from './providers';
@@ -52,14 +60,9 @@ interface FlyRequests {
   hasApp: (name: string) => Promise<boolean>;
 }
 
-const API_URL = 'https://api.machines.dev/v1';
-const GRAPHQL_URL = 'https://api.fly.io/graphql';
-const SCHEME = 'FlyV1 ';
 const MANAGED_KEY = 'open-agent';
 const MANAGED_VALUE = 'managed';
 const NOT_FOUND_STATUS = 404;
-const REQUEST_TIMEOUT_MS = 30_000;
-const LONG_REQUEST_TIMEOUT_MS = 90_000;
 
 /**
  * a Fly Machines inventory the e2e cleanup sweeps and deletes through,
@@ -129,11 +132,11 @@ export function createFlyInventory(token: string): MachineInventory {
 function flyRequests(token: string): FlyRequests {
   const authorization = authorizationOf(token);
   const request = async (path: string, method = 'GET'): Promise<Response> =>
-    fetch(`${API_URL}${path}`, {
-      method,
-      headers: { authorization },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
+    sendFlyRequest(
+      `${API_URL}${path}`,
+      { method, headers: { authorization } },
+      { timeoutMs: REQUEST_TIMEOUT_MS },
+    );
   const json = async <T>(path: string): Promise<T> => {
     const response = await request(path);
     if (!response.ok) {
@@ -181,10 +184,11 @@ export async function flyResourceStatus(
   const app = `${API_URL}/apps/${encodeURIComponent(name)}`;
   const [own, machines, volumes] = await Promise.all(
     [app, `${app}/machines`, `${app}/volumes`].map(async (url) => {
-      const response = await fetch(url, {
-        headers: { authorization },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+      const response = await sendFlyRequest(
+        url,
+        { headers: { authorization } },
+        { timeoutMs: REQUEST_TIMEOUT_MS },
+      );
       await response.body?.cancel();
 
       return response.status;
@@ -264,18 +268,22 @@ export async function flyVolumeState(
   token: string,
   id: string,
 ): Promise<string | undefined> {
-  const response = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: {
-      'authorization': authorizationOf(token),
-      'content-type': 'application/json',
+  // a GraphQL query only reads, so it may be sent again like a GET
+  const response = await sendFlyRequest(
+    GRAPHQL_URL,
+    {
+      method: 'POST',
+      headers: {
+        'authorization': authorizationOf(token),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: 'query($id: ID!) { volume(id: $id) { state } }',
+        variables: { id },
+      }),
     },
-    body: JSON.stringify({
-      query: 'query($id: ID!) { volume(id: $id) { state } }',
-      variables: { id },
-    }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+    { timeoutMs: REQUEST_TIMEOUT_MS, isRead: true },
+  );
   const answer = (await response.json()) as {
     data?: { volume?: { state?: string } | null };
     errors?: Array<{ extensions?: { code?: string } }>;
@@ -415,48 +423,4 @@ export async function flyVolumeSize(
   }
 
   return sizeGb;
-}
-
-/**
- * sends one Machines API request and decodes its JSON answer
- * @param token Fly organization token of the e2e run
- * @param path path below the API base
- * @param request HTTP method and JSON body of the request
- * @param request.method verb of the request, GET unless given
- * @param request.body payload sent as JSON, none unless given
- * @returns decoded answer
- */
-async function flyJson<T>(
-  token: string,
-  path: string,
-  request: { method?: string; body?: unknown } = {},
-): Promise<T> {
-  const { method = 'GET', body } = request;
-  const response = await fetch(`${API_URL}${path}`, {
-    method,
-    headers: {
-      authorization: authorizationOf(token),
-      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    // a wait may be held open for a minute
-    signal: AbortSignal.timeout(LONG_REQUEST_TIMEOUT_MS),
-  });
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(
-      `Fly ${method} ${path.split('?')[0]} answered ${response.status}`,
-    );
-  }
-
-  return (text === '' ? undefined : JSON.parse(text)) as T;
-}
-
-/**
- * renders the Machines API authorization header of a token
- * @param token Fly token, with or without its scheme
- * @returns header value
- */
-function authorizationOf(token: string): string {
-  return token.startsWith(SCHEME) ? token : `${SCHEME}${token}`;
 }

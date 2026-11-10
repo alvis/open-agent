@@ -8,6 +8,7 @@ import {
   CREATE_TIMEOUT_MS,
   COMMAND_TIMEOUT_MS,
   MACHINE_SIZE_FLAGS,
+  SHARED_IDLE_FLAGS,
 } from './limits';
 
 import type { MachineHarness } from '../harness';
@@ -70,6 +71,7 @@ async function createWithoutNetwork(context: VariantContext): Promise<void> {
       '--provider',
       type,
       ...MACHINE_SIZE_FLAGS[type],
+      ...SHARED_IDLE_FLAGS[type],
     ],
     CREATE_TIMEOUT_MS[type],
     signal,
