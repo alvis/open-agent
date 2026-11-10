@@ -12,6 +12,7 @@ import {
   COMMAND_TIMEOUT_MS,
   DEVICE_TIMEOUT_MS,
   DEVICE_POLL_MS,
+  MACHINE_SIZE_FLAGS,
 } from './limits';
 
 import type { MachineHarness } from '../harness';
@@ -100,6 +101,7 @@ async function createConfigured(
         envFile,
         '--provider',
         type,
+        ...MACHINE_SIZE_FLAGS[type],
       ],
       CREATE_TIMEOUT_MS[type],
       signal,

@@ -22,6 +22,7 @@ import {
   COMMAND_TIMEOUT_MS,
   DEVICE_TIMEOUT_MS,
   DEVICE_POLL_MS,
+  MACHINE_SIZE_FLAGS,
   READ_TIMEOUT_MS,
 } from '../limits';
 
@@ -65,6 +66,7 @@ export async function createWorkstation(
         'tailscale',
         '--provider',
         type,
+        ...MACHINE_SIZE_FLAGS[type],
       ],
       CREATE_TIMEOUT_MS[type],
       signal,

@@ -4,7 +4,11 @@ import { tailscaleDaemon } from '#adapters/drivers/networks/tailscale/service';
 import { successData } from '../cli';
 import { profileTools, readEnvironment } from '../guest';
 
-import { CREATE_TIMEOUT_MS, COMMAND_TIMEOUT_MS } from './limits';
+import {
+  CREATE_TIMEOUT_MS,
+  COMMAND_TIMEOUT_MS,
+  MACHINE_SIZE_FLAGS,
+} from './limits';
 
 import type { MachineHarness } from '../harness';
 
@@ -65,6 +69,7 @@ async function createWithoutNetwork(context: VariantContext): Promise<void> {
       '--no-git-identity',
       '--provider',
       type,
+      ...MACHINE_SIZE_FLAGS[type],
     ],
     CREATE_TIMEOUT_MS[type],
     signal,

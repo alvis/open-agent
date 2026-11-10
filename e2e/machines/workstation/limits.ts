@@ -9,6 +9,19 @@ export const CREATE_TIMEOUT_MS: Readonly<Record<MachineType, number>> = {
   'fly-machine': 3_600_000,
 };
 
+/**
+ * the machine size every workstation is created with, by machine type: Fly's
+ * default shared-cpu-2x has a CPU quota of an eighth of a core once its burst
+ * is spent, which held a create's tool installs past an hour, so a Fly
+ * Machine runs on shared-cpu-8x, whose quota is four times that
+ */
+export const MACHINE_SIZE_FLAGS: Readonly<
+  Record<MachineType, readonly string[]>
+> = {
+  'sprite': [],
+  'fly-machine': ['--cpu', '8', '--mem', '4'],
+};
+
 /** maximum time allowed for workstation commands */
 export const COMMAND_TIMEOUT_MS = 480_000;
 

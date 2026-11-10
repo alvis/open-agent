@@ -63,6 +63,7 @@ import {
 import { credentialVariable } from './machines/providers';
 import { createRedactor } from './machines/redaction';
 import { describeWorkstationSuite } from './machines/workstation';
+import { MACHINE_SIZE_FLAGS } from './machines/workstation/limits';
 
 import type { CommandData } from '#application/data';
 import type { GuestChannel } from '#application/ports/guest-channel';
@@ -124,18 +125,11 @@ const MINUTE_MS = 60_000;
 // a create installs the whole tool set
 const CREATE_TIMEOUT_MS = 60 * MINUTE_MS;
 /**
- * the growth case's create, which may run longer: on the default
- * shared-cpu-2x, Fly's CPU quota held three live runs on 2026-11-08 to an
- * eighth of a core, and none finished the tool set within 85 minutes; the
- * case's checks after the create need under 15 more
+ * the size of a machine that must still be suspended, or grow past the 2 GB
+ * a suspend allows: shared-cpu-8x for its CPU quota, like every other case,
+ * at the 2 GB Fly can still suspend
  */
-const GROWTH_CREATE_TIMEOUT_MS = 85 * MINUTE_MS;
-/**
- * the growth case runs on shared-cpu-8x with 8 GB, whose CPU quota of half a
- * core is four times the default size's, since the case checks storage and
- * not the machine size
- */
-const GROWTH_MACHINE_FLAGS = ['--cpu', '8', '--mem', '8'] as const;
+const SUSPENDABLE_SIZE_FLAGS = ['--cpu', '8', '--mem', '2'] as const;
 const COMMAND_TIMEOUT_MS = 8 * MINUTE_MS;
 const LIFECYCLE_TIMEOUT_MS = 100 * MINUTE_MS;
 const PREFLIGHT_TIMEOUT_MS = 2 * MINUTE_MS;
@@ -631,14 +625,18 @@ function flyProvider(): ReturnType<
  * network, proxy, GitHub access, plugins or Git identity
  * @param name name the workstation takes
  * @param idleMinutes suspend-after-idle minutes; 0 never suspends
- * @param flags further create flags, such as the storage options
+ * @param options the machine size and any further flags
+ * @param options.size the size flags, shared-cpu-8x with 4 GB unless given
+ * @param options.flags further create flags, such as the storage options
  * @returns CLI arguments
  */
 function flyCreateArguments(
   name: string,
   idleMinutes: number,
-  flags: readonly string[] = [],
+  options: { size?: readonly string[]; flags?: readonly string[] } = {},
 ): string[] {
+  const { size = MACHINE_SIZE_FLAGS['fly-machine'], flags = [] } = options;
+
   return [
     'create',
     '--name',
@@ -655,6 +653,7 @@ function flyCreateArguments(
     'claude',
     '--idle-minutes',
     String(idleMinutes),
+    ...size,
     ...flags,
   ];
 }
@@ -666,8 +665,8 @@ function flyCreateArguments(
  * @param run how the create runs
  * @param run.cli CLI driver to run it with
  * @param run.signal aborts the create early
+ * @param run.size the size flags, shared-cpu-8x with 4 GB unless given
  * @param run.flags further create flags, such as the storage options
- * @param run.timeoutMs how long the create may take, an hour unless given
  * @returns the created workstation's record and what create reported
  */
 async function createFlyWorkstation(
@@ -676,14 +675,14 @@ async function createFlyWorkstation(
   run: {
     cli: MachineCli;
     signal: AbortSignal;
+    size?: readonly string[];
     flags?: readonly string[];
-    timeoutMs?: number;
   },
 ): Promise<{ record: WorkstationRecord; created: CommandData['create'] }> {
   for (let attempt = 1; ; attempt += 1) {
     const outcome = await run.cli.json(
-      flyCreateArguments(name, idleMinutes, run.flags),
-      run.timeoutMs ?? CREATE_TIMEOUT_MS,
+      flyCreateArguments(name, idleMinutes, run),
+      CREATE_TIMEOUT_MS,
       run.signal,
     );
     // Fly may have no room for a machine beside the new volume at that moment;
@@ -1133,7 +1132,9 @@ describe('Fly Machine provider probe', () => {
         const observing = watchAddresses(name);
         const created = successData(
           await cli.json(
-            flyCreateArguments(name, IDLE_MINUTES),
+            flyCreateArguments(name, IDLE_MINUTES, {
+              size: SUSPENDABLE_SIZE_FLAGS,
+            }),
             CREATE_TIMEOUT_MS,
             signal,
           ),
@@ -1491,9 +1492,11 @@ describe('Fly Machine provider probe', () => {
       const cli = await harness.isolatedCli('b');
 
       await harness.withWorkstation(name, async () => {
+        // created small enough to suspend, then resized past it
         const { record } = await createFlyWorkstation(name, IDLE_MINUTES, {
           cli,
           signal,
+          size: SUSPENDABLE_SIZE_FLAGS,
         });
 
         const watching = watchStates(name, record.id);
@@ -1619,9 +1622,7 @@ describe('Fly Machine provider probe', () => {
         const { record, created } = await createFlyWorkstation(name, 0, {
           cli,
           signal,
-          timeoutMs: GROWTH_CREATE_TIMEOUT_MS,
           flags: [
-            ...GROWTH_MACHINE_FLAGS,
             '--storage',
             String(STORAGE_GB),
             '--auto-extend-at',
