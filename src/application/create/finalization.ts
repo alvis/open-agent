@@ -139,6 +139,7 @@ async function configureAndFinalize(
         context.input.profile.agent,
       ),
     async () => dependencies.guest.inspection.inspect(guest),
+    (inspection) => assessReadiness(dependencies, inspection).ready,
   );
 
   return finalizeCreate(dependencies, {

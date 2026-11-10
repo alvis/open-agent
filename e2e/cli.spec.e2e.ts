@@ -92,6 +92,21 @@ const OFFLINE_SETUP_ARGUMENTS = [
   '--no-local-credentials',
 ];
 
+/** a Sprites read the network hook blocks is sent as often as one whose connection drops */
+const BLOCKED_READ_ATTEMPTS = 4;
+
+/**
+ * lists the attempts the CLI makes at one Sprites read the network hook blocks
+ * @param target text the read's URL contains
+ * @returns one blocked fetch for each attempt
+ */
+function blockedRead(target: string): unknown[] {
+  return Array.from({ length: BLOCKED_READ_ATTEMPTS }, () => ({
+    kind: 'fetch',
+    target: expect.stringContaining(target),
+  }));
+}
+
 async function withIsolatedCli<T>(
   run: (cwd: string, env: NodeJS.ProcessEnv) => Promise<T>,
 ): Promise<T> {
@@ -680,9 +695,7 @@ describe('installed CLI', () => {
     );
 
     expect(result.exitCode).toBe(1);
-    expect(attempts).toEqual([
-      { kind: 'fetch', target: expect.stringContaining('sprites.dev') },
-    ]);
+    expect(attempts).toEqual(blockedRead('sprites.dev'));
   });
 
   it('should aggregate a missing provider credential into one message before any provider call', async () => {
@@ -1567,9 +1580,7 @@ describe('installed CLI', () => {
     expect(parsed.error.message).not.toBe(
       'The workstation selection is invalid',
     );
-    expect(attempts).toEqual([
-      { kind: 'fetch', target: expect.stringContaining('/sprites/devbox') },
-    ]);
+    expect(attempts).toEqual(blockedRead('/sprites/devbox'));
   });
 
   it('should accept an update interval in the tools section and reach the provider lookup', async () => {
@@ -1598,9 +1609,7 @@ describe('installed CLI', () => {
     expect(parsed.error.message).not.toBe(
       'The workstation selection is invalid',
     );
-    expect(attempts).toEqual([
-      { kind: 'fetch', target: expect.stringContaining('/sprites/devbox') },
-    ]);
+    expect(attempts).toEqual(blockedRead('/sprites/devbox'));
   });
 
   it('should refuse an update interval in a section that does not own it before any provider call', async () => {
@@ -1657,9 +1666,7 @@ describe('installed CLI', () => {
     expect(parsed.error.message).not.toBe(
       'The workstation selection is invalid',
     );
-    expect(attempts).toEqual([
-      { kind: 'fetch', target: expect.stringContaining('/sprites/devbox') },
-    ]);
+    expect(attempts).toEqual(blockedRead('/sprites/devbox'));
   });
 
   it('should accept a machine size on setup and reach the provider lookup', async () => {
@@ -1690,9 +1697,7 @@ describe('installed CLI', () => {
     expect(parsed.error.message).not.toBe(
       'The workstation selection is invalid',
     );
-    expect(attempts).toEqual([
-      { kind: 'fetch', target: expect.stringContaining('/sprites/devbox') },
-    ]);
+    expect(attempts).toEqual(blockedRead('/sprites/devbox'));
   });
 
   it('should refuse a release channel in a section that does not own it before any provider call', async () => {
