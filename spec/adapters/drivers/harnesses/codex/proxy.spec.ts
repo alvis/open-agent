@@ -133,8 +133,8 @@ describe('Codex native configuration', () => {
               {
                 type: 'command',
                 command:
-                  '/opt/open-agent/governor/awake.sh hold-close --source codex --session - --budget-ms 8000',
-                timeout: 10,
+                  '/opt/open-agent/governor/awake.sh hold-close --source codex --session - --budget-ms 8000 --background-env CODEX_THREAD_ID',
+                timeout: 30,
               },
             ],
           },

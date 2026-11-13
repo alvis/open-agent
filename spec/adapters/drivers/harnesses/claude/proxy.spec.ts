@@ -133,7 +133,7 @@ describe('Claude native configuration', () => {
                 type: 'command',
                 command:
                   '/opt/open-agent/governor/awake.sh hold-open --source claude --session - --budget-ms 8000',
-                timeout: 10,
+                timeout: 30,
               },
             ],
           },
