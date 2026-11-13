@@ -32,10 +32,14 @@ const CODEX_TEARDOWN_HOOK_TIMEOUT_SECONDS = 3;
  * the awake hooks of Codex. Codex runs `Interrupt`, whose event carries
  * `session_id`, when a turn is aborted instead of `Stop`, so it releases the
  * turn's hold too (codex-rs/core/src/hook_runtime.rs and
- * codex-rs/hooks/schema/generated/interrupt.command.input.schema.json)
+ * codex-rs/hooks/schema/generated/interrupt.command.input.schema.json).
+ * Codex gives every command it runs, including a background terminal it
+ * keeps across turns, the thread id its hooks report as `session_id` in
+ * `CODEX_THREAD_ID` (codex-rs/core/src/exec_env.rs)
  */
 export const CODEX_WORK_HOOKS: WorkHooks = {
   harness: 'codex',
+  background: { environment: 'CODEX_THREAD_ID' },
   events: [
     ...TURN_WORK_HOOKS,
     {

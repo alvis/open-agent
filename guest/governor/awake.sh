@@ -6,8 +6,12 @@
 # records managed holds the same way, `--pid` naming the process whose run
 # keeps the hold open. Every event is a heartbeat: `hold-open` opens or
 # refreshes a turn hold, a heartbeat refreshes a hold still open and
-# `hold-close` closes it. Each account keeps its holders in its own awake
-# directory under its own state lock, run/awake for the agent and
+# `hold-close` closes it, unless the harness's turn-end hook names how it
+# marks a background command (`--background-output` or `--background-env`)
+# and the session still has background work running, which refreshes the
+# hold instead so the workstation stays awake until a later turn of the
+# session ends with none left, or until the turn-hold maximum. Each account keeps its holders
+# in its own awake directory under its own state lock, run/awake for the agent and
 # run/awake-root for root, and every event recomputes the awake deadline from
 # both, the provider facts and the idle options environment.json records,
 # then records the governor state, governor.json, in the caller's own awake
@@ -91,7 +95,7 @@ OA_IDLE_RELAY_SCAN=200
 OA_IDLE_RELAY_LINES=50
 OA_IDLE_RELAY_STALE_MINUTES=5
 OA_IDLE_RECORD_BYTES=256
-OA_IDLE_USAGE='usage: open-agent-awake <heartbeat|hold-open|hold-close> --source <name> --session <id|-> [--budget-ms <1000-8000>]'
+OA_IDLE_USAGE='usage: open-agent-awake <heartbeat|hold-open|hold-close> --source <name> --session <id|-> [--budget-ms <1000-8000>] [--background-output <pattern> | --background-env <name>]'
 
 # the jq definitions every computation shares: an instant as ISO 8601 with
 # milliseconds, which the host round-trips, its epoch milliseconds back, and
@@ -188,6 +192,86 @@ oa_idle_process_start() {
   'Z '* | '' | *' ') return 1 ;;
   esac
   printf '%s\n' "${oa_idle_process_start_fields#* }"
+}
+
+# prints the parent process id of a process
+# arguments: the process id
+oa_idle_parent() {
+  oa_idle_parent_stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+  # the fields after the command name's closing parenthesis: state, parent
+  printf '%s\n' "${oa_idle_parent_stat##*) }" | cut -d ' ' -f 2
+}
+
+# finds the harness that ran this hook, the nearest ancestor of the awake
+# command the hook started that is not a shell the hook runs it through, into
+# oa_idle_harness, the awake command's own processes into oa_idle_hook_self
+# and those shells into oa_idle_hook_shells. The event runs in a child of that
+# command, which names itself in OA_AWAKE_CHILD; the command itself runs as a
+# script whose process takes the script's own name, so the walk starts above
+# it
+oa_idle_hook_harness() {
+  oa_idle_harness=$$
+  case ${OA_AWAKE_CHILD-} in
+  '' | *[!0-9]*) ;;
+  *) oa_idle_harness=$OA_AWAKE_CHILD ;;
+  esac
+  oa_idle_hook_self=" $$ $oa_idle_harness "
+  oa_idle_hook_shells=" "
+  while oa_idle_harness=$(oa_idle_parent "$oa_idle_harness") &&
+    test "$oa_idle_harness" -gt 1; do
+    case $(cat "/proc/$oa_idle_harness/comm" 2>/dev/null) in
+    sh | dash | bash | zsh | timeout) oa_idle_hook_shells="$oa_idle_hook_shells$oa_idle_harness " ;;
+    *) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# prints a /proc path naming each process that may be background work of the
+# session, as the harness's turn-end hook says the harness marks one: a
+# standard output that links to a path matching the --background-output
+# pattern, its {session} replaced by the session id, such as the task output
+# file Claude Code points a background command at; or the session id in the
+# --background-env variable, such as the CODEX_THREAD_ID Codex gives every
+# command it runs. Neither the pattern nor the session id holds a character
+# find or grep would read as more than itself beyond the pattern's own *,
+# which parsing them ensured
+oa_idle_background_candidates() {
+  if test -n "$oa_idle_background_output"; then
+    find /proc/[0-9]*/fd -mindepth 1 -maxdepth 1 -name 1 \
+      -lname "$(printf '%s\n' "$oa_idle_background_output" | sed "s/[{]session[}]/$oa_idle_session/")" \
+      -printf '%h\n' 2>/dev/null
+  else
+    grep -lsxzF "$oa_idle_background_env=$oa_idle_session" /proc/[0-9]*/environ 2>/dev/null
+  fi
+}
+
+# tells whether a turn that just ended left background work running in its
+# session, when its hook names the harness's mark. At a turn's end no command of the
+# turn is in the foreground, so a process its harness marks for the session
+# that is still descended from the harness is background work, while one a
+# command left behind detached has been handed to another parent and does
+# not count, and neither do the hook's shells and the awake command's own
+# processes, which may carry the session's mark too. Another account's
+# processes cannot be read and count as none
+oa_idle_background_work() {
+  test -n "$oa_idle_background_output$oa_idle_background_env" || return 1
+  oa_idle_hook_harness || return 1
+  oa_idle_background_candidates | {
+    while read -r oa_idle_background_path; do
+      oa_idle_background_pid=${oa_idle_background_path#/proc/}
+      oa_idle_background_pid=${oa_idle_background_pid%%/*}
+      case $oa_idle_hook_self$oa_idle_hook_shells in
+      *" $oa_idle_background_pid "*) continue ;;
+      esac
+      while oa_idle_background_pid=$(oa_idle_parent "$oa_idle_background_pid") &&
+        test "$oa_idle_background_pid" -gt 1; do
+        case $oa_idle_hook_self in *" $oa_idle_background_pid "*) continue 2 ;; esac
+        test "$oa_idle_background_pid" != "$oa_idle_harness" || exit 0
+      done
+    done
+    exit 1
+  }
 }
 
 # writes settings.json to the work directory: the provider facts
@@ -845,11 +929,13 @@ oa_idle_hook_session() {
 oa_idle_parse() {
   oa_idle_source=
   oa_idle_session=
+  oa_idle_background_output=
+  oa_idle_background_env=
   oa_idle_pid=
   oa_idle_budget=$OA_IDLE_DEFAULT_BUDGET_MS
   while test "$#" -gt 0; do
     case $1 in
-    --source | --session | --budget-ms | --pid)
+    --source | --session | --budget-ms | --pid | --background-output | --background-env)
       if test "$#" -lt 2; then
         echo "$1 needs a value"
         return 1
@@ -859,6 +945,8 @@ oa_idle_parse() {
       --session) oa_idle_session=$2 ;;
       --budget-ms) oa_idle_budget=$2 ;;
       --pid) oa_idle_pid=$2 ;;
+      --background-output) oa_idle_background_output=$2 ;;
+      --background-env) oa_idle_background_env=$2 ;;
       esac
       shift 2
       ;;
@@ -890,6 +978,25 @@ oa_idle_parse() {
       return 1
     fi
   fi
+  if test -n "$oa_idle_background_output$oa_idle_background_env"; then
+    case $oa_idle_background_output in
+    '' | *[!A-Za-z0-9._/*'{}'-]* | *'{session}'*'{session}'*) oa_idle_background_output=- ;;
+    *'{session}'*) ;;
+    *) oa_idle_background_output=- ;;
+    esac
+    case $oa_idle_background_env in
+    '' | [!A-Z_]* | *[!A-Z0-9_]*) oa_idle_background_env=- ;;
+    esac
+    if test "$oa_idle_action" != hold-close ||
+      test "${#oa_idle_background_output}" -gt 128 || test "${#oa_idle_background_env}" -gt 64 ||
+      { test "$oa_idle_background_output" = - && test "$oa_idle_background_env" = -; } ||
+      { test "$oa_idle_background_output" != - && test "$oa_idle_background_env" != -; }; then
+      echo '--background-output (a pattern with one {session}) or --background-env (a variable name), one alone, is hold-close'"'"'s alone'
+      return 1
+    fi
+    test "$oa_idle_background_output" != - || oa_idle_background_output=
+    test "$oa_idle_background_env" != - || oa_idle_background_env=
+  fi
   oa_idle_pid_start=
   if test -n "$oa_idle_pid"; then
     if test "$oa_idle_uid" -ne 0; then
@@ -911,6 +1018,7 @@ oa_idle_refusal_reason() {
   --budget-ms*) echo bad-budget ;;
   --source*) echo bad-source ;;
   --pid*) echo bad-pid ;;
+  --background*) echo bad-background ;;
   --session*) echo bad-session ;;
   hook*) echo bad-hook-input ;;
   *) echo refused ;;
@@ -1002,7 +1110,8 @@ oa_idle_relay_line() {
   *) return 1 ;;
   esac
   case $oa_idle_relay_reason in
-  - | bad-budget | bad-source | bad-pid | bad-session | bad-hook-input | bad-option | refused | not-recorded) ;;
+  - | bad-budget | bad-source | bad-pid | bad-background | bad-session | bad-hook-input | bad-option | refused | not-recorded) ;;
+  background-work) test "$oa_idle_relay_event" = hold-close || return 1 ;;
   adapter-failed | size-unknown) test "$oa_idle_relay_event" = extend-storage || return 1 ;;
   *) return 1 ;;
   esac
@@ -1101,6 +1210,15 @@ oa_idle_event() {
     oa_idle_record
     return 0
   fi
+  oa_idle_event_reason=-
+  # a turn that ends with its background work still running keeps its hold,
+  # refreshed as at a turn's start: a later turn of the session closes it,
+  # and a crashed harness's hold lapses at the turn-hold maximum
+  if test "$oa_idle_action" = hold-close && test "$oa_idle_uid" -ne 0 &&
+    oa_idle_background_work; then
+    oa_idle_action=hold-open
+    oa_idle_event_reason=background-work
+  fi
   if ! oa_idle_record; then
     oa_idle_log_event failed not-recorded
     return 0
@@ -1108,7 +1226,7 @@ oa_idle_event() {
   if test -n "$oa_idle_event_failure"; then
     oa_idle_log_event failed not-recorded
   else
-    oa_idle_log_event recorded -
+    oa_idle_log_event recorded "$oa_idle_event_reason"
   fi
   if test "$(oa_idle_setting .provider.keepAwakeMode)" != native-deadline ||
     test -z "$(oa_idle_setting .provider.awakeAdapter)"; then
@@ -1244,7 +1362,7 @@ heartbeat | hold-open | hold-close)
     fi
     oa_idle_previous=$oa_idle_argument
   done
-  OA_AWAKE_CHILD=1 timeout -k 0.2 \
+  OA_AWAKE_CHILD=$$ timeout -k 0.2 \
     "$((oa_idle_budget / 1000)).$(printf '%03d' "$((oa_idle_budget % 1000))")" \
     /bin/sh "$oa_idle_self" "$@" >/dev/null 2>&1
   exit 0

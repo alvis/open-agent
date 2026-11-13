@@ -1,3 +1,9 @@
+> **Status:** Superseded
+>
+> **Superseded by:** [ADR-21 — Shared heartbeat idle governor that keeps background work awake](../../workstation/adr-21-idle-governor-background-work.md)
+>
+> **What changed:** Partial. A Claude Code turn end no longer always closes its hold: while a background command the turn started is still running, the hold is refreshed instead and ends when a later turn ends with none left, or at the hold maximum. The holder, deadline, sleep, adapter and reporting rules carry over unchanged.
+
 # ADR-13: Shared heartbeat idle governor
 
 📌

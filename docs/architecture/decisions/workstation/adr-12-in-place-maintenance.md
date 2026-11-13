@@ -23,7 +23,7 @@ The provider, harness, ACP agent and network are drivers (ADR-9); the updater is
 - **Node swap.** Node switches by extracting a verified tree beside the current one and swapping a symlink with `mv -T`. Trees that any running process executes from are never pruned.
 - **Outcomes.** Each component's outcome (`installed`, `skipped` or `failed`, with its version) is written incrementally and copied into the manifest. Success time advances only after every required component succeeds or is skipped.
 - **Schedule.** Cron runs a root-owned shell gate every minute under `flock`. The gate starts Node only when the stored check interval (1–10080 minutes, default 30) has elapsed. The updater installs only when the due interval (1–365 days, default 7) has passed since the last success. Both intervals live in the stored profile and are changed by `setup`. One shared builder produces the gate command, so a provider without cron can run the same entry from its own timer.
-- **Awake.** Updates and setup transactions hold the workstation awake through a managed hold in the idle governor (ADR-13).
+- **Awake.** Updates and setup transactions hold the workstation awake through a managed hold in the idle governor (ADR-21).
 
 ## 🔀 Alternatives considered
 

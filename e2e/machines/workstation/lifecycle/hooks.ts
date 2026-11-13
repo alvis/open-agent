@@ -28,10 +28,18 @@ export async function checkHookDefinitions(
   ): string[] => [
     `${AWAKE_COMMAND} ${action} --source ${harness} --session - --budget-ms ${budgetMs}`,
   ];
+  // each harness's turn-end hook names how the harness marks a background
+  // command: Claude Code by its task output file, Codex by CODEX_THREAD_ID
+  const marks: Record<string, string> = {
+    claude: ` --background-output '*/{session}/tasks/*.output'`,
+    codex: ' --background-env CODEX_THREAD_ID',
+  };
   const turnHooks = (harness: string): Record<string, string[]> => ({
     UserPromptSubmit: awake(harness, 'hold-open', STANDARD_HOOK_BUDGET_MS),
     PreToolUse: awake(harness, 'heartbeat', STANDARD_HOOK_BUDGET_MS),
-    Stop: awake(harness, 'hold-close', STANDARD_HOOK_BUDGET_MS),
+    Stop: awake(harness, 'hold-close', STANDARD_HOOK_BUDGET_MS).map(
+      (command) => `${command}${marks[harness]}`,
+    ),
   });
 
   expect(hooks.claude).toMatchObject({
@@ -105,4 +113,44 @@ export async function checkHookEvents(
     Date.parse(closed!.deadline ?? '') -
       Date.parse(closed!.lastHeartbeat ?? ''),
   ).toBe(closed!.idleTimeoutMinutes * MINUTE_MS);
+
+  // a Claude Code or Codex turn that ends with background work still running
+  // keeps its hold, and the end of a later turn with none left closes it,
+  // both through the turn-end hook command the harness has installed
+  const installed = await readAwakeHooks(provider, name);
+  const backgroundTurns: {
+    harness: string;
+    exitCode: number;
+    openHolds: number;
+  }[] = [];
+  for (const harness of ['claude', 'codex'] as const) {
+    const [command] = installed[harness].Stop ?? [];
+    const kept = await sendHookEvents(provider, name, {
+      harness,
+      session: name,
+      actions: ['hold-close'],
+      command,
+      backgroundWork: true,
+    });
+    const released = await sendHookEvents(provider, name, {
+      harness,
+      session: name,
+      actions: ['hold-close'],
+      command,
+    });
+    backgroundTurns.push(
+      ...[...kept, ...released].map(({ exitCode, openHolds }) => ({
+        harness,
+        exitCode,
+        openHolds,
+      })),
+    );
+  }
+
+  expect(backgroundTurns).toEqual([
+    { harness: 'claude', exitCode: 0, openHolds: 1 },
+    { harness: 'claude', exitCode: 0, openHolds: 0 },
+    { harness: 'codex', exitCode: 0, openHolds: 1 },
+    { harness: 'codex', exitCode: 0, openHolds: 0 },
+  ]);
 }

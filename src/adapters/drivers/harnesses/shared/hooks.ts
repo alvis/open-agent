@@ -16,7 +16,26 @@ interface WorkHook {
    * the harness honours for the event
    */
   timeoutSeconds: number;
+  /**
+   * whether the event ends a turn, so its hook names how the harness marks
+   * a background command the turn left running
+   */
+  endsTurn?: boolean;
 }
+
+/**
+ * how a harness marks a background command of a session, so a turn that ends
+ * while one runs keeps the workstation awake
+ */
+export type BackgroundMark =
+  /**
+   * the path the command's standard output links to matches this pattern,
+   * its `{session}` standing for the session id; letters, digits, `._/-`,
+   * `*` and one `{session}`, at most 128 characters
+   */
+  | { output: string }
+  /** the command's environment holds the session id in this variable */
+  | { environment: string };
 
 /** the awake hooks open-agent installs in one harness */
 export interface WorkHooks {
@@ -24,6 +43,8 @@ export interface WorkHooks {
   harness: string;
   /** every event the harness reports, in the order the harness lists them */
   events: readonly WorkHook[];
+  /** how the harness marks a background command its turn left running */
+  background: BackgroundMark;
 }
 
 /** what an owned hook merge, check or listing works on */
@@ -37,10 +58,12 @@ interface WorkHookParams {
 /**
  * longest a harness waits on an awake hook of a turn event, in seconds: the
  * awake command ends itself with status 0 within its run budget, which is
- * never more than AWAKE_DEADLINE_MS (8 s), so the harness never kills it
- * mid-write
+ * never more than AWAKE_DEADLINE_MS (8 s), and the rest is room for the
+ * command to start, which on a workstation just woken or under heavy load
+ * took more than 2 seconds and made a 10-second timeout cancel the hook
+ * before it recorded its event
  */
-export const HOOK_TIMEOUT_SECONDS = 10;
+export const HOOK_TIMEOUT_SECONDS = 30;
 
 /**
  * part of a hook's timeout kept free of the awake command's run budget for
@@ -65,7 +88,12 @@ export const TURN_WORK_HOOKS: readonly WorkHook[] = [
     action: 'heartbeat',
     timeoutSeconds: HOOK_TIMEOUT_SECONDS,
   },
-  { event: 'Stop', action: 'hold-close', timeoutSeconds: HOOK_TIMEOUT_SECONDS },
+  {
+    event: 'Stop',
+    action: 'hold-close',
+    timeoutSeconds: HOOK_TIMEOUT_SECONDS,
+    endsTurn: true,
+  },
 ];
 
 /**
@@ -132,15 +160,48 @@ export function hasWorkHooks(value: unknown, params: WorkHookParams): boolean {
 }
 
 /**
- * writes one owned hook's command line
+ * writes one owned hook's command line; a turn-end hook also names how the
+ * harness marks a background command
  * @param hook the event and its action and timeout
  * @param params the owned hooks and the awake command they invoke
  * @returns the exact command line
  */
 function hookCommand(hook: WorkHook, params: WorkHookParams): string {
-  const { owned, command } = params;
+  const { owned } = params;
+  const { background } = owned;
+  const mark = !hook.endsTurn
+    ? ''
+    : 'output' in background
+      ? ` --background-output '${background.output}'`
+      : ` --background-env ${background.environment}`;
 
-  return `${command.program} ${hook.action} --source ${owned.harness} --session - --budget-ms ${awakeBudgetMs(hook.timeoutSeconds)}`;
+  return `${ownedPrefix(params)}${hook.action} --source ${owned.harness} --session - --budget-ms ${awakeBudgetMs(hook.timeoutSeconds)}${mark}`;
+}
+
+/**
+ * the start every owned command line shares: the awake program
+ * @param params the owned hooks and the awake command they invoke
+ * @returns the command line's start
+ */
+function ownedPrefix(params: WorkHookParams): string {
+  return `${params.command.program} `;
+}
+
+/**
+ * tells whether a handler is one open-agent installed for the harness, in
+ * this version or an earlier one: a command of the awake program reporting
+ * as the harness
+ * @param handler one native hook handler
+ * @param params the owned hooks and the awake command they invoke
+ * @returns true when open-agent owns the handler
+ */
+function isOwnedHandler(handler: unknown, params: WorkHookParams): boolean {
+  return (
+    isRecord(handler) &&
+    typeof handler.command === 'string' &&
+    handler.command.startsWith(ownedPrefix(params)) &&
+    handler.command.includes(` --source ${params.owned.harness} `)
+  );
 }
 
 /**
@@ -191,8 +252,40 @@ export function assertMergeableHooks(value: unknown, owned: WorkHooks): void {
 }
 
 /**
+ * removes, from one event's handler groups, every owned handler whose command
+ * line is not the current one, such as an earlier version's, and every group
+ * that held nothing else
+ * @param groups the event's handler groups
+ * @param command the event's current owned command line
+ * @param params the owned hooks and the awake command they invoke
+ * @returns the groups without stale owned handlers
+ */
+function withoutStaleHandlers(
+  groups: unknown[],
+  command: string,
+  params: WorkHookParams,
+): unknown[] {
+  return groups.flatMap((group: unknown) => {
+    if (!isRecord(group) || !Array.isArray(group.hooks)) {
+      return [group];
+    }
+    const kept = group.hooks.filter(
+      (handler: unknown) =>
+        !isOwnedHandler(handler, params) ||
+        (isRecord(handler) && handler.command === command),
+    );
+
+    return kept.length || !group.hooks.length
+      ? [{ ...group, hooks: kept }]
+      : [];
+  });
+}
+
+/**
  * adds owned awake handlers, each with its event's timeout, while preserving
- * all existing native hooks
+ * all other native hooks; an owned handler already installed keeps its place
+ * and takes its event's current timeout, and one an earlier version installed
+ * with another command line is removed
  * @param value current native hook event map
  * @param params the owned hooks and the awake command they invoke
  * @returns hook event map with idempotent owned handlers
@@ -205,18 +298,32 @@ export function mergeWorkHooks(
   for (const hook of params.owned.events) {
     const { event, timeoutSeconds } = hook;
     const command = hookCommand(hook, params);
-    const previous = eventGroups(hooks, event);
+    const previous = withoutStaleHandlers(
+      eventGroups(hooks, event),
+      command,
+      params,
+    );
+    const isOwned = (handler: unknown): handler is Record<string, unknown> =>
+      isRecord(handler) && handler.command === command;
     const installed = previous.some(
       (group: unknown) =>
         isRecord(group) &&
         Array.isArray(group.hooks) &&
-        group.hooks.some(
-          (handler: unknown) =>
-            isRecord(handler) && handler.command === command,
-        ),
+        group.hooks.some(isOwned),
     );
     hooks[event] = installed
-      ? previous
+      ? previous.map((group: unknown) =>
+          isRecord(group) && Array.isArray(group.hooks)
+            ? {
+                ...group,
+                hooks: group.hooks.map((handler: unknown) =>
+                  isOwned(handler)
+                    ? { ...handler, timeout: timeoutSeconds }
+                    : handler,
+                ),
+              }
+            : group,
+        )
       : [
           ...previous,
           {
