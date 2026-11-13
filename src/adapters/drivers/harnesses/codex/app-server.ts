@@ -17,8 +17,12 @@ export type CodexRequest = (
 
 /** the Codex CLI, kept in the agent's npm prefix */
 const CODEX = `${AGENT_BIN}/codex`;
-/** longest one conversation with the app server may take */
-const CONVERSATION_LIMIT_MS = 45_000;
+/**
+ * longest one conversation with the app server may take: on a workstation
+ * whose disk the agent's own work keeps busy, the server alone can take half a
+ * minute to start and as long again to answer one `hooks/list`
+ */
+const CONVERSATION_LIMIT_MS = 180_000;
 /** most output the app server may print in one conversation */
 const OUTPUT_LIMIT_CHARS = 4_194_304;
 
