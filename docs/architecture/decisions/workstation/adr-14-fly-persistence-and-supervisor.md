@@ -13,7 +13,7 @@ Fly Machines have no persistent root filesystem and no service manager. A suspen
 
 ## 🧭 Context
 
-- The idle governor and its adapters are ADR-13; the Fly adapter suspends or stops through the root-only `/.fly/api` socket.
+- The idle governor and its adapters are ADR-21; the Fly adapter suspends or stops through the root-only `/.fly/api` socket.
 - Root must never run code the agent account can write (ADR-10).
 - Tools come from Homebrew bottles, which pour only at `/home/linuxbrew/.linuxbrew`.
 - Fly's REST `/exec` endpoint takes no standard input, returns output only after the command ends, and is rate limited; `fly ssh console` streams both ways but needs flyctl and an SSH-scoped token on the host.
