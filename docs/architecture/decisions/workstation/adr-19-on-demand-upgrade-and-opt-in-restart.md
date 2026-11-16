@@ -15,7 +15,7 @@ The only way to upgrade on demand was `setup --section tools --update`. It reins
 ## 🧭 Context
 
 - ADR-12 forbids the updater from issuing any service command, and an end-to-end scan enforces that. It also rejected staging an upgrade until a safe point, because that needed safe-point detection.
-- The idle governor (ADR-13) already records harness turn holds. `UserPromptSubmit` opens a hold under the harness's name and `Stop` closes it, so the governor knows whether a turn is in flight.
+- The idle governor (ADR-21) already records harness turn holds. `UserPromptSubmit` opens a hold under the harness's name and `Stop` closes it, so the governor knows whether a turn is in flight.
 - Harnesses (Claude Code, Codex) run as processes the agent spawns per turn, not as services. Only the agent (`t3-code`) and the network daemon (`tailscaled`) are long-running services.
 - Both service backends report a service's start time.
 
@@ -39,7 +39,7 @@ The only way to upgrade on demand was `setup --section tools --update`. It reins
 
 ## 🤝 Accepted Trade Offs
 
-- The idle signal covers only turns whose harness hooks fire. Work outside the hooks does not delay a restart (ADR-13's coverage limit).
+- The idle signal covers only turns whose harness hooks fire. Work outside the hooks does not delay a restart (ADR-21's coverage limit).
 - A stale hold from a crashed turn delays a restart until it expires or the wait times out.
 - `setup` rewrites `environment.json` and drops the recorded install times, so a restart still pending from an earlier `upgrade` is forgotten after a setup.
 - A harness process that the agent keeps alive keeps its old version until the agent spawns it again.

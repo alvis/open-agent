@@ -239,6 +239,13 @@ interface HookState {
  * @param events.session the session the events name
  * @param events.actions the awake actions to send, in order
  * @param events.pausesMs how long to wait before sending an action, by action
+ * @param events.command the exact awake command line to run, such as an
+ * installed hook's, in place of one built from each action
+ * @param events.backgroundWork whether each event comes from a shell that
+ * still runs a stand-in for a background command of the harness, marked as
+ * that harness marks one: for Claude Code, standard output to a task output
+ * file in the session's tasks directory; for Codex, the session in
+ * CODEX_THREAD_ID; the stand-in ends once the event has been sent
  * @returns each event's exit status and the resulting state
  */
 export async function sendHookEvents(
@@ -249,17 +256,38 @@ export async function sendHookEvents(
     session: string;
     actions: readonly string[];
     pausesMs?: Partial<Record<string, number>>;
+    command?: string;
+    backgroundWork?: boolean;
   },
 ): Promise<HookStep[]> {
-  const { harness, session, actions, pausesMs = {} } = events;
+  const {
+    harness,
+    session,
+    actions,
+    pausesMs = {},
+    command,
+    backgroundWork = false,
+  } = events;
   const steps: HookStep[] = [];
   const event = JSON.stringify({ session_id: session, hook_event_name: 'x' });
   for (const action of actions) {
     await sleep(pausesMs[action] ?? 0);
+    const awake =
+      command ?? `${AWAKE_COMMAND} ${action} --source ${harness} --session -`;
+    // the stand-in and the event share the shell, so the governor finds the
+    // stand-in descended from the process the event came from, as a Claude
+    // Code or Codex background command is from the harness that runs the hook
+    const worker =
+      harness === 'codex'
+        ? `CODEX_THREAD_ID=${session} sleep 600 >/dev/null 2>&1 </dev/null &`
+        : `tasks=/tmp/claude-\\$(id -u)/oa-e2e/${session}/tasks; mkdir -p \\$tasks; sleep 600 >\\$tasks/oa-e2e.output 2>&1 </dev/null &`;
+    const send = backgroundWork
+      ? `runuser -u agent -- /bin/sh -c "${worker} worker=\\$!; ${awake}; status=\\$?; kill \\$worker; echo \\$status"`
+      : `runuser -u agent -- ${awake}; echo $?`;
     const status = await asRoot(
       provider,
       name,
-      `printf '%s' '${event}' | runuser -u agent -- ${AWAKE_COMMAND} ${action} --source ${harness} --session -; echo $?`,
+      `printf '%s' '${event}' | ${send}`,
     );
     const state = reportedGovernorState(
       await asRoot(provider, name, GOVERNOR_REPORT),

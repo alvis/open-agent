@@ -168,6 +168,7 @@ stateDiagram-v2
   Idle --> Working: prompt opens a turn hold
   Working --> Working: each tool call sends a heartbeat
   Working --> Idle: turn ends and closes its hold
+  Working --> Working: turn ends with background work still running, so its hold stays open
   Idle --> Asleep: idle minutes pass with no heartbeat or open hold
   Asleep --> Idle: HTTP request to the router client's URL
   note right of Asleep
@@ -176,12 +177,12 @@ stateDiagram-v2
   end note
 ```
 
-One idle governor decides how long the workstation stays awake, from what the harnesses and the managed operations report. A Claude Code or Codex hook runs the root-owned `/opt/open-agent/guest/awake.sh` command: a prompt (`UserPromptSubmit`) opens a **turn hold**, every tool call (`PreToolUse`) is a **heartbeat** that refreshes it, and the end of the turn (`Stop`, `SessionEnd`) closes it. Managed setup, update and create work opens a **managed hold** of its own, refreshed while the work runs and dropped once its process has exited. The workstation stays awake until the later of the last heartbeat plus the idle timeout (`--idle-minutes`, default 5) and the latest open hold, and no hold lasts longer than `--hold-max-minutes` (default 60) after its last refresh, so a turn whose end hook never fires lapses at that maximum.
+One idle governor decides how long the workstation stays awake, from what the harnesses and the managed operations report. A Claude Code or Codex hook runs the root-owned `/opt/open-agent/guest/awake.sh` command: a prompt (`UserPromptSubmit`) opens a **turn hold**, every tool call (`PreToolUse`) is a **heartbeat** that refreshes it, and the end of the turn (`Stop`, `SessionEnd`) closes it — unless a background command the turn started is still running (a Claude Code background task or a Codex background terminal, each found by the mark its harness gives one), in which case the hold stays open until a later turn ends with none left, so the workstation does not sleep under the work and miss its result. Managed setup, update and create work opens a **managed hold** of its own, refreshed while the work runs and dropped once its process has exited. The workstation stays awake until the later of the last heartbeat plus the idle timeout (`--idle-minutes`, default 5) and the latest open hold, and no hold lasts longer than `--hold-max-minutes` (default 60) after its last refresh, so a turn whose end hook never fires lapses at that maximum.
 
 - **Sprite**: the deadline is mirrored into a Sprite task (`open-agent-awake`) that expires at the deadline and is removed when nothing keeps the workstation awake. A Sprite task cannot last more than 60 minutes, so `create` refuses an idle timeout or hold maximum above 60 for Sprite.
 - **Fly Machine**: once the deadline passes, the governor's per-minute cron tick suspends the machine, or stops it when suspending is ruled out; see [Prerequisites](#fly-machine---provider-fly-machine). A URL request resumes a suspended machine or cold-boots a stopped one.
 
-The command never fails a turn: it exits 0 within eight seconds whatever happens, and every hook allows ten. `show --inspect` and `doctor` report the governor (last heartbeat, open holds, deadline, last adapter result) and whether each harness has all four awake hooks installed. Arbitrary shells, third-party tools, and paths bypassing hooks may not keep the workstation awake.
+The command never fails a turn: it exits 0 within eight seconds whatever happens, and every hook allows thirty, so a slow start on a busy or just-woken workstation does not cancel it. `show --inspect` and `doctor` report the governor (last heartbeat, open holds, deadline, last adapter result) and whether each harness has all four awake hooks installed. Arbitrary shells, third-party tools, and paths bypassing hooks may not keep the workstation awake.
 
 **Auto-wake.** A sleeping workstation wakes when traffic reaches the router client's URL: opening the agent URL in your client is enough. This needs a provider whose machines are woken by incoming traffic; both Fly Sprites and Fly Machines are, and a provider that cannot be woken by traffic gets no auto-wake.
 

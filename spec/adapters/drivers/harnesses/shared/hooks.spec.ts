@@ -41,7 +41,7 @@ describe('fn:workHookCommands', () => {
     expect(workHookCommands(CLAUDE)).toEqual({
       UserPromptSubmit: `${COMMAND.program} hold-open --source claude --session - --budget-ms 8000`,
       PreToolUse: `${COMMAND.program} heartbeat --source claude --session - --budget-ms 8000`,
-      Stop: `${COMMAND.program} hold-close --source claude --session - --budget-ms 8000`,
+      Stop: `${COMMAND.program} hold-close --source claude --session - --budget-ms 8000 --background-output '*/{session}/tasks/*.output'`,
       SessionEnd: `${COMMAND.program} hold-close --source claude --session - --budget-ms 8000`,
     });
   });
@@ -50,7 +50,7 @@ describe('fn:workHookCommands', () => {
     expect(workHookCommands(CODEX)).toEqual({
       UserPromptSubmit: `${COMMAND.program} hold-open --source codex --session - --budget-ms 8000`,
       PreToolUse: `${COMMAND.program} heartbeat --source codex --session - --budget-ms 8000`,
-      Stop: `${COMMAND.program} hold-close --source codex --session - --budget-ms 8000`,
+      Stop: `${COMMAND.program} hold-close --source codex --session - --budget-ms 8000 --background-env CODEX_THREAD_ID`,
       SessionEnd: `${COMMAND.program} hold-close --source codex --session - --budget-ms 2000`,
       Interrupt: `${COMMAND.program} hold-close --source codex --session - --budget-ms 2000`,
     });
@@ -74,20 +74,20 @@ describe('fn:awakeBudgetMs', () => {
 });
 
 describe('harness hook timeouts', () => {
-  it('should give each Claude event a 10-second timeout, which Claude Code honours on every event', () => {
+  it('should give each Claude event a 30-second timeout, which Claude Code honours on every event', () => {
     expect(timeoutsOf(mergeWorkHooks({}, CLAUDE))).toEqual({
-      UserPromptSubmit: [10],
-      PreToolUse: [10],
-      Stop: [10],
-      SessionEnd: [10],
+      UserPromptSubmit: [30],
+      PreToolUse: [30],
+      Stop: [30],
+      SessionEnd: [30],
     });
   });
 
   it('should keep the Codex session-end and interrupt timeouts within the 3-second cap Codex enforces', () => {
     expect(timeoutsOf(mergeWorkHooks({}, CODEX))).toEqual({
-      UserPromptSubmit: [10],
-      PreToolUse: [10],
-      Stop: [10],
+      UserPromptSubmit: [30],
+      PreToolUse: [30],
+      Stop: [30],
       SessionEnd: [3],
       Interrupt: [3],
     });
@@ -128,13 +128,63 @@ describe('fn:mergeWorkHooks', () => {
 
     expect(first).toEqual({
       CustomEvent: [foreign],
-      UserPromptSubmit: [owned('UserPromptSubmit', 10)],
-      PreToolUse: [owned('PreToolUse', 10)],
-      Stop: [foreign, owned('Stop', 10)],
+      UserPromptSubmit: [owned('UserPromptSubmit', 30)],
+      PreToolUse: [owned('PreToolUse', 30)],
+      Stop: [foreign, owned('Stop', 30)],
       SessionEnd: [owned('SessionEnd', 3)],
       Interrupt: [owned('Interrupt', 3)],
     });
     expect(repeated).toEqual(first);
+  });
+
+  it('should give an owned handler installed with an older timeout the current timeout of its event in place', () => {
+    const command = workHookCommands(CLAUDE).Stop;
+    const stale = {
+      Stop: [
+        foreign,
+        { matcher: '', hooks: [{ type: 'command', command, timeout: 10 }] },
+      ],
+    };
+
+    expect(mergeWorkHooks(stale, CLAUDE).Stop).toEqual([
+      foreign,
+      { matcher: '', hooks: [{ type: 'command', command, timeout: 30 }] },
+    ]);
+  });
+
+  it('should replace an owned handler an earlier version installed with another command line, keeping foreign handlers beside it', () => {
+    const earlier = `${COMMAND.program} hold-close --source claude --session - --budget-ms 8000`;
+    const otherHarness = `${COMMAND.program} hold-close --source codex --session - --budget-ms 8000`;
+    const stale = {
+      Stop: [
+        { hooks: [{ type: 'command', command: earlier, timeout: 10 }] },
+        {
+          hooks: [
+            { type: 'command', command: 'user-command' },
+            { type: 'command', command: earlier, timeout: 10 },
+            { type: 'command', command: otherHarness, timeout: 30 },
+          ],
+        },
+      ],
+    };
+
+    expect(mergeWorkHooks(stale, CLAUDE).Stop).toEqual([
+      {
+        hooks: [
+          { type: 'command', command: 'user-command' },
+          { type: 'command', command: otherHarness, timeout: 30 },
+        ],
+      },
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: workHookCommands(CLAUDE).Stop,
+            timeout: 30,
+          },
+        ],
+      },
+    ]);
   });
 });
 

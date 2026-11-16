@@ -22,11 +22,14 @@ import type { GuestChannel } from '#application/ports/guest-channel';
  * the awake hooks of Claude Code. Claude Code honours a command hook's
  * `timeout` on every event; `SessionEnd` hooks share a 1.5-second budget that
  * a per-hook `timeout` in the settings files raises, up to 60 seconds
- * (https://code.claude.com/docs/en/hooks, "SessionEnd"), so 10 seconds holds
- * on each event
+ * (https://code.claude.com/docs/en/hooks, "SessionEnd"), so 30 seconds holds
+ * on each event. Claude Code points a background command's standard output
+ * at a task output file in the session's tasks directory,
+ * `<temporary root>/claude-<uid>/<project>/<session id>/tasks/<task id>.output`
  */
 export const CLAUDE_WORK_HOOKS: WorkHooks = {
   harness: 'claude',
+  background: { output: '*/{session}/tasks/*.output' },
   events: [
     ...TURN_WORK_HOOKS,
     {
