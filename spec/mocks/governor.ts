@@ -137,6 +137,50 @@ export interface TickScenario {
   hasWatcher: boolean;
 }
 
+/** the awake event one run handles and what its provider and locks allow */
+export interface AwakeEventScenario {
+  /** the event a hook sends */
+  action: 'heartbeat' | 'hold-open' | 'hold-close';
+  /** the recorded provider's keep-awake mode */
+  keepAwakeMode: 'native-deadline' | 'governed' | 'none';
+  /** the recorded idle timeout, in minutes */
+  idleTimeoutMinutes: number;
+  /** the recorded turn-hold maximum, in minutes */
+  holdMaxMinutes: number;
+  /** the event's time, in epoch milliseconds */
+  now: number;
+  /** the id the event runs as, the agent's (1000) when absent */
+  uid?: number;
+  /** true when a turn end leaves background work of its session running */
+  hasBackgroundWork?: boolean;
+  /** true when another deadline apply holds the apply lock */
+  isApplyLockHeld?: boolean;
+}
+
+/** how the governor judged a hook's standard input */
+export interface HookSessionVerdict {
+  /** the session id it read, when it accepted the input */
+  session?: string;
+  /** why it refused the input, when it did */
+  refusal?: string;
+}
+
+/** the governor state and adapter result an event's apply leaves before it is stored */
+export interface AdapterRecordScenario {
+  /** the state the event recorded; absent when it recorded none */
+  recordedState?: Record<string, unknown>;
+  /** the result the apply left in adapter.json; absent when it left none */
+  adapterResult?: Record<string, unknown>;
+}
+
+/** the governor state an account's awake directory holds once the adapter result is stored */
+export interface StoredState {
+  /** governor.json, undefined when there is none */
+  state?: unknown;
+  /** its permission bits, undefined when there is none */
+  mode?: number;
+}
+
 const execFileAsync = promisify(execFile);
 
 /**
@@ -426,6 +470,140 @@ oa_idle_recompute() { echo "recompute $*"; }
 oa_idle_tick`,
     async (_root, _state, { stdout }) =>
       stdout.split('\n').filter((line) => line !== ''),
+  );
+}
+
+/**
+ * runs one awake event whose budget runs out as recording starts, as on a
+ * busy or slow disk, with the settings read from environment.json and the
+ * stand-in adapter recording each deadline it is given
+ * @param scenario the event, the recorded provider and idle options, the caller and the apply lock
+ * @returns each adapter run's arguments, then `record` once recording started
+ */
+export async function runCutShortAwakeEvent(
+  scenario: AwakeEventScenario,
+): Promise<string[]> {
+  return runGovernor(
+    async (root, state) => {
+      const adapter = await setUpAdapter(
+        { path: 'drivers/providers/fixture/awake.sh' },
+        root,
+        state,
+      );
+      await Promise.all([
+        mkdir(join(root, 'run/awake'), { recursive: true }),
+        writeFile(join(state, 'answer'), ''),
+        writeFile(
+          join(root, 'environment.json'),
+          JSON.stringify({
+            provider: {
+              keepAwakeMode: scenario.keepAwakeMode,
+              idleTimeoutMinutes: scenario.idleTimeoutMinutes,
+              holdMaxMinutes: scenario.holdMaxMinutes,
+              awakeAdapter: adapter,
+            },
+          }),
+        ),
+        ...(scenario.isApplyLockHeld
+          ? [writeFile(join(state, 'held-8'), '')]
+          : []),
+      ]);
+    },
+    async () => `set -u
+OA_IDLE_SHARED=$OA_IDLE_RUN/awake
+OA_IDLE_ENVIRONMENT=$OA_ENVIRONMENT_PATH
+${await governorSource(['oa_idle_settings', 'oa_idle_setting', 'oa_idle_apply_hold', 'oa_idle_event'])}
+oa_idle_now() { echo ${String(scenario.now)}; }
+oa_idle_uid=${String(scenario.uid ?? 1000)}
+oa_idle_parse() { oa_idle_source=claude; oa_idle_session=s1; }
+oa_idle_background_work() { ${scenario.hasBackgroundWork ? 'true' : 'false'}; }
+oa_idle_record() { echo record >>"$state/calls"; exit 143; }
+state="$(dirname "$(command -v flock)")"
+oa_idle_event ${scenario.action} --source claude --session -`,
+    async (_root, state) =>
+      (await lines(join(state, 'calls'))).flatMap((call) => {
+        if (call.startsWith('adapter ')) {
+          return [call.slice('adapter '.length)];
+        }
+
+        return call === 'record' ? [call] : [];
+      }),
+  );
+}
+
+/**
+ * hands a hook's standard input to the governor as an awake event does
+ * @param input the bytes the hook writes
+ * @returns the session the governor read, or why it refused the input
+ */
+export async function judgeHookInput(
+  input: string,
+): Promise<HookSessionVerdict> {
+  return runGovernor(
+    async (_root, state) => writeFile(join(state, 'hook-input'), input),
+    async () => `OA_IDLE_INPUT_WAIT_MS=1500
+OA_IDLE_INPUT_BYTES=65536
+${await governorSource(['oa_idle_hook_session'])}
+state="$(dirname "$(command -v flock)")"
+if oa_idle_hook_session 6000 <"$state/hook-input" >"$state/refusal"; then
+  printf '%s' "$oa_idle_session"
+else
+  cat "$state/refusal" >&2
+  exit 1
+fi`,
+    async (_root, state, { exitCode, stdout }) =>
+      exitCode === 0
+        ? { session: stdout }
+        : {
+            refusal: (await readFile(join(state, 'refusal'), 'utf8')).trim(),
+          },
+  );
+}
+
+/**
+ * stores the adapter result an event's apply left in the agent's governor
+ * state, with the state copied as recorded since the guest's trusted read
+ * needs GNU find and dd
+ * @param scenario the state the event recorded and the apply's result
+ * @returns governor.json once the result is stored
+ */
+export async function storeAdapterResult(
+  scenario: AdapterRecordScenario,
+): Promise<StoredState> {
+  return runGovernor(
+    async (root) => {
+      await mkdir(join(root, 'run/awake'), { recursive: true });
+      await Promise.all([
+        writeFile(
+          join(root, 'work/adapter.json'),
+          scenario.adapterResult ? JSON.stringify(scenario.adapterResult) : '',
+        ),
+        ...(scenario.recordedState
+          ? [
+              writeFile(
+                join(root, 'run/awake/governor.json'),
+                JSON.stringify(scenario.recordedState),
+                { mode: 0o600 },
+              ),
+            ]
+          : []),
+      ]);
+    },
+    async () => `set -u
+OA_IDLE_STATE=governor.json
+${await governorSource(['oa_idle_place', 'oa_idle_record_adapter'])}
+oa_idle_read_state() { cat "$1/$OA_IDLE_STATE" >"$OA_IDLE_WORK/$3" 2>/dev/null || : >"$OA_IDLE_WORK/$3"; }
+oa_idle_own=$OA_IDLE_RUN/awake
+oa_idle_uid=1000
+oa_idle_record_adapter`,
+    async (root) => {
+      const path = join(root, 'run/awake/governor.json');
+      const text = await readFile(path, 'utf8').catch(() => '');
+
+      return text
+        ? { state: parseState(text), mode: (await stat(path)).mode & 0o777 }
+        : {};
+    },
   );
 }
 

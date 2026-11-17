@@ -30,7 +30,10 @@
 # governed it runs nothing else. An event runs within its budget, --budget-ms or 8
 # seconds, and exits 0 whatever happens, except for an unknown action; a
 # refused or failed event is recorded as a diagnostic, and an event that is
-# not recorded counts as idleness. Root's `report` prints the newer of the
+# not recorded counts as idleness, except that the agent's hold-open on a
+# native-deadline provider applies its hold's deadline before recording, so
+# a turn start cut short on a busy or slow disk still keeps the workstation
+# awake until a later event's apply. Root's `report` prints the newer of the
 # two recorded states for the host, and root's `install` and `check` make
 # and check the directories the governor keeps its state in. Every file it
 # reads from an awake directory is data: it is read without following links,
@@ -280,6 +283,8 @@ oa_idle_background_work() {
 # is missing; with no valid provider recorded the defaults apply. No jq
 # variable is named after a keyword, which Debian 12's jq 1.6 rejects
 oa_idle_settings() {
+  # one run reads them once
+  test ! -s "$OA_IDLE_WORK/settings.json" || return 0
   if /usr/bin/jq -c --arg guestRoot "$OA_GUEST_ROOT/" "$OA_IDLE_JQ_DEFS"'
     def minutes($v; $least; $default; $setting):
       if ($v | count) and $v >= $least then {v: $v}
@@ -906,20 +911,26 @@ oa_idle_hook_session() {
     echo "hook input is larger than $OA_IDLE_INPUT_BYTES bytes"
     return 1
   fi
-  if ! /usr/bin/jq -e . "$OA_IDLE_WORK/input" >/dev/null 2>&1; then
+  # one jq run judges the input: not JSON fails it, and otherwise it prints
+  # the session id after `session `, or what is wrong with the input
+  if ! oa_idle_hook_session_verdict=$(/usr/bin/jq -sr '
+    if length != 1 or (.[0] | type != "object" or (.session_id | type != "string")) then "no-session"
+    elif .[0].session_id | test("\\A[A-Za-z0-9._:-]{1,128}\\z") then "session \(.[0].session_id)"
+    else "bad-session" end' "$OA_IDLE_WORK/input" 2>/dev/null); then
     echo 'hook input is not JSON'
     return 1
   fi
-  if ! /usr/bin/jq -se 'length == 1 and (.[0] | type == "object" and (.session_id | type == "string"))' \
-    "$OA_IDLE_WORK/input" >/dev/null 2>&1; then
+  case $oa_idle_hook_session_verdict in
+  'session '?*) oa_idle_session=${oa_idle_hook_session_verdict#session } ;;
+  no-session)
     echo 'hook input has no session_id string'
     return 1
-  fi
-  if ! oa_idle_session=$(/usr/bin/jq -er '.session_id | select(test("\\A[A-Za-z0-9._:-]{1,128}\\z"))' \
-    "$OA_IDLE_WORK/input" 2>/dev/null); then
+    ;;
+  *)
     echo 'hook session_id must be 1 to 128 letters, digits or ._:- characters'
     return 1
-  fi
+    ;;
+  esac
 }
 
 # parses an awake event's options into oa_idle_source, oa_idle_session and
@@ -1219,6 +1230,7 @@ oa_idle_event() {
     oa_idle_action=hold-open
     oa_idle_event_reason=background-work
   fi
+  oa_idle_apply_hold
   if ! oa_idle_record; then
     oa_idle_log_event failed not-recorded
     return 0
@@ -1233,8 +1245,41 @@ oa_idle_event() {
     return 0
   fi
   oa_idle_dispatch
-  : >"$OA_IDLE_WORK/notes"
-  oa_idle_record
+  oa_idle_locked oa_idle_record_adapter
+  return 0
+}
+
+# applies a turn hold's deadline through the native-deadline adapter before
+# the event is recorded, so a hold-open the event's budget cuts short on a
+# busy or slow disk still keeps the workstation awake: the agent's hold-open
+# applies the hold maximum or the idle timeout from now, whichever is later,
+# the deadline the event then records, and the full apply that follows
+# confirms it. Root, which never runs the adapter, and an apply that another
+# holds the lock of skip it; nothing it does changes the event's outcome
+oa_idle_apply_hold() {
+  test "$oa_idle_action" = hold-open && test "$oa_idle_uid" -ne 0 || return 0
+  oa_idle_settings
+  read -r oa_idle_apply_hold_minutes oa_idle_apply_hold_adapter <<EOF || return 0
+$(/usr/bin/jq -r 'select(.provider.keepAwakeMode == "native-deadline" and (.provider.awakeAdapter | type == "string"))
+  | "\([.holdMax, .idle] | max) \(.provider.awakeAdapter)"' "$OA_IDLE_WORK/settings.json" 2>/dev/null)
+EOF
+  test -n "$oa_idle_apply_hold_adapter" || return 0
+  {
+    flock -w 0.4 8 || return 0
+    timeout -k 0.1 1.4 /bin/sh "$oa_idle_apply_hold_adapter" apply-deadline \
+      "$(($(oa_idle_now) + oa_idle_apply_hold_minutes * 60000))" >/dev/null 2>&1 </dev/null
+  } 8>>"$OA_IDLE_SHARED/.apply.lock"
+  return 0
+}
+
+# records the adapter result the event's apply left in adapter.json in the
+# governor state the caller recorded just before, rather than recomputing it
+oa_idle_record_adapter() {
+  oa_idle_read_state "$oa_idle_own" "$oa_idle_uid" previous.json
+  test -s "$OA_IDLE_WORK/previous.json" && test -s "$OA_IDLE_WORK/adapter.json" || return 0
+  /usr/bin/jq -c --slurpfile adapter "$OA_IDLE_WORK/adapter.json" '.adapter = $adapter[0]' \
+    "$OA_IDLE_WORK/previous.json" >"$OA_IDLE_WORK/state.json" &&
+    oa_idle_place "$OA_IDLE_WORK/state.json" "$oa_idle_own" "$OA_IDLE_STATE" 0640
 }
 
 # prints the recorded governor state for the host as a report, which says
