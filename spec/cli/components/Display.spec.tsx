@@ -49,6 +49,79 @@ describe('rc:Display', () => {
     }
   });
 
+  it('should lay out a list of records as a table with one aligned row per record', () => {
+    const text = renderToString(
+      <ResultDetails
+        title="upgrade"
+        value={{
+          tools: [
+            { name: 't3', outcome: 'installed', version: '0.1.12 → 0.1.13' },
+            {
+              name: 'ca-certificates',
+              outcome: 'skipped',
+              reason: 'is\ncurrent',
+            },
+          ],
+        }}
+      />,
+      { columns: 120 },
+    );
+
+    expect(text.split('\n')).toEqual([
+      'Upgrade',
+      '  Tools',
+      '    Name             Outcome    Version          Reason',
+      '    t3               installed  0.1.12 → 0.1.13',
+      '    ca-certificates  skipped                     is current',
+    ]);
+  });
+
+  it('should give each record its own group when the table is wider than the terminal', () => {
+    const text = renderToString(
+      <ResultDetails
+        columns={40}
+        title="upgrade"
+        value={{
+          tools: [
+            {
+              name: 'ca-certificates',
+              manager: 'system',
+              version: '20260816ubuntu0.26.04.2',
+            },
+            { name: 't3', manager: 'npm', reason: 'it is current' },
+            { manager: 'brew' },
+          ],
+        }}
+      />,
+      { columns: 40 },
+    );
+
+    expect(text.split('\n')).toEqual([
+      'Upgrade',
+      '  Tools',
+      '    ca-certificates',
+      '      Manager: system',
+      '      Version: 20260816ubuntu0.26.04.2',
+      '    t3',
+      '      Manager: npm',
+      '      Reason: it is current',
+      '    Not reported',
+      '      Manager: brew',
+    ]);
+  });
+
+  it('should keep a list that mixes records with other values on one line', () => {
+    const text = renderToString(
+      <ResultDetails
+        title="upgrade"
+        value={{ restarts: [{ service: 'tailscaled' }, null] }}
+      />,
+      { columns: 120 },
+    );
+
+    expect(text).toContain('Restarts: Service: tailscaled, Not reported');
+  });
+
   it('should display actual workflow stages, counts and status words', () => {
     expect(
       renderToString(

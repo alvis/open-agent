@@ -22,11 +22,13 @@ export function machineTableElement(
  * creates the human-readable detail element
  * @param title result group heading
  * @param value already redacted result details
+ * @param columns available terminal width
  * @returns the detail element
  */
 export function resultDetailsElement(
   title: string,
   value: JsonObject,
+  columns: number,
 ): ReactElement {
-  return <ResultDetails title={title} value={value} />;
+  return <ResultDetails columns={columns} title={title} value={value} />;
 }
