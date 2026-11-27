@@ -130,7 +130,11 @@ function humanResult(result: SerializedResult, columns: number): string {
     return `${error}${renderToString(machineTableElement(machines.rows, columns))}\n${listNotes(result.data, machines.entries)}`;
   }
   const details = renderToString(
-    resultDetailsElement(result.command, humanResultDetails(result.data)),
+    resultDetailsElement(
+      result.command,
+      humanResultDetails(result.data),
+      columns,
+    ),
     { columns },
   );
 

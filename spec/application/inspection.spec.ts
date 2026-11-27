@@ -506,7 +506,7 @@ describe('cmd:show', () => {
       } else {
         expect(out).toBe('');
         expect(errorOutput.replaceAll(/\s+/g, ' ')).toContain(
-          'Probe: services · Reason: Service registry response could not be read.',
+          'Unavailable probes Probe Reason services Service registry response could not be read.',
         );
       }
     }

@@ -1,5 +1,6 @@
 import { harnessDrivers } from '#application/catalog/harnesses';
 import { serviceLabels } from '#application/catalog/services';
+import { isJsonObject } from '#cli/serialization';
 import { registry } from '#composition/registry';
 import { harnessIds } from '#domain/harnesses';
 
@@ -17,23 +18,64 @@ export function humanResultDetails(data: JsonObject): JsonObject {
   return Object.fromEntries(
     Object.entries(data)
       .filter(([key]) => key !== 'agentUrl')
-      .map(([key, value]) => [
-        key,
-        key === 'inspection' || key === 'currentReadiness'
-          ? inspectionDetails(value)
-          : key === 'machine'
-            ? machineDetails(
-                value,
-                data.inspection !== undefined ||
-                  data.currentReadiness !== undefined,
-              )
-            : key === 'pairing'
-              ? pairingDetails(value)
-              : key === 'action' && value === 'copy'
-                ? 'Agent URL copied to clipboard'
-                : value,
-      ]),
+      .map(([key, value]) => [key, humanField(data, key, value)]),
   );
+}
+
+/**
+ * prepares one top-level field of the command data for a human reader
+ * @param data redacted command data the field belongs to
+ * @param key the field's name in the command data
+ * @param value what the command reported for the field
+ * @returns the readable field
+ */
+function humanField(
+  data: JsonObject,
+  key: string,
+  value: JsonValue | undefined,
+): JsonValue | undefined {
+  switch (key) {
+    case 'inspection':
+    case 'currentReadiness':
+      return inspectionDetails(value);
+    case 'machine':
+      return machineDetails(
+        value,
+        data.inspection !== undefined || data.currentReadiness !== undefined,
+      );
+    case 'pairing':
+      return pairingDetails(value);
+    case 'tools':
+      return Array.isArray(value) ? value.map(toolChange) : value;
+    case 'action':
+      return value === 'copy' ? 'Agent URL copied to clipboard' : value;
+    default:
+      return value;
+  }
+}
+
+/**
+ * folds the versions an update recorded for one tool into one version column:
+ * the version alone when it did not change, otherwise the change, with `?`
+ * for a version the update could not read afterwards
+ * @param value one tool's update outcome
+ * @returns the outcome with its version in place of its from and to versions
+ */
+function toolChange(value: JsonValue): JsonValue {
+  if (!isJsonObject(value)) {
+    return value;
+  }
+  const { from, to, ...outcome } = value;
+  const [before, after] = [from, to].map((version) =>
+    typeof version === 'string' ? version.split('\n')[0] : undefined,
+  );
+  const version =
+    before === undefined || before === after
+      ? after
+      : `${before} → ${after ?? '?'}`;
+  const { reason, ...rest } = outcome;
+
+  return { ...rest, version, reason };
 }
 
 /**

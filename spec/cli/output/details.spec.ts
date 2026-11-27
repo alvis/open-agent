@@ -68,6 +68,62 @@ describe('fn:humanResultDetails', () => {
     });
   });
 
+  it("should show each upgraded tool's version, or its change, in one column", () => {
+    const result = humanResultDetails({
+      tools: [
+        {
+          name: 't3',
+          manager: 'npm',
+          required: true,
+          outcome: 'installed',
+          from: '0.1.12',
+          to: '0.1.13\nextra output',
+        },
+        {
+          name: 'curl',
+          manager: 'system',
+          required: true,
+          outcome: 'skipped',
+          from: '8.18.0',
+          to: '8.18.0',
+          reason: 'it is current',
+        },
+        { name: 'wget', outcome: 'installed', to: '1.25.0' },
+        { name: 'jq', outcome: 'failed', reason: 'no bottle' },
+        { name: 'gh', outcome: 'failed', from: '2.106.0', to: null },
+        null,
+      ],
+    });
+
+    expect(result.tools).toEqual([
+      {
+        name: 't3',
+        manager: 'npm',
+        required: true,
+        outcome: 'installed',
+        version: '0.1.12 → 0.1.13',
+      },
+      {
+        name: 'curl',
+        manager: 'system',
+        required: true,
+        outcome: 'skipped',
+        version: '8.18.0',
+        reason: 'it is current',
+      },
+      { name: 'wget', outcome: 'installed', version: '1.25.0' },
+      { name: 'jq', outcome: 'failed', reason: 'no bottle' },
+      { name: 'gh', outcome: 'failed', version: '2.106.0 → ?' },
+      null,
+    ]);
+  });
+
+  it("should leave a setup's tools outcome, which is no list, as it is", () => {
+    const tools = { status: 'installed', tools: [{ name: 'gh' }] };
+
+    expect(humanResultDetails({ tools })).toEqual({ tools });
+  });
+
   it.each([
     { governor: { recorded: false }, expected: /not recorded.*unavailable/u },
     {
